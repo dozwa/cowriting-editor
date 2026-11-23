@@ -13,6 +13,8 @@ export type TurnRow = {
   category: string
   asked: string
   answer: string
+  /** the answer's beginning as plain words */
+  excerpt: string
   model: string
   provider: string
   toolsUsed: string[]
@@ -41,10 +43,13 @@ export type AskEvent =
   | { kind: 'tool'; name: string }
   | { kind: 'refused'; tool: string; input: string }
 
-export type AskResult = { id: string; answer: string; isAiText: boolean; refused: number; cutOff: string | null }
+export type AskResult = { id: string; answer: string; isAiText: boolean; refused: number; cutOff: string | null; withoutTools: boolean }
 
 export type Settings = { backend: string; model: string; baseUrl: string }
-export type SettingsView = Settings & { hasKey: boolean; openAtStart: string | null }
+/** Whether a model kept to the assist-only rules in the behaviour suite. */
+export type ModelStatus = 'tested' | 'failed' | 'untested'
+export type SettingsView = Settings & { hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null }
+export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean }
 export type Exported = { paths: string[]; register: string }
@@ -54,6 +59,8 @@ const MARKDOWN = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
 export const api = {
   getSettings: () => invoke<SettingsView>('get_settings'),
   setSettings: (settings: Settings, apiKey: string | null) => invoke<void>('set_settings', { settings, apiKey }),
+  /** Asks the provider for its models with settings that are not saved yet. */
+  testConnection: (settings: Settings, apiKey: string | null) => invoke<ModelChoice[]>('test_connection', { settings, apiKey }),
   /** Asks the author for a file; null when they cancel. */
   pickDocument: async (): Promise<string | null> => {
     const path = await open({ multiple: false, directory: false, filters: MARKDOWN })

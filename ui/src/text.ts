@@ -16,7 +16,7 @@ export function when(ts: string, now = new Date()): string {
   return d.toDateString() === now.toDateString() ? clock : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${clock}`
 }
 
-const LINE_REF = /\b(lines?|Zeilen?|l\.)\s*(\d+)(?:\s*[–-]\s*\d+)?/g
+const LINE_REF = /\b(lines?|Zeilen?|l\.)\s*(\d+)(?:\s*[–-]\s*\d+)?/gi
 
 /** An answer's mentions of a line ("line 12", "Zeile 3", "lines 4–6") as links the editor can jump to. Code is left alone. */
 export function linkLines(markdown: string): string {
@@ -27,3 +27,10 @@ export function linkLines(markdown: string): string {
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** What the author is told about a model the behaviour suite has not passed. Empty for a tested one. */
+export const MODEL_NOTICE: Record<'tested' | 'failed' | 'untested', string> = {
+  tested: '',
+  untested: 'Untested model: it may not keep to the assist-only rules. Everything it says is logged all the same, and it cannot change your text.',
+  failed: 'This model did not keep to the assist-only rules when tested. Everything it says is logged all the same, and it cannot change your text.',
+}

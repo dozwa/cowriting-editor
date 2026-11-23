@@ -3,7 +3,7 @@ import type { Api, AskEvent, LogView, Opened, SettingsView, ThreadMessage, Use }
 import { DisclosureDialog, SettingsDialog } from './dialogs'
 import { createEditor, type Editor } from './editor'
 import { AskPanel, LogPanel } from './panels'
-import { plural } from './text'
+import { MODEL_NOTICE, plural } from './text'
 
 type Props = {
   api: Api
@@ -41,6 +41,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [live, setLive] = useState<Live | null>(null)
   const [error, setError] = useState('')
   const [dialog, setDialog] = useState<'settings' | 'disclosure' | null>(null)
+  const [isWithoutTools, setWithoutTools] = useState(false)
 
   const fail = (e: unknown) => setError(typeof e === 'string' ? e : e instanceof Error ? e.message : String(e))
 
@@ -67,6 +68,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
   // the handlers the editor was created with must reach the latest save
   const saveRef = useRef(save)
   saveRef.current = save
+  const refreshRef = useRef(refreshLog)
+  refreshRef.current = refreshLog
+  const counting = useRef<number | undefined>(undefined)
 
   const show = useCallback(
     async (opened: Opened) => {
@@ -84,7 +88,14 @@ export function App({ api, makeEditor = createEditor }: Props) {
 
   useEffect(() => {
     if (doc === null || host.current === null || editor.current !== null) return
-    editor.current = makeEditor(host.current, { onChange: () => setDirty(true), onSave: () => void saveRef.current() })
+    editor.current = makeEditor(host.current, {
+      onChange: () => {
+        setDirty(true)
+        window.clearTimeout(counting.current)
+        counting.current = window.setTimeout(() => void refreshRef.current(), 600)
+      },
+      onSave: () => void saveRef.current(),
+    })
     editor.current.setText(doc.text)
     setDirty(false)
     editor.current.focus()
@@ -95,6 +106,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       .getSettings()
       .then(async s => {
         setSettings(s)
+        if (s.isFirstRun) setDialog('settings')
         if (s.openAtStart !== null) await show(await api.openDocument(s.openAtStart))
       })
       .catch(fail)
@@ -138,6 +150,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       })
     try {
       const result = await api.ask({ text, replyTo, documentText: editor.current.getText() }, onEvent)
+      setWithoutTools(result.withoutTools)
       setThread(await api.thread(result.id))
     } catch (e) {
       fail(e)
@@ -165,6 +178,17 @@ export function App({ api, makeEditor = createEditor }: Props) {
     }
   }
 
+  const settingsDialog = dialog === 'settings' && settings !== null && (
+    <SettingsDialog api={api} settings={settings} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false)))} />
+  )
+  const isScripted = settings?.backend.startsWith('fake:') ?? false
+  const notice = [
+    settings === null || isScripted ? '' : MODEL_NOTICE[settings.modelStatus],
+    isWithoutTools ? 'This model cannot use tools: your document is sent along with each question, and it cannot write notes.' : '',
+  ]
+    .filter(line => line !== '')
+    .join(' ')
+
   if (doc === null) {
     return (
       <main className="welcome">
@@ -174,7 +198,13 @@ export function App({ api, makeEditor = createEditor }: Props) {
           <button className="primary" onClick={open}>Open a markdown file…</button>
           <button onClick={create}>New document…</button>
         </div>
+        {settings !== null && !settings.isReady && (
+          <p className="muted">
+            The AI is not set up yet. <button className="link" onClick={() => setDialog('settings')}>Set it up</button>
+          </p>
+        )}
         {error !== '' && <p className="error" role="alert">{error}</p>}
+        {settingsDialog}
       </main>
     )
   }
@@ -210,20 +240,21 @@ export function App({ api, makeEditor = createEditor }: Props) {
             </button>
           </nav>
           {tab === 'ask' ? (
-            <AskPanel thread={thread} live={live} turns={log.turns} hasKey={settings?.hasKey ?? true} backend={settings?.backend ?? ''} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onSettings={() => setDialog('settings')} />
+            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onSettings={() => setDialog('settings')} />
           ) : (
             <LogPanel log={log} onOpen={openTurn} />
           )}
         </aside>
       </div>
       <footer className="status">
-        <span>{settings === null ? '' : settings.backend.startsWith('fake:') ? 'Scripted answers (no model)' : `${settings.model}${settings.baseUrl === '' ? ' · Anthropic' : ` · ${settings.baseUrl}`}`}</span>
+        <span>
+          {settings === null ? '' : isScripted ? 'Scripted answers (no model)' : `${settings.model} · ${settings.baseUrl !== '' ? settings.baseUrl : settings.backend === 'anthropic' ? 'Anthropic' : 'OpenAI'}`}
+          {settings !== null && !isScripted && settings.modelStatus !== 'tested' && <span className="flag" title={MODEL_NOTICE[settings.modelStatus]}>{settings.modelStatus === 'failed' ? 'failed the rule test' : 'untested model'}</span>}
+        </span>
         <span className="spacer" />
         <span>{plural(log.stats.turns, 'AI input')} logged{open_ > 0 ? ` · ${open_} to classify` : ''}{log.guard.length > 0 ? ` · ${plural(log.guard.length, 'refused write')}` : ''}</span>
       </footer>
-      {dialog === 'settings' && settings !== null && (
-        <SettingsDialog api={api} settings={settings} onClose={saved => (setDialog(null), saved !== null && setSettings(saved))} />
-      )}
+      {settingsDialog}
       {dialog === 'disclosure' && <DisclosureDialog api={api} language={doc.language === 'de' ? 'de' : 'en'} open={open_} onClose={() => setDialog(null)} />}
     </div>
   )

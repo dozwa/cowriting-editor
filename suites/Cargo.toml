@@ -1,0 +1,16 @@
+[package]
+name = "cowriting-suites"
+description = "Suites that ask real models: does a model keep to the assist-only rules in the CoWriting Editor?"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+cowriting-app = { path = "../crates/app" }
+cowriting-core = { path = "../crates/core" }
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

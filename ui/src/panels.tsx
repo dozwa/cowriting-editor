@@ -55,8 +55,9 @@ type AskProps = {
   thread: ThreadMessage[]
   live: Live | null
   turns: TurnRow[]
-  hasKey: boolean
-  backend: string
+  isReady: boolean
+  /** Said above the question field: an untested model, a model without tools. */
+  notice: string
   onAsk(text: string, replyTo: string | null): void
   onAnnotate(id: string, use: Use, note: string): void
   onJump(line: number): void
@@ -64,13 +65,12 @@ type AskProps = {
   onSettings(): void
 }
 
-export function AskPanel({ thread, live, turns, hasKey, backend, onAsk, onAnnotate, onJump, onNew, onSettings }: AskProps) {
+export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnotate, onJump, onNew, onSettings }: AskProps) {
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
   const byId = new Map(turns.map(t => [t.id, t]))
   const last = thread[thread.length - 1]
   const isReply = thread.length > 0
-  const needsKey = !hasKey && !backend.startsWith('fake:')
 
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' })
@@ -124,9 +124,9 @@ export function AskPanel({ thread, live, turns, hasKey, backend, onAsk, onAnnota
         )}
         <div ref={end} />
       </div>
-      {needsKey ? (
+      {!isReady ? (
         <p className="hint">
-          To ask the AI, add an API key first. <button className="link" onClick={onSettings}>Open settings</button>
+          To ask the AI, set it up first: an API key, or a model on your own computer. <button className="link" onClick={onSettings}>Open settings</button>
         </p>
       ) : (
         <form
@@ -136,6 +136,7 @@ export function AskPanel({ thread, live, turns, hasKey, backend, onAsk, onAnnota
             send()
           }}
         >
+          {notice !== '' && <p className="notice" role="note">{notice}</p>}
           <textarea
             aria-label={isReply ? 'Reply' : 'Ask the AI'}
             placeholder={isReply ? 'Reply…' : 'Ask about your text…'}
@@ -182,7 +183,7 @@ export function LogPanel({ log, onOpen }: { log: LogView; onOpen(id: string): vo
                 <span className="muted">{when(turn.ts)}</span>
               </span>
               <span className="asked">{turn.replyTo !== null ? '↳ ' : ''}{turn.asked}</span>
-              <span className="muted excerpt">{turn.answer}</span>
+              <span className="muted excerpt">{turn.excerpt}</span>
             </button>
           </li>
         ))}

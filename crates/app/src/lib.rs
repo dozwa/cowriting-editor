@@ -4,10 +4,11 @@
 
 use cowriting_backends::anthropic::AnthropicBackend;
 use cowriting_backends::fake::FakeBackend;
+use cowriting_backends::openai::{OpenAiBackend, OPENAI_BASE_URL};
 use cowriting_core::backend::Backend;
 use cowriting_core::disclosure::{disclosure, prompts_appendix, turns, DocFormat, Lang, Profile};
 use cowriting_core::host::Host;
-use cowriting_core::log::readable;
+use cowriting_core::log::{flatten, readable};
 use cowriting_core::stats::compute_stats;
 use cowriting_core::thread::thread_of;
 use cowriting_core::turn::{annotate, run_turn, Ask, TurnEvent, TurnOutcome, Workspace};
@@ -38,6 +39,8 @@ pub struct TurnRow {
     pub category: String,
     pub asked: String,
     pub answer: String,
+    /// The answer's beginning as plain words, for a list.
+    pub excerpt: String,
     pub model: String,
     pub provider: String,
     pub tools_used: Vec<String>,
@@ -99,10 +102,10 @@ pub struct Exported {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BackendSettings {
-    /// 'anthropic' for now; 'fake:<script file>' plays a script instead of asking a model.
+    /// 'anthropic' or 'openai-compatible'; 'fake:<script file>' plays a script instead of asking a model.
     pub backend: String,
     pub model: String,
-    /// A gateway that speaks the Claude API; empty for Anthropic itself.
+    /// Where the API is: a gateway, or a local model server. Empty for Anthropic or OpenAI itself.
     #[serde(default)]
     pub base_url: String,
 }
@@ -113,6 +116,8 @@ impl Default for BackendSettings {
     }
 }
 
+const NO_KEY: &str = "No API key is set yet. Add one in the settings to ask the AI.";
+
 /// The backend the settings name. `api_key` is what the key store holds for it, if anything.
 pub fn make_backend(settings: &BackendSettings, api_key: Option<&str>) -> Result<Box<dyn Backend>, String> {
     if let Some(script) = settings.backend.strip_prefix("fake:") {
@@ -122,9 +127,61 @@ pub fn make_backend(settings: &BackendSettings, api_key: Option<&str>) -> Result
     match settings.backend.as_str() {
         "anthropic" => match api_key.map(str::trim).filter(|k| !k.is_empty()) {
             Some(key) => Ok(Box::new(AnthropicBackend::new(key, Some(&settings.base_url)))),
-            None => Err("No API key is set yet. Add one in the settings to ask the AI.".into()),
+            None => Err(NO_KEY.into()),
         },
+        "openai-compatible" => {
+            let key = api_key.map(str::trim).filter(|k| !k.is_empty());
+            let base_url = settings.base_url.trim();
+            // OpenAI itself always wants a key; a local server or a gateway may not
+            if key.is_none() && (base_url.is_empty() || base_url.trim_end_matches('/') == OPENAI_BASE_URL) {
+                return Err(NO_KEY.into());
+            }
+            Ok(Box::new(OpenAiBackend::new(base_url, key)))
+        }
         other => Err(format!("This version cannot use the backend “{other}” yet.")),
+    }
+}
+
+/// The models the provider in these settings offers: (id, display name).
+pub async fn list_models(settings: &BackendSettings, api_key: Option<&str>) -> Result<Vec<(String, String)>, String> {
+    let key = api_key.map(str::trim).filter(|k| !k.is_empty());
+    let models = match settings.backend.as_str() {
+        "anthropic" => AnthropicBackend::new(key.ok_or(NO_KEY)?, Some(&settings.base_url)).models().await,
+        "openai-compatible" => OpenAiBackend::new(&settings.base_url, key).models().await,
+        _ => return Ok(Vec::new()),
+    };
+    models.map_err(error)
+}
+
+/// A model the behaviour suite (`suites/`) was run on, and what came of it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TestedModel {
+    pub backend: String,
+    pub model: String,
+    /// 'passed': it kept to the assist-only rules in every case; 'failed': it did not.
+    pub verdict: String,
+    pub date: String,
+    /// The editor's version the suite ran with.
+    #[serde(default)]
+    pub editor: String,
+    /// Per case, how many runs held: {"asks-for-a-section": "3/3"}.
+    #[serde(default)]
+    pub cases: serde_json::Map<String, serde_json::Value>,
+}
+
+/// The suite's results that ship with this version.
+pub fn tested_models() -> Vec<TestedModel> {
+    let shipped: serde_json::Value = serde_json::from_str(include_str!("../../../tested-models.json")).unwrap_or_default();
+    serde_json::from_value(shipped["models"].clone()).unwrap_or_default()
+}
+
+/// 'tested', 'failed' or 'untested': what is known about a model keeping to the rules.
+pub fn model_status(tested: &[TestedModel], backend: &str, model: &str) -> &'static str {
+    match tested.iter().rev().find(|t| t.backend == backend && t.model == model) {
+        Some(t) if t.verdict == "passed" => "tested",
+        Some(_) => "failed",
+        None => "untested",
     }
 }
 
@@ -180,6 +237,7 @@ impl Session {
                 category: t.category.clone(),
                 asked: readable(&t.prompt.text),
                 answer: readable(&t.response.answer),
+                excerpt: flatten(&t.response.answer).chars().take(240).collect(),
                 model: t.response.model.clone().unwrap_or_default(),
                 provider: t.response.provider.clone().unwrap_or_default(),
                 tools_used: t.response.tools_used.clone(),

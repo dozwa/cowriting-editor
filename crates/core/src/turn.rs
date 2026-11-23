@@ -11,7 +11,7 @@ use crate::log::{category_for, Log, AI_TEXT_MARKER};
 use crate::personas::Party;
 use crate::sidecar::Sidecar;
 use crate::thread::thread_of;
-use crate::tools::{execute, tool_defs, ToolContext};
+use crate::tools::{execute, numbered, tool_defs, ToolContext};
 use crate::types::{AnnotationEntry, GuardEntry, LogEntry, PromptEntry, ResponseEntry};
 use std::io;
 use std::sync::Arc;
@@ -82,6 +82,8 @@ pub struct TurnOutcome {
     pub refused: usize,
     /// Why the answer is incomplete, when it is.
     pub cut_off: Option<String>,
+    /// The model cannot call tools: it was sent the document with the question, and can write no note.
+    pub without_tools: bool,
 }
 
 #[derive(Debug)]
@@ -127,6 +129,14 @@ fn history(entries: &[LogEntry], reply_to: &str, party: &Party) -> Vec<Message> 
     out
 }
 
+/// What a model without tools is told instead: the rules, and the document itself.
+fn system_without_tools(contract: &str, document_text: &str) -> String {
+    format!(
+        "{contract}\n- You have no tools in this conversation. The document as it is now follows, with line numbers added; you cannot write notes.\n\n# The document\n\n{}",
+        numbered(document_text)
+    )
+}
+
 pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on_event: &mut (dyn FnMut(TurnEvent) + Send)) -> Result<TurnOutcome, TurnError> {
     let host = workspace.host.as_ref();
     workspace.sidecar.ensure(host, &ask.document_text)?;
@@ -154,7 +164,13 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         Some(Message { role: Role::User, content }) => content.push(Block::Text { text: ask.text.clone() }),
         _ => messages.push(Message::user(ask.text.clone())),
     }
-    let mut request = ModelRequest { system: contract_text(&workspace.sidecar.name, &workspace.language), messages, tools: tool_defs(), model: ask.model.clone() };
+    let contract = contract_text(&workspace.sidecar.name, &workspace.language);
+    let mut without_tools = !backend.uses_tools();
+    let mut request = if without_tools {
+        ModelRequest { system: system_without_tools(&contract, &ask.document_text), messages, tools: Vec::new(), model: ask.model.clone() }
+    } else {
+        ModelRequest { system: contract.clone(), messages, tools: tool_defs(), model: ask.model.clone() }
+    };
     let context = ToolContext { host, sidecar: &workspace.sidecar, document_text: &ask.document_text, model: &ask.model };
 
     let mut answer: Vec<String> = Vec::new();
@@ -172,6 +188,13 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
             .await;
         let reply = match reply {
             Ok(reply) => reply,
+            // the backend just learned that its model has no tools: ask again, with the document in the question
+            Err(_) if !without_tools && !backend.uses_tools() && round == 0 => {
+                without_tools = true;
+                request.system = system_without_tools(&contract, &ask.document_text);
+                request.tools.clear();
+                continue;
+            }
             Err(error) => {
                 // what the author already read stays on the record
                 if !streamed.trim().is_empty() {
@@ -266,7 +289,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         answer: text.clone(),
         ..Default::default()
     }))?;
-    Ok(TurnOutcome { id, answer: text, ai_text_flag, tools_used, refused, cut_off })
+    Ok(TurnOutcome { id, answer: text, ai_text_flag, tools_used, refused, cut_off, without_tools })
 }
 
 pub const USES: [&str; 4] = ["adopted", "adapted", "rejected", "info"];

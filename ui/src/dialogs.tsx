@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import type { Api, ExportOptions, Exported, Settings, SettingsView } from './api'
+import type { Api, ExportOptions, Exported, ModelChoice, Settings, SettingsView } from './api'
 
 function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -15,45 +15,115 @@ function Dialog({ title, onClose, children }: { title: string; onClose(): void; 
   )
 }
 
+type Kind = 'anthropic' | 'local' | 'other'
+
+const KINDS: Record<Kind, { label: string; backend: string; address: string; model: string; sent: string }> = {
+  anthropic: { label: 'Claude, with an Anthropic API key', backend: 'anthropic', address: '', model: 'claude-opus-5-5', sent: 'Your questions and your document are sent to Anthropic when you ask.' },
+  local: { label: 'A model on this computer (Ollama, LM Studio)', backend: 'openai-compatible', address: 'http://localhost:11434/v1', model: '', sent: 'Nothing leaves this computer.' },
+  other: { label: 'Another provider (OpenAI-compatible API)', backend: 'openai-compatible', address: '', model: '', sent: 'Your questions and your document are sent to the provider at this address when you ask.' },
+}
+
+const isLocalAddress = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(url)
+
+const STATUS_WORDS = { tested: 'kept to the assist-only rules when tested', failed: 'did not keep to the assist-only rules when tested', untested: 'not tested for the assist-only rules' }
+
 export function SettingsDialog({ api, settings, onClose }: { api: Api; settings: SettingsView; onClose(saved: SettingsView | null): void }) {
-  const [model, setModel] = useState(settings.model)
+  const isScripted = settings.backend.startsWith('fake:')
+  const [kind, setKind] = useState<Kind>(settings.backend !== 'openai-compatible' ? 'anthropic' : isLocalAddress(settings.baseUrl) ? 'local' : 'other')
+  const [model, setModel] = useState(isScripted ? KINDS.anthropic.model : settings.model)
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
   const [key, setKey] = useState('')
+  const [choices, setChoices] = useState<ModelChoice[] | null>(null)
+  const [isTesting, setTesting] = useState(false)
   const [error, setError] = useState('')
-  const isScripted = settings.backend.startsWith('fake:')
+  const chosen = KINDS[kind]
+  const next: Settings = { backend: chosen.backend, model: model.trim(), baseUrl: baseUrl.trim() }
+  const hasStoredKey = settings.hasKey && settings.backend === chosen.backend
+
+  const choose = (to: Kind) => {
+    setKind(to)
+    setBaseUrl(KINDS[to].address)
+    setModel(KINDS[to].model)
+    setChoices(null)
+    setError('')
+  }
+
+  const test = async () => {
+    setTesting(true)
+    setError('')
+    try {
+      const found = await api.testConnection(next, key.trim() === '' ? null : key.trim())
+      setChoices(found)
+      // a model the provider does not offer is replaced by one it does
+      if (found.length > 0 && !found.some(m => m.id === model.trim())) setModel(found[0]!.id)
+    } catch (e) {
+      setChoices(null)
+      setError(String(e))
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const save = async () => {
-    const next: Settings = { backend: isScripted ? 'anthropic' : settings.backend, model: model.trim(), baseUrl: baseUrl.trim() }
     try {
       await api.setSettings(next, key.trim() === '' ? null : key.trim())
-      onClose({ ...settings, ...next, backend: settings.backend, hasKey: settings.hasKey || key.trim() !== '' })
+      onClose(await api.getSettings())
     } catch (e) {
       setError(String(e))
     }
   }
 
+  const status = choices?.find(m => m.id === model.trim())?.status
   return (
-    <Dialog title="Settings" onClose={() => onClose(null)}>
+    <Dialog title={settings.isFirstRun ? 'Set up the AI' : 'Settings'} onClose={() => onClose(null)}>
+      {settings.isFirstRun && <p>Choose where the AI's answers come from. You can change this later, and you can write without it.</p>}
       {isScripted && <p className="hint">This run answers from a script, not a model. The settings below apply to normal runs.</p>}
+      <div className="choice" role="radiogroup" aria-label="Where the AI's answers come from">
+        {(Object.keys(KINDS) as Kind[]).map(k => (
+          <label key={k}>
+            <input type="radio" name="kind" checked={kind === k} onChange={() => choose(k)} /> {KINDS[k].label}
+          </label>
+        ))}
+      </div>
+      {kind !== 'local' && (
+        <label>
+          API key
+          <input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} placeholder={hasStoredKey ? 'A key is stored. Type a new one to replace it.' : ''} />
+          <small>Kept in your system’s key store, not in a file.</small>
+        </label>
+      )}
       <label>
-        Anthropic API key
-        <input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} placeholder={settings.hasKey ? 'A key is stored. Type a new one to replace it.' : 'sk-ant-…'} />
-        <small>Kept in your system’s key store, not in a file. Your questions and your document are sent to the provider below when you ask.</small>
+        {kind === 'anthropic' ? 'Address of the API (optional)' : 'Address of the API'}
+        <input value={baseUrl} onChange={e => (setBaseUrl(e.target.value), setChoices(null))} placeholder={kind === 'anthropic' ? 'https://api.anthropic.com' : kind === 'other' ? 'https://api.openai.com/v1' : ''} />
+        {kind === 'local' && (
+          <small>
+            <button className="link" onClick={() => setBaseUrl('http://localhost:11434/v1')}>Ollama</button> · <button className="link" onClick={() => setBaseUrl('http://localhost:1234/v1')}>LM Studio</button>
+          </small>
+        )}
+        {kind === 'anthropic' && <small>Only for a gateway that speaks the Claude API, such as one your institution runs.</small>}
       </label>
       <label>
         Model
-        <input value={model} onChange={e => setModel(e.target.value)} />
-        <small>For example claude-opus-5-5, claude-sonnet-5-5 or claude-haiku-5-5. The disclosure names the model that answered.</small>
+        {choices !== null && choices.length > 0 ? (
+          <select value={model} onChange={e => setModel(e.target.value)}>
+            {choices.map(m => (
+              <option key={m.id} value={m.id}>{m.name === m.id || m.name === '' ? m.id : `${m.name} (${m.id})`}{m.status === 'untested' ? '' : m.status === 'tested' ? ' ✓' : ' ✗'}</option>
+            ))}
+          </select>
+        ) : (
+          <input value={model} onChange={e => setModel(e.target.value)} placeholder={kind === 'local' ? 'Test the connection to list the models' : ''} />
+        )}
+        <small>{status !== undefined ? `This model: ${STATUS_WORDS[status]}. ` : ''}The disclosure names the model that answered.</small>
       </label>
-      <label>
-        Address of the API (optional)
-        <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://api.anthropic.com" />
-        <small>Only for a gateway that speaks the Claude API, such as one your institution runs.</small>
-      </label>
+      <div className="row">
+        <button onClick={() => void test()} disabled={isTesting}>{isTesting ? 'Testing…' : 'Test the connection'}</button>
+        {choices !== null && <span className="ok" role="status">Connected: {choices.length === 1 ? '1 model' : `${choices.length} models`}</span>}
+      </div>
+      <p className="muted">{chosen.sent}</p>
       {error !== '' && <p className="error" role="alert">{error}</p>}
       <div className="row end">
-        <button onClick={() => onClose(null)}>Cancel</button>
-        <button className="primary" onClick={() => void save()} disabled={model.trim() === ''}>Save</button>
+        <button onClick={() => onClose(null)}>{settings.isFirstRun ? 'Later' : 'Cancel'}</button>
+        <button className="primary" onClick={() => void save()} disabled={model.trim() === '' || (kind !== 'anthropic' && baseUrl.trim() === '' && kind === 'local')}>Save</button>
       </div>
     </Dialog>
   )

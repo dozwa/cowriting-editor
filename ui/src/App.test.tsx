@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
-import type { Api, AskEvent, LogView, ThreadMessage, TurnRow, Use } from './api'
+import type { Api, AskEvent, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use } from './api'
 import { App } from './App'
 import type { Editor } from './editor'
 import { linkLines } from './text'
@@ -20,18 +20,27 @@ const plainEditor = (parent: HTMLElement, handlers: { onChange(): void; onSave()
 }
 let lastEditor: Editor & { jumps: number[] }
 
-function standIn(options: { hasKey?: boolean; answer?: string; refuse?: boolean } = {}) {
+function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[] } = { saved: [], asked: [], annotated: [], exported: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [] }
   const view = (): LogView => ({
     stats: { turns: turns.length, today: turns.length, unannotated: turns.filter(t => t.isOpen).length, aiText: 0, annotations: turns.filter(t => t.use !== '').length, rejected: 0, guardEvents: 0 },
     turns: [...turns].reverse(),
     guard: options.refuse && turns.length > 0 ? [{ ts: '2026-11-23T10:00:00Z', tool: 'write_note', input: 'write_note ../../thesis.md', files: [], refused: true, turn: 't1' }] : [],
     words: 7,
   })
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
-    getSettings: async () => ({ backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', hasKey: options.hasKey ?? true, openAtStart: '/work/thesis.md' }),
-    setSettings: async () => {},
+    getSettings: async () => settings,
+    setSettings: async (next, apiKey) => {
+      calls.settings.push([next, apiKey])
+      settings = { ...settings, ...next, isReady: true, isFirstRun: false, modelStatus: 'untested' }
+    },
+    testConnection: async next => {
+      calls.tested.push(next)
+      if (next.baseUrl === 'http://localhost:1234/v1') throw 'localhost:1234 could not be reached. Is the local model server running?'
+      return [{ id: 'gemma3:4b', name: 'gemma3:4b', status: 'untested' }, { id: 'qwen3.5:9b', name: 'qwen3.5:9b', status: 'failed' }]
+    },
     pickDocument: async () => null,
     pickNewDocument: async () => null,
     confirmLeave: async () => true,
@@ -45,8 +54,8 @@ function standIn(options: { hasKey?: boolean; answer?: string; refuse?: boolean 
       onEvent({ kind: 'started', id })
       onEvent({ kind: 'tool', name: 'read_document' })
       onEvent({ kind: 'text', text: answer })
-      turns.push({ id, ts: '2026-11-23T10:00:00Z', category: 'general', asked: input.text, answer, model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: ['read_document'], use: '', note: '', isOpen: true, isAiText: false, replyTo: input.replyTo })
-      return { id, answer, isAiText: false, refused: 0, cutOff: null }
+      turns.push({ id, ts: '2026-11-23T10:00:00Z', category: 'general', asked: input.text, answer, excerpt: answer, model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: ['read_document'], use: '', note: '', isOpen: true, isAiText: false, replyTo: input.replyTo })
+      return { id, answer, isAiText: false, refused: 0, cutOff: null, withoutTools: options.withoutTools ?? false }
     },
     logView: async () => view(),
     thread: async id => {
@@ -75,7 +84,7 @@ test('the author asks, reads the answer, classifies it, and the log shows the ch
 
   // the document named at start is opened, and nothing waits yet
   expect(await screen.findByText('thesis.md')).toBeTruthy()
-  expect((screen.getByLabelText('Document') as HTMLTextAreaElement).value).toContain('48 subjects')
+  expect(((await screen.findByLabelText('Document')) as HTMLTextAreaElement).value).toContain('48 subjects')
   expect(screen.getByText('saved')).toBeTruthy()
 
   // the author types on: the question is asked about the text as it is now, saved or not
@@ -134,15 +143,65 @@ test('saving sends the text as typed, and a refused write is shown in the log', 
   expect(screen.getByText(/write_note \.\.\/\.\.\/thesis\.md/)).toBeTruthy()
 })
 
-test('without a key the panel says so and asks nothing', async () => {
+test('until the AI is set up the panel says so and asks nothing', async () => {
   const user = userEvent.setup()
-  const { api, calls } = standIn({ hasKey: false })
+  const { api, calls } = standIn({ isReady: false })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText(/add an API key first/)
+  await screen.findByText(/set it up first/)
   expect(screen.queryByLabelText('Ask the AI')).toBeNull()
   await user.click(screen.getByRole('button', { name: 'Open settings' }))
-  expect(screen.getByLabelText(/Anthropic API key/)).toBeTruthy()
+  expect(screen.getByLabelText(/^API key/)).toBeTruthy()
   expect(calls.asked).toEqual([])
+})
+
+test('on the first start the author sets up a local model, and is told it is untested and has no tools', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ isReady: false, withoutTools: true, settings: { isFirstRun: true, hasKey: false } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'Set up the AI' }))
+
+  await user.click(dialog.getByRole('radio', { name: /A model on this computer/ }))
+  expect(dialog.queryByLabelText(/^API key/)).toBeNull() // a local model needs no key
+  expect(dialog.getByText('Nothing leaves this computer.')).toBeTruthy()
+
+  // a server that is not running is said in plain words; nothing is saved
+  await user.click(dialog.getByRole('button', { name: 'LM Studio' }))
+  await user.click(dialog.getByRole('button', { name: 'Test the connection' }))
+  expect((await dialog.findByRole('alert')).textContent).toContain('Is the local model server running?')
+
+  await user.click(dialog.getByRole('button', { name: 'Ollama' }))
+  await user.click(dialog.getByRole('button', { name: 'Test the connection' }))
+  await dialog.findByText('Connected: 2 models')
+  expect((dialog.getByLabelText(/Model/) as HTMLSelectElement).value).toBe('gemma3:4b')
+  expect(dialog.getByText(/not tested for the assist-only rules/)).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'openai-compatible', model: 'gemma3:4b', baseUrl: 'http://localhost:11434/v1' }, null]]))
+
+  // the window now asks, and says what kind of model answers
+  expect(await screen.findByText('untested model')).toBeTruthy()
+  expect(screen.getByRole('note').textContent).toMatch(/^Untested model: it may not keep to the assist-only rules/)
+  await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await screen.findByText(/why subjects/)
+  expect(screen.getByRole('note').textContent).toContain('This model cannot use tools: your document is sent along with each question')
+})
+
+test('a tested model carries no notice, and choosing Claude sends the key to the app only', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(screen.queryByText('untested model')).toBeNull()
+
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  expect((dialog.getByRole('radio', { name: /Claude/ }) as HTMLInputElement).checked).toBe(true)
+  await user.type(dialog.getByLabelText(/^API key/), 'sk-ant-secret')
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '' }, 'sk-ant-secret']]))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(document.body.textContent).not.toContain('sk-ant-secret')
 })
 
 test('HTML in an answer is shown as text, and a web address is not a link', async () => {
@@ -160,5 +219,7 @@ test('HTML in an answer is shown as text, and a web address is not a link', asyn
 
 test('mentions of a line become jumps, except inside code', () => {
   expect(linkLines('See line 12 and Zeile 3, lines 4–6; not `line 9`.')).toBe('See [line 12](#line-12) and [Zeile 3](#line-3), [lines 4–6](#line-4); not `line 9`.')
+  // as models write it: capitalised, inside bold
+  expect(linkLines('- **Line 14:** unclear')).toBe('- **[Line 14](#line-14):** unclear')
   expect(linkLines('```\nline 1\n```\nl. 7')).toBe('```\nline 1\n```\n[l. 7](#line-7)')
 })

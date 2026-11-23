@@ -5,7 +5,7 @@
 //! web view has no file or network access of its own, so the document, the log and the API key
 //! are only ever touched here.
 
-use cowriting_app::{make_backend, BackendSettings, ExportOptions, Exported, LogView, Opened, Session};
+use cowriting_app::{list_models, make_backend, model_status, tested_models, BackendSettings, ExportOptions, Exported, LogView, Opened, Session};
 use cowriting_core::host::DiskHost;
 use cowriting_core::turn::{Ask, TurnEvent};
 use cowriting_core::types::ThreadMessage;
@@ -44,11 +44,8 @@ fn read_settings(app: &tauri::AppHandle) -> BackendSettings {
 
 /// The key the system's key store holds for a backend. An environment variable serves where there is no key store.
 fn api_key(backend: &str) -> Option<String> {
-    keyring::Entry::new(KEY_SERVICE, backend)
-        .ok()
-        .and_then(|entry| entry.get_password().ok())
-        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-        .filter(|key| !key.trim().is_empty())
+    let from_environment = || if backend == "anthropic" { std::env::var("ANTHROPIC_API_KEY").ok() } else { None };
+    keyring::Entry::new(KEY_SERVICE, backend).ok().and_then(|entry| entry.get_password().ok()).or_else(from_environment).filter(|key| !key.trim().is_empty())
 }
 
 #[derive(Serialize)]
@@ -56,7 +53,14 @@ fn api_key(backend: &str) -> Option<String> {
 struct SettingsView {
     #[serde(flatten)]
     settings: BackendSettings,
+    /// A key for this backend is in the key store.
     has_key: bool,
+    /// The AI can be asked with these settings.
+    is_ready: bool,
+    /// 'tested', 'failed' or 'untested': whether the model kept to the assist-only rules in the behaviour suite.
+    model_status: &'static str,
+    /// Nothing was ever set up: the window offers to do it.
+    is_first_run: bool,
     /// A document to open at start (`COWRITING_OPEN`), for tests and for "open with".
     open_at_start: Option<String>,
 }
@@ -64,8 +68,11 @@ struct SettingsView {
 #[tauri::command]
 fn get_settings(app: tauri::AppHandle) -> SettingsView {
     let settings = read_settings(&app);
-    let has_key = api_key(&settings.backend).is_some();
-    SettingsView { settings, has_key, open_at_start: std::env::var("COWRITING_OPEN").ok() }
+    let key = api_key(&settings.backend);
+    let is_ready = make_backend(&settings, key.as_deref()).is_ok();
+    let model_status = model_status(&tested_models(), &settings.backend, &settings.model);
+    let is_first_run = !settings_file(&app).is_ok_and(|file| file.exists()) && std::env::var("COWRITING_BACKEND").is_err();
+    SettingsView { settings, has_key: key.is_some(), is_ready, model_status, is_first_run, open_at_start: std::env::var("COWRITING_OPEN").ok() }
 }
 
 /// Saves the settings; a key that is given goes to the system's key store and nowhere else.
@@ -80,6 +87,24 @@ fn set_settings(app: tauri::AppHandle, settings: BackendSettings, api_key: Optio
             .map_err(|e| format!("The key could not be put into the system's key store: {e}"))?;
     }
     Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelChoice {
+    id: String,
+    name: String,
+    status: &'static str,
+}
+
+/// Asks the provider in these settings (not yet saved) for its models: the connection test.
+/// A key that is given is used; otherwise the stored one.
+#[tauri::command]
+async fn test_connection(settings: BackendSettings, api_key: Option<String>) -> Result<Vec<ModelChoice>, String> {
+    let key = api_key.filter(|k| !k.trim().is_empty()).or_else(|| self::api_key(&settings.backend));
+    let tested = tested_models();
+    let models = list_models(&settings, key.as_deref()).await?;
+    Ok(models.into_iter().map(|(id, name)| ModelChoice { status: model_status(&tested, &settings.backend, &id), id, name }).collect())
 }
 
 #[tauri::command]
@@ -130,6 +155,7 @@ struct AskResult {
     is_ai_text: bool,
     refused: usize,
     cut_off: Option<String>,
+    without_tools: bool,
 }
 
 #[tauri::command]
@@ -148,7 +174,14 @@ async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, 
             });
         })
         .await?;
-    Ok(AskResult { id: outcome.id, answer: outcome.answer, is_ai_text: outcome.ai_text_flag, refused: outcome.refused, cut_off: outcome.cut_off })
+    Ok(AskResult {
+        id: outcome.id,
+        answer: outcome.answer,
+        is_ai_text: outcome.ai_text_flag,
+        refused: outcome.refused,
+        cut_off: outcome.cut_off,
+        without_tools: outcome.without_tools,
+    })
 }
 
 #[tauri::command]
@@ -175,7 +208,19 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Editor::default())
-        .invoke_handler(tauri::generate_handler![get_settings, set_settings, open_document, new_document, save_document, ask, log_view, thread, annotate, export_disclosure])
+        .invoke_handler(tauri::generate_handler![
+            get_settings,
+            set_settings,
+            test_connection,
+            open_document,
+            new_document,
+            save_document,
+            ask,
+            log_view,
+            thread,
+            annotate,
+            export_disclosure
+        ])
         .run(tauri::generate_context!())
         .expect("the editor's window could not be opened");
 }

@@ -7,10 +7,11 @@ log becomes your disclosure of AI use.
 It is the standalone sibling of the [CoWriting plugin for Claude Code](https://github.com/dozwa/claude-cowriting)
 and writes the same log format.
 
-**State: early.** The first slice works: open and save a markdown file, ask, classify, log,
-disclosure, with the Claude API as the only backend. Not built yet: other providers, Claude Code as
-a backend, experts, live review, scope, sources, and the detection of AI text pasted into the
-manuscript. There are no signed installers yet.
+**State: early.** What works: open and save a markdown file, ask, classify, log, disclosure. The
+AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM Studio), or any
+provider with an OpenAI-compatible API. Not built yet: Claude Code as a backend, experts, live
+review, scope, sources, and the detection of AI text pasted into the manuscript. There are no
+signed installers yet.
 
 ## What it does with your files
 
@@ -21,8 +22,22 @@ until you first ask the AI, and nothing is written into the manuscript.
 
 ## What is sent where
 
-When you ask, your question and your document go to the provider you set up (Anthropic, or a
-gateway you name). Nothing is sent otherwise. The API key is kept in the system's key store.
+When you ask, your question and your document go to the provider you set up. With a model on
+your own computer nothing leaves it. Nothing is sent otherwise. An API key is kept in the system's
+key store. The disclosure names the provider and the model that answered.
+
+## Which models keep to the rules
+
+No model can write to your text, and every answer is logged: that holds for any model. Whether a
+model also *behaves* (declines to ghostwrite, marks AI text, invents no references) is tested per
+model by `suites/behaviour`. Results ship in `tested-models.json`; **it is empty so far, so every
+model is shown as "untested"**. A model that cannot call tools is sent the document with each
+question and cannot write notes; the editor says so.
+
+```
+COWRITING_API_KEY=… cargo run -p cowriting-suites --bin behaviour -- \
+    --backend openai-compatible --base-url http://localhost:11434/v1 --model qwen3.5:9b [--record]
+```
 
 ## What it does not check
 
@@ -43,15 +58,25 @@ ui/node_modules/.bin/tauri dev          # run it
 ui/node_modules/.bin/tauri build        # unsigned installer for this system
 ```
 
+To run the interface in an ordinary browser against the real Rust code (for development and for
+browser automation; localhost only, one document, never shipped):
+
+```
+cargo run -p cowriting-suites --bin bridge -- --document /path/to/file.md \
+    --backend openai-compatible --base-url http://localhost:11434/v1 --model gemma3:4b
+(cd ui && npm run dev)                  # then open http://localhost:1420
+```
+
 To try it without a model: `COWRITING_BACKEND=fake:/path/to/script.json COWRITING_OPEN=/path/to/file.md`
 (see `crates/backends/src/fake.rs` for the script's form).
 
 ## Layout
 
 - `crates/core`: log, guard, stats, disclosure, the turn loop. No window, no network.
-- `crates/backends`: the Claude API and a scripted stand-in.
+- `crates/backends`: the Claude API, OpenAI-compatible APIs, and a scripted stand-in.
 - `crates/app`: one open document, as the window uses it.
 - `src-tauri`: the window's commands, settings, key store.
 - `ui`: editor and panels (TypeScript, React, CodeMirror). No file or network access.
+- `suites`: the behaviour rules and the runner that asks real models.
 - `fixtures/goldens`: the plugin's own output over `fixtures/`, which the core must reproduce
   byte for byte. `scripts/make-goldens.py --plugin <plugin repo> [--check]` regenerates or checks them.

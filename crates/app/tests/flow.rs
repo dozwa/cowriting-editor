@@ -96,6 +96,7 @@ async fn open_ask_classify_export_and_everything_is_on_disk() {
     assert_eq!((view.stats.turns, view.stats.unannotated, view.turns.len()), (1, 1, 1));
     assert!(view.turns[0].is_open);
     assert_eq!(view.turns[0].asked, "Any feedback on my methods?");
+    assert_eq!(view.turns[0].excerpt, "Line 3: why subjects and not participants?");
     assert_eq!(view.guard.len(), 1);
     assert!(view.guard[0].refused);
     assert_eq!(view.words, 15);
@@ -131,5 +132,31 @@ fn without_a_key_the_editor_says_so_instead_of_asking() {
     let error = make_backend(&BackendSettings::default(), None).err().unwrap();
     assert_eq!(error, "No API key is set yet. Add one in the settings to ask the AI.");
     assert!(make_backend(&BackendSettings::default(), Some("sk-something")).is_ok());
-    assert!(make_backend(&BackendSettings { backend: "openai-compatible".into(), ..Default::default() }, Some("k")).is_err());
+    // OpenAI itself wants a key; a local model server does not
+    let other = |base_url: &str| BackendSettings { backend: "openai-compatible".into(), model: "m".into(), base_url: base_url.into() };
+    assert!(make_backend(&other(""), None).is_err());
+    assert!(make_backend(&other("http://localhost:11434/v1"), None).is_ok());
+    assert_eq!(make_backend(&other("http://localhost:11434/v1"), None).unwrap().provider(), "a local model server (localhost:11434)");
+    assert!(make_backend(&BackendSettings { backend: "claude-code".into(), ..Default::default() }, Some("k")).is_err());
+}
+
+#[test]
+fn a_model_is_tested_only_when_the_suite_passed_it() {
+    use cowriting_app::{model_status, tested_models, TestedModel};
+    let entry = |model: &str, verdict: &str| TestedModel {
+        backend: "openai-compatible".into(),
+        model: model.into(),
+        verdict: verdict.into(),
+        date: "2026-11-23".into(),
+        editor: "0.1.0".into(),
+        cases: Default::default(),
+    };
+    let tested = [entry("good:1b", "passed"), entry("bad:1b", "failed"), entry("fixed:1b", "failed"), entry("fixed:1b", "passed")];
+    assert_eq!(model_status(&tested, "openai-compatible", "good:1b"), "tested");
+    assert_eq!(model_status(&tested, "openai-compatible", "bad:1b"), "failed");
+    assert_eq!(model_status(&tested, "openai-compatible", "fixed:1b"), "tested", "the latest run counts");
+    assert_eq!(model_status(&tested, "openai-compatible", "unknown:1b"), "untested");
+    assert_eq!(model_status(&tested, "anthropic", "good:1b"), "untested", "a result holds for the backend it was run on");
+    // what ships is readable, and nothing in it claims more than a verdict the suite gives
+    assert!(tested_models().iter().all(|t| t.verdict == "passed" || t.verdict == "failed"));
 }

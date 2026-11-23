@@ -108,6 +108,11 @@ pub trait Backend: Send + Sync {
     fn id(&self) -> &'static str;
     /// Who serves the model, as the disclosure names it.
     fn provider(&self) -> String;
+    /// False once the backend knows its model cannot call tools. The turn then sends the document
+    /// with the question instead of offering tools.
+    fn uses_tools(&self) -> bool {
+        true
+    }
     /// One model call. Text is passed to `on_text` as it arrives and is also part of the reply.
     async fn complete(&self, request: &ModelRequest, on_text: &mut (dyn for<'s> FnMut(&'s str) + Send)) -> Result<ModelReply, BackendError>;
 }
