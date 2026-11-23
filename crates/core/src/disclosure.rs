@@ -77,10 +77,7 @@ pub fn turns(entries: &[LogEntry]) -> Vec<Turn<'_>> {
         let Some(response) = responses.get(p.id.as_str()).copied() else { continue };
         let annotation = notes.get(p.id.as_str()).copied();
         let auto = auto_category(p.origin.as_deref());
-        let category = auto
-            .map(String::from)
-            .or_else(|| annotation.and_then(|a| a.category.clone()).filter(|c| !c.is_empty()))
-            .unwrap_or_else(|| p.category.clone());
+        let category = auto.map(String::from).or_else(|| annotation.and_then(|a| a.category.clone()).filter(|c| !c.is_empty())).unwrap_or_else(|| p.category.clone());
         let is_launch = response.agents.as_ref().is_some_and(|agents| !agents.is_empty());
         out.push(Turn { prompt: p, response, annotation, category, is_open: annotation.is_none() && auto.is_none() && !is_launch, is_auto: auto.is_some(), is_launch });
     }
@@ -145,7 +142,7 @@ fn most_common<'a>(items: impl Iterator<Item = &'a str>) -> Vec<(&'a str, usize)
             None => counts.push((item, 1)),
         }
     }
-    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    counts.sort_by_key(|count| std::cmp::Reverse(count.1));
     counts
 }
 
@@ -208,18 +205,8 @@ fn log_files(event: &GuardEntry, profile: Profile) -> Vec<&str> {
         .collect()
 }
 
-const TEX_SPECIALS: &[(char, &str)] = &[
-    ('\\', r"\textbackslash{}"),
-    ('&', r"\&"),
-    ('%', r"\%"),
-    ('$', r"\$"),
-    ('#', r"\#"),
-    ('_', r"\_"),
-    ('{', r"\{"),
-    ('}', r"\}"),
-    ('~', r"\textasciitilde{}"),
-    ('^', r"\^{}"),
-];
+const TEX_SPECIALS: &[(char, &str)] =
+    &[('\\', r"\textbackslash{}"), ('&', r"\&"), ('%', r"\%"), ('$', r"\$"), ('#', r"\#"), ('_', r"\_"), ('{', r"\{"), ('}', r"\}"), ('~', r"\textasciitilde{}"), ('^', r"\^{}")];
 
 /// Character by character, so the braces an escape introduces are not escaped again.
 pub fn tex_escape(s: &str) -> String {
@@ -285,7 +272,7 @@ pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocForma
             None => groups.push((&turn.category, vec![turn])),
         }
     }
-    groups.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    groups.sort_by_key(|group| std::cmp::Reverse(group.1.len()));
 
     let mut rows = Vec::new();
     for (category, items) in &groups {
@@ -326,11 +313,8 @@ pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocForma
     let guards: Vec<&GuardEntry> = entries.iter().filter_map(|e| if let LogEntry::Guard(g) = e { Some(g) } else { None }).collect();
     let changed = guards.iter().filter(|g| !g.refused);
     // only the manuscript is declared; a changed bibliography or setting is in the log, not the register
-    let guard_lines: Vec<String> = changed
-        .clone()
-        .filter(|g| !manuscript_files(g, profile).is_empty())
-        .map(|g| format!("{}: {} – {}", day(&g.ts), g.tool, manuscript_files(g, profile).join(", ")))
-        .collect();
+    let guard_lines: Vec<String> =
+        changed.clone().filter(|g| !manuscript_files(g, profile).is_empty()).map(|g| format!("{}: {} – {}", day(&g.ts), g.tool, manuscript_files(g, profile).join(", "))).collect();
     let log_lines: Vec<String> =
         changed.filter(|g| !log_files(g, profile).is_empty()).map(|g| format!("{}: {} – {}", day(&g.ts), g.tool, log_files(g, profile).join(", "))).collect();
     let refused_lines: Vec<String> = guards.iter().filter(|g| g.refused).map(|g| format!("{}: {} – {}", day(&g.ts), g.tool, py_squash(&g.input, Some(80)))).collect();
@@ -387,7 +371,10 @@ pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocForma
     );
     let refused_head = pick("Write attempts by the AI that the guard refused", "Vom Schutz abgewiesene Schreibversuche der KI");
     let refused_note = match profile {
-        Profile::Plugin => pick("These changed nothing. The pattern check can also refuse harmless commands.", "Dadurch wurde nichts geändert. Die Musterprüfung kann auch harmlose Befehle abweisen."),
+        Profile::Plugin => pick(
+            "These changed nothing. The pattern check can also refuse harmless commands.",
+            "Dadurch wurde nichts geändert. Die Musterprüfung kann auch harmlose Befehle abweisen.",
+        ),
         Profile::Editor => pick("These changed nothing.", "Dadurch wurde nichts geändert."),
     };
     let log_head = pick("Changes to the AI log undone after a tool call", "Nach einem Werkzeugaufruf rückgängig gemachte Änderungen am KI-Protokoll");

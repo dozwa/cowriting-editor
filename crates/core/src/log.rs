@@ -50,12 +50,7 @@ pub fn category_for(command: Option<&str>, text: &str, party: &Party) -> String 
 
 /// The entries in a log file's text. A torn line is skipped, never fatal.
 pub fn parse_log(text: &str) -> Vec<LogEntry> {
-    text.split('\n')
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| serde_json::from_str(line).ok())
-        .filter_map(LogEntry::from_value)
-        .collect()
+    text.split('\n').map(str::trim).filter(|line| !line.is_empty()).filter_map(|line| serde_json::from_str(line).ok()).filter_map(LogEntry::from_value).collect()
 }
 
 /// The log file a moment belongs to, from its ISO timestamp (UTC): `2026-11.jsonl`.

@@ -34,12 +34,7 @@ impl Layout {
     /// One markdown file with its sidecar: the root is the file's folder, and the AI's only place
     /// is the sidecar's `notes/`.
     pub fn editor(folder: &str, sidecar_in_folder: &str) -> Layout {
-        Layout {
-            root: folder.to_string(),
-            ai_folders: vec![format!("{sidecar_in_folder}/notes")],
-            ai_files: Vec::new(),
-            log_folder: format!("{sidecar_in_folder}/ai-log"),
-        }
+        Layout { root: folder.to_string(), ai_folders: vec![format!("{sidecar_in_folder}/notes")], ai_files: Vec::new(), log_folder: format!("{sidecar_in_folder}/ai-log") }
     }
 }
 

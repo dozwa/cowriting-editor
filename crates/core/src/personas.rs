@@ -30,14 +30,7 @@ const CATALOG: &[(&str, &str, &str, &str, &str)] = &[
 pub fn catalog() -> Vec<Persona> {
     CATALOG
         .iter()
-        .map(|&(id, name, short, role, category)| Persona {
-            id: id.into(),
-            name: name.into(),
-            short: short.into(),
-            role: role.into(),
-            category: category.into(),
-            is_custom: false,
-        })
+        .map(|&(id, name, short, role, category)| Persona { id: id.into(), name: name.into(), short: short.into(), role: role.into(), category: category.into(), is_custom: false })
         .collect()
 }
 

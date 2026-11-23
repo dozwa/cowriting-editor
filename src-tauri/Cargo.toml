@@ -1,0 +1,18 @@
+[package]
+name = "cowriting-editor"
+description = "A markdown editor with assist-only AI co-writing: every AI input logged, a disclosure at the end"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+cowriting-app = { path = "../crates/app" }
+cowriting-core = { path = "../crates/core" }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde.workspace = true
+serde_json.workspace = true
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }

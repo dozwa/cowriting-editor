@@ -13,9 +13,8 @@ pub enum Format {
     Latex,
 }
 
-static MD_STRIP: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    [r"\A---\n(?s:.*?)\n---\n", r"(?s)```.*?```", r"(?s)<!--.*?-->", r"\[@[^\]]*\]", r"[#*_>`|~-]"].iter().map(|p| Regex::new(p).unwrap()).collect()
-});
+static MD_STRIP: LazyLock<Vec<Regex>> =
+    LazyLock::new(|| [r"\A---\n(?s:.*?)\n---\n", r"(?s)```.*?```", r"(?s)<!--.*?-->", r"\[@[^\]]*\]", r"[#*_>`|~-]"].iter().map(|p| Regex::new(p).unwrap()).collect());
 
 static WORDLIKE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[\p{L}\p{N}]").unwrap());
 static TEX_COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)(^|[^\\])%.*$").unwrap());

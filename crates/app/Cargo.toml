@@ -1,0 +1,15 @@
+[package]
+name = "cowriting-app"
+description = "What the CoWriting Editor does with one open document, without a window"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cowriting-core = { path = "../core" }
+cowriting-backends = { path = "../backends" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
