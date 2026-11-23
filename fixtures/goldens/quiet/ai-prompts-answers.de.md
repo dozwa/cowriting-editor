@@ -1,0 +1,3 @@
+# Anhang: KI-Prompts
+
+Alle Eingaben an das KI-System für die Arbeit „Walking breaks & 100% focus_time“, in zeitlicher Reihenfolge, mit der Einordnung durch die Autorin bzw. den Autor. Automatisch gestartete Live-Reviews und Abgleiche sind als solche gekennzeichnet.

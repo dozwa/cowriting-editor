@@ -1,0 +1,11 @@
+[package]
+name = "cowriting-backends"
+description = "How the CoWriting Editor reaches a model: one interface, several providers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cowriting-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true

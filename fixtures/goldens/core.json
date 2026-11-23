@@ -1,0 +1,564 @@
+{
+  "stats": {
+    "full.jsonl": {
+      "turns": 11,
+      "today": 4,
+      "unannotated": 3,
+      "aiText": 1,
+      "byCategory": {
+        "feedback": 3,
+        "language": 1,
+        "terminology": 3,
+        "brief-update": 1,
+        "structure": 2,
+        "scope-check": 1
+      },
+      "personaConsults": {
+        "reviewer-2": 2,
+        "terminologist": 2,
+        "architect": 2,
+        "lay-reader": 1
+      },
+      "personaAdopted": {
+        "reviewer-2": 1,
+        "terminologist": 1,
+        "architect": 1
+      },
+      "annotations": 4,
+      "rejected": 1,
+      "guardEvents": 2,
+      "recent": [
+        {
+          "id": "c6",
+          "ts": "2026-10-07T09:50:00Z",
+          "category": "feedback",
+          "preview": "Feedback on the abstract, please",
+          "answer": "Three issues",
+          "persona": "reviewer-2",
+          "isOpen": true,
+          "personas": [
+            "reviewer-2"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        },
+        {
+          "id": "c5",
+          "ts": "2026-10-07T09:40:00Z",
+          "category": "scope-check",
+          "preview": "Scope check of the planned points",
+          "answer": "[]",
+          "origin": "scope",
+          "isOpen": false,
+          "personas": [],
+          "isAnnotated": false,
+          "isAiText": false
+        },
+        {
+          "id": "c4",
+          "ts": "2026-10-07T09:30:00Z",
+          "category": "structure",
+          "preview": "Check the outline",
+          "answer": "Outline feedback",
+          "persona": "architect",
+          "isOpen": false,
+          "personas": [
+            "architect"
+          ],
+          "isAnnotated": true,
+          "isAiText": false
+        },
+        {
+          "id": "c1",
+          "ts": "2026-10-07T09:00:00Z",
+          "category": "structure",
+          "preview": " A question over several lines, with a_underscore, a {brace}",
+          "answer": "Findings Where What --- --- main.md:12 unclear claim Why this order?",
+          "persona": "architect",
+          "isOpen": false,
+          "personas": [
+            "architect",
+            "lay-reader"
+          ],
+          "isAnnotated": true,
+          "isAiText": false
+        },
+        {
+          "id": "b1",
+          "ts": "2026-10-06T10:00:00Z",
+          "category": "brief-update",
+          "preview": "Briefing proposal: what The Terminologist should remember fr",
+          "answer": "- Keep \"subjects\": the field's term.",
+          "persona": "terminologist",
+          "origin": "brief",
+          "isOpen": false,
+          "personas": [
+            "terminologist"
+          ],
+          "isAnnotated": true,
+          "isAiText": false
+        },
+        {
+          "id": "a6",
+          "ts": "2026-10-05T10:01:00Z",
+          "category": "terminology",
+          "preview": "↳ answer from The Terminologist",
+          "answer": "The Terminologist concedes for psychology.",
+          "persona": "terminologist",
+          "origin": "agent",
+          "replyTo": "a5",
+          "isOpen": true,
+          "personas": [
+            "terminologist"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        }
+      ],
+      "open": [
+        {
+          "id": "c6",
+          "ts": "2026-10-07T09:50:00Z",
+          "category": "feedback",
+          "preview": "Feedback on the abstract, please",
+          "answer": "Three issues",
+          "persona": "reviewer-2",
+          "isOpen": true,
+          "personas": [
+            "reviewer-2"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        },
+        {
+          "id": "a6",
+          "ts": "2026-10-05T10:01:00Z",
+          "category": "terminology",
+          "preview": "↳ answer from The Terminologist",
+          "answer": "The Terminologist concedes for psychology.",
+          "persona": "terminologist",
+          "origin": "agent",
+          "replyTo": "a5",
+          "isOpen": true,
+          "personas": [
+            "terminologist"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        },
+        {
+          "id": "a2",
+          "ts": "2026-10-02T10:00:00Z",
+          "category": "language",
+          "preview": "Korrigiere Rechtschreibung",
+          "answer": "[AI-TEXT] bla",
+          "isOpen": true,
+          "personas": [],
+          "isAnnotated": false,
+          "isAiText": true
+        }
+      ],
+      "openByPersona": {
+        "terminologist": 1,
+        "reviewer-2": 1
+      }
+    },
+    "launch.jsonl": null,
+    "quiet.jsonl": {
+      "turns": 0,
+      "today": 0,
+      "unannotated": 0,
+      "aiText": 0,
+      "byCategory": {},
+      "personaConsults": {},
+      "personaAdopted": {},
+      "annotations": 0,
+      "rejected": 0,
+      "guardEvents": 0,
+      "recent": [],
+      "open": [],
+      "openByPersona": {}
+    },
+    "thread.jsonl": {
+      "turns": 2,
+      "today": 0,
+      "unannotated": 1,
+      "aiText": 0,
+      "byCategory": {
+        "terminology": 2
+      },
+      "personaConsults": {
+        "terminologist": 1
+      },
+      "personaAdopted": {},
+      "annotations": 0,
+      "rejected": 0,
+      "guardEvents": 0,
+      "recent": [
+        {
+          "id": "answer1",
+          "ts": "2026-11-01T10:06:00Z",
+          "category": "terminology",
+          "preview": "↳ answer from The Terminologist",
+          "answer": "The Terminologist agrees: participants throughout.",
+          "persona": "terminologist",
+          "origin": "agent",
+          "replyTo": "reply1",
+          "isOpen": true,
+          "personas": [
+            "terminologist"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        },
+        {
+          "id": "reply1",
+          "ts": "2026-11-01T10:05:00Z",
+          "category": "terminology",
+          "preview": "For this journal I always write participants, never subjects",
+          "answer": "I have asked the Terminologist.",
+          "persona": "terminologist",
+          "replyTo": "report1",
+          "isOpen": false,
+          "personas": [
+            "terminologist"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        }
+      ],
+      "open": [
+        {
+          "id": "answer1",
+          "ts": "2026-11-01T10:06:00Z",
+          "category": "terminology",
+          "preview": "↳ answer from The Terminologist",
+          "answer": "The Terminologist agrees: participants throughout.",
+          "persona": "terminologist",
+          "origin": "agent",
+          "replyTo": "reply1",
+          "isOpen": true,
+          "personas": [
+            "terminologist"
+          ],
+          "isAnnotated": false,
+          "isAiText": false
+        }
+      ],
+      "openByPersona": {
+        "terminologist": 1
+      }
+    }
+  },
+  "entries": {
+    "full.jsonl": 34,
+    "launch.jsonl": 4,
+    "quiet.jsonl": 2,
+    "thread.jsonl": 4
+  },
+  "words": {
+    "paper.tex": 23,
+    "walking.after.md": 68,
+    "walking.before.md": 51
+  },
+  "paragraphs": {
+    "paper.tex": [
+      {
+        "start": 1,
+        "end": 16,
+        "text": "\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n% a comment that is not counted\n\\begin{document}\n\\section{Introduction}\nSitting is common \\cite{smith2020} and costs 50\\% of the day. % trailing comment\nSee Figure~\\ref{fig:one} and \\textbf{bold words}.\n\\begin{figure}\n\\caption{Not counted at all}\n\\label{fig:one}\n\\end{figure}\n\\begin{equation*}\na = b\n\\end{equation*}\nFinal sentence with $x$ in it.\n\\end{document}"
+      }
+    ],
+    "walking.after.md": [
+      {
+        "start": 1,
+        "end": 4,
+        "text": "---\ntitle: Walking breaks\nauthor: A. Author\n---"
+      },
+      {
+        "start": 6,
+        "end": 6,
+        "text": "# Walking breaks at work"
+      },
+      {
+        "start": 8,
+        "end": 9,
+        "text": "Sitting for long periods is common in office work [@smith2020; @lee2021]. We ask whether short\nwalking breaks change how people rate their own concentration."
+      },
+      {
+        "start": 11,
+        "end": 11,
+        "text": "## Methods"
+      },
+      {
+        "start": 13,
+        "end": 14,
+        "text": "We recruited 48 participants from two offices in the same city.\n<!-- TODO: add the ethics vote -->"
+      },
+      {
+        "start": 16,
+        "end": 18,
+        "text": "```r\nt.test(a, b)\n```"
+      },
+      {
+        "start": 20,
+        "end": 22,
+        "text": "| Group | n |\n|---|---|\n| Walk | 24 |"
+      },
+      {
+        "start": 24,
+        "end": 24,
+        "text": "Ünïcödé words like Größe and naïve count, as do numbers such as 42."
+      },
+      {
+        "start": 26,
+        "end": 26,
+        "text": "Ok."
+      },
+      {
+        "start": 28,
+        "end": 28,
+        "text": "A new closing paragraph   with odd   spacing, long enough to be reviewed."
+      }
+    ],
+    "walking.before.md": [
+      {
+        "start": 1,
+        "end": 4,
+        "text": "---\ntitle: Walking breaks\nauthor: A. Author\n---"
+      },
+      {
+        "start": 6,
+        "end": 6,
+        "text": "# Walking breaks at work"
+      },
+      {
+        "start": 8,
+        "end": 9,
+        "text": "Sitting for long periods is common in office work [@smith2020; @lee2021]. We ask whether short\nwalking breaks change how people rate their own concentration."
+      },
+      {
+        "start": 11,
+        "end": 11,
+        "text": "## Methods"
+      },
+      {
+        "start": 13,
+        "end": 14,
+        "text": "We recruited 48 subjects from two offices.\n<!-- TODO: add the ethics vote -->"
+      },
+      {
+        "start": 16,
+        "end": 18,
+        "text": "```r\nt.test(a, b)\n```"
+      },
+      {
+        "start": 20,
+        "end": 22,
+        "text": "| Group | n |\n|---|---|\n| Walk | 24 |"
+      },
+      {
+        "start": 24,
+        "end": 24,
+        "text": "Ünïcödé words like Größe and naïve count, as do numbers such as 42."
+      }
+    ]
+  },
+  "changed": {
+    "walking.before.md": [
+      {
+        "start": 13,
+        "end": 14,
+        "text": "We recruited 48 participants from two offices in the same city.\n<!-- TODO: add the ethics vote -->"
+      },
+      {
+        "start": 28,
+        "end": 28,
+        "text": "A new closing paragraph   with odd   spacing, long enough to be reviewed."
+      }
+    ]
+  },
+  "category": [
+    "feedback",
+    "feedback",
+    "structure",
+    "literature",
+    "concepts",
+    "integrity",
+    "meta",
+    "methods",
+    "literature",
+    "feedback",
+    "general",
+    "terminology",
+    "general",
+    "general"
+  ],
+  "readable": [
+    "## Findings\n\n| Where | Term |\n|---|---|\n| main.md:12 | subjects |\n\nWhy do you say subjects here?",
+    "plain text\n\nwith tags and a < b comparison",
+    ""
+  ],
+  "guard": [
+    {
+      "path": "/home/a/Paper/manuscript/main.md",
+      "authorFile": "manuscript/main.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/paper/MANUSCRIPT/main.md",
+      "authorFile": "MANUSCRIPT/main.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/notes/ai/summary.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/notes/mine.md",
+      "authorFile": "notes/mine.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/notes/ai/../mine.md",
+      "authorFile": "notes/mine.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/scope.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/sub/scope.md",
+      "authorFile": "sub/scope.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/ai-log/2026-10.jsonl",
+      "authorFile": null,
+      "isLog": true,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/ai-log",
+      "authorFile": null,
+      "isLog": true,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/AI-LOG/../ai-log/x.jsonl",
+      "authorFile": null,
+      "isLog": true,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/party/expert.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/party.md",
+      "authorFile": "party.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/notes/ai/*.md",
+      "authorFile": "notes/ai/*.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/notes/*/x.md",
+      "authorFile": "notes/*/x.md",
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": false
+    },
+    {
+      "path": "/home/a/Other/manuscript/main.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": false
+    },
+    {
+      "path": "/home/a/Paper/../Other/x.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": false
+    },
+    {
+      "path": "C:\\home\\a\\Paper\\manuscript\\main.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": false
+    },
+    {
+      "path": "/home/a/Paper/./disclosure//ai-register.en.md",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/.cowriting/game.json",
+      "authorFile": null,
+      "isLog": false,
+      "liesIn": true
+    },
+    {
+      "path": "/home/a/Paper/literature/refs.bib",
+      "authorFile": "literature/refs.bib",
+      "isLog": false,
+      "liesIn": true
+    }
+  ],
+  "logFiles": [
+    {
+      "rewritten": [],
+      "stray": []
+    },
+    {
+      "rewritten": [
+        "2026-09.jsonl",
+        "2026-10.jsonl"
+      ],
+      "stray": [
+        "notes.txt"
+      ]
+    },
+    {
+      "rewritten": [],
+      "stray": [
+        "copy.jsonl"
+      ]
+    }
+  ],
+  "changedFiles": [
+    [
+      "b.md",
+      "c.md"
+    ],
+    [
+      "a.md"
+    ]
+  ],
+  "monthFile": [
+    "2026-01.jsonl",
+    "2026-12.jsonl"
+  ]
+}

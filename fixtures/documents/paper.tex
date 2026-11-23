@@ -1,0 +1,16 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+% a comment that is not counted
+\begin{document}
+\section{Introduction}
+Sitting is common \cite{smith2020} and costs 50\% of the day. % trailing comment
+See Figure~\ref{fig:one} and \textbf{bold words}.
+\begin{figure}
+\caption{Not counted at all}
+\label{fig:one}
+\end{figure}
+\begin{equation*}
+a = b
+\end{equation*}
+Final sentence with $x$ in it.
+\end{document}

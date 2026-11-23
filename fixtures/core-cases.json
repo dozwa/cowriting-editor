@@ -1,0 +1,60 @@
+{
+  "now": "2026-10-07T12:00:00.000Z",
+  "category": [
+    { "command": "cowrite:feedback", "text": "" },
+    { "command": "cw:socratic", "text": "" },
+    { "command": "structure", "text": "" },
+    { "command": "cowrite:sources", "text": "x" },
+    { "command": "explain", "text": "x" },
+    { "command": "submit", "text": "x" },
+    { "command": "cowrite:pane", "text": "log" },
+    { "command": "cowrite:summon", "text": "statistics-nerd please" },
+    { "command": "cowrite:ask", "text": "  cowrite:librarian  what now" },
+    { "command": "cowrite:ask", "text": "nobody at all" },
+    { "command": "something-else", "text": "" },
+    { "command": null, "text": "Use the cowrite:terminologist agent to review main.tex" },
+    { "command": null, "text": "Use the cowrite:unknown agent" },
+    { "command": null, "text": "just a question" }
+  ],
+  "readable": [
+    "<agent-message from=\"a1\">\n[Subagent hand-back]\n## Findings\n\n| Where | Term |\n|---|---|\n| main.md:12 | subjects |\n\n\n\nWhy do you say subjects here?\n</agent-message>",
+    "plain text\n\n\n\nwith <b>tags</b> and a < b comparison",
+    "   "
+  ],
+  "guard": {
+    "root": "/home/a/Paper",
+    "paths": [
+      "/home/a/Paper/manuscript/main.md",
+      "/home/a/paper/MANUSCRIPT/main.md",
+      "/home/a/Paper/notes/ai/summary.md",
+      "/home/a/Paper/notes/mine.md",
+      "/home/a/Paper/notes/ai/../mine.md",
+      "/home/a/Paper/scope.md",
+      "/home/a/Paper/sub/scope.md",
+      "/home/a/Paper/ai-log/2026-10.jsonl",
+      "/home/a/Paper/ai-log",
+      "/home/a/Paper/AI-LOG/../ai-log/x.jsonl",
+      "/home/a/Paper/party/expert.md",
+      "/home/a/Paper/party.md",
+      "/home/a/Paper/notes/ai/*.md",
+      "/home/a/Paper/notes/*/x.md",
+      "/home/a/Paper",
+      "/home/a/Other/manuscript/main.md",
+      "/home/a/Paper/../Other/x.md",
+      "C:\\home\\a\\Paper\\manuscript\\main.md",
+      "/home/a/Paper/./disclosure//ai-register.en.md",
+      "/home/a/Paper/.cowriting/game.json",
+      "/home/a/Paper/literature/refs.bib"
+    ]
+  },
+  "logFiles": [
+    { "before": { "2026-09.jsonl": "a\n", "2026-10.jsonl": "b\n" }, "after": { "2026-09.jsonl": "a\n", "2026-10.jsonl": "b\nc\n" }, "month": "2026-10.jsonl" },
+    { "before": { "2026-09.jsonl": "a\n", "2026-10.jsonl": "b\n" }, "after": { "2026-09.jsonl": "A\n", "2026-11.jsonl": "x\n", "notes.txt": "hi" }, "month": "2026-11.jsonl" },
+    { "before": {}, "after": { "2026-10.jsonl": "b\n", "copy.jsonl": "b\n" }, "month": "2026-10.jsonl" }
+  ],
+  "changedFiles": [
+    { "before": { "a.md": "1:10", "b.md": "2:20" }, "after": { "a.md": "1:10", "b.md": "3:21", "c.md": "4:1" } },
+    { "before": { "a.md": "1:10" }, "after": {} }
+  ],
+  "monthFile": ["2026-01-31T23:59:59.999Z", "2026-12-01T00:00:00.000Z"]
+}

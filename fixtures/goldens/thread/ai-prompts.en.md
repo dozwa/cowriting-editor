@@ -1,0 +1,14 @@
+# Appendix: AI prompts
+
+Every input to the AI system for “Walking breaks & 100% focus_time”, in order, with the author's classification. Live reviews and checks the plugin started on its own are marked as such.
+
+### 2026-11-01 10:05 · Checks of field-specific terminology · in reply to report1 · not annotated
+
+> For this journal I always write participants, never subjects. Please keep that in mind for this paper.
+
+### 2026-11-01 10:06 · Checks of field-specific terminology · report from terminologist · in reply to 2026-11-01 10:05 · not annotated
+
+> <agent-message from="a2">
+> [Subagent hand-back]
+> Agreed. For this journal it is participants throughout, and I will flag subjects from now on.
+> </agent-message>

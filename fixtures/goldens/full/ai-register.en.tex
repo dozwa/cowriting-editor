@@ -1,0 +1,52 @@
+\section*{AI register (disclosure of AI use)}
+
+For “Walking breaks \& 100\% focus\_time”, the generative AI model Claude (Anthropic) was used via Claude Code with the CoWriting plugin in an assisting role only: for hints, questions, explanations and literature support. The manuscript text was written by the author. The plugin refuses the AI's writes to manuscript files, records any change it nevertheless detects during an AI tool call (listed below), and the manuscript's version history (git) shows how the text came about. All AI interactions were logged automatically (ai-log/). Some briefing lines for the reviewer personas (party.md) were proposed by the model from discussions with the author and taken over only after the author confirmed them.
+
+\begin{tabular}{p{.22\linewidth}p{.18\linewidth}p{.2\linewidth}p{.2\linewidth}p{.1\linewidth}}
+\hline
+\textbf{Purpose} & \textbf{Tool / model} & \textbf{Extent} & \textbf{Use} & \textbf{Chapters} \\
+\hline
+Checks of field-specific terminology & Claude Code 2.1.300; CoWriting 0.1.0 (claude-opus-5-5, m) & 1 request, 2026-10-04 to 2026-10-05 & not annotated: 1 & – \\
+Feedback and critique of own text & Claude Code 2.1.300; CoWriting 0.1.0 (claude-opus-5-5) & 2 requests, 2026-10-01 to 2026-10-07 & adapted: 1, not annotated: 1 & Einleitung \\
+Structure and argumentation feedback & Claude Code 2.1.300; CoWriting 0.1.0 (claude-opus-5-5) & 2 requests, 2026-10-07 to 2026-10-07 & rejected: 1, adopted: 1 & Discussion, Methods \\
+Grammar, spelling and punctuation corrections (1) & Claude Code 2.1.300; CoWriting 0.1.0 (claude-opus-5-5) & 1 request, 2026-10-02 to 2026-10-02 & not annotated: 1 & – \\
+Live review while writing (short hints on changed paragraphs) & Claude Code 2.1.300; CoWriting 0.1.0 (haiku) & 1 request, 2026-10-03 to 2026-10-03 & hints only, no classification required & – \\
+Briefing lines for a reviewer persona, distilled from a feedback discussion; written to party.md only once the author confirmed them & Claude Code 2.1.300; CoWriting 0.1.0 (m) & 1 request, 2026-10-06 to 2026-10-06 & hints only, no classification required; adopted: 1 & – \\
+Check of the planned points against the text & Claude Code 2.1.300; CoWriting 0.1.0 (haiku) & 1 request, 2026-10-07 to 2026-10-07 & hints only, no classification required & – \\
+\hline
+\end{tabular}
+
+\noindent(1) Pure language corrections (grammar/spelling) need no disclosure in DFG proposals; some universities still require it.
+
+\subsection*{Example prompts}
+\begin{itemize}
+  \item \textit{Checks of field-specific terminology:} Use the cowrite:terminologist agent to review main.tex
+  \item \textit{Checks of field-specific terminology:} Reply to The Terminologist (the cowrite:terminologist agent) on its terminology feedback from 10:00, log entry a4. My r…
+  \item \textit{Feedback and critique of own text:} Gib mir Feedback zur Einleitung \& zu 50\% der Methodik
+  \item \textit{Feedback and critique of own text:} Feedback on the abstract, please
+  \item \textit{Structure and argumentation feedback:} A question over several lines, with a\_underscore, a \{brace\}, 100\% and a very long tail word word word word word word wo…
+  \item \textit{Structure and argumentation feedback:} Check the outline
+  \item \textit{Grammar, spelling and punctuation corrections:} Korrigiere Rechtschreibung
+\end{itemize}
+\subsection*{Text formulated by the AI ([AI-TEXT])}
+\begin{itemize}
+  \item 2026-10-02: Korrigiere Rechtschreibung
+\end{itemize}
+\subsection*{Manuscript changes detected during AI tool calls}
+\begin{itemize}
+  \item 2026-10-04: Bash – manuscript/main.tex
+\end{itemize}
+Each of these changes was reviewed; what remained in the text is declared above or under [AI-TEXT].
+\subsection*{Changes to the AI log undone after a tool call}
+\begin{itemize}
+  \item 2026-10-08: Bash – ai-log/2026-10.jsonl
+\end{itemize}
+The log was restored each time; the altered version is kept in .cowriting/log-rewrites/.
+\subsection*{Write attempts by the AI that the guard refused}
+\begin{itemize}
+  \item 2026-10-09: Write – manuscript/main.tex
+  \item 2026-10-09: Bash – sed -i 's/subjects/participants/g' manuscript/main.tex \&\& echo xxxxxxxxxxxxxxxx…
+\end{itemize}
+These changed nothing. The pattern check can also refuse harmless commands.
+
+\textit{The author bears full responsibility for content, sources and wording. Adapt this statement to the target institution's rules.}

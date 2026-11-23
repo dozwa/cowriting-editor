@@ -1,0 +1,3 @@
+# Appendix: AI prompts
+
+Every input to the AI system for “Walking breaks & 100% focus_time”, in order, with the author's classification. Live reviews and checks the plugin started on its own are marked as such.
