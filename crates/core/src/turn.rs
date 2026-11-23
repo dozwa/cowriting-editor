@@ -155,9 +155,26 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         Some(id) => Some(party.by_id(id).cloned().ok_or_else(|| TurnError::Invalid(format!("This document's party has no expert “{id}”.")))?),
         None => None,
     };
+    let earlier = workspace.log.read()?;
+    // an action holds for its whole thread: a reply in a Socratic dialogue is still that dialogue
+    let started_by = ask.command.clone().or_else(|| {
+        let first = thread_of(&earlier, ask.reply_to.as_deref()?, &party, "Assistant").first()?.id.clone();
+        earlier.iter().find_map(|e| match e {
+            LogEntry::Prompt(p) if p.id == first => p.command.clone(),
+            _ => None,
+        })
+    });
+    let action = if expert.is_none() { started_by.as_deref().and_then(crate::actions::action) } else { None };
+    let mut ask = ask;
+    if ask.text.trim().is_empty() {
+        match action.filter(|_| ask.reply_to.is_none()) {
+            Some(action) if !action.request.is_empty() => ask.text = action.request.to_string(),
+            Some(action) => return Err(TurnError::Invalid(format!("{}: say what you mean first.", action.label))),
+            None => return Err(TurnError::Invalid("There is no question to ask.".into())),
+        }
+    }
     workspace.sidecar.ensure(host, &ask.document_text)?;
     let before = workspace.log.snapshot()?;
-    let earlier = workspace.log.read()?;
 
     // the question is on the record, with the text it was asked about, before anything is sent
     let id = host.new_id();
@@ -166,7 +183,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         ts: host.now(),
         session: workspace.session.clone(),
         paper: workspace.sidecar.name.clone(),
-        category: expert.as_ref().map_or_else(|| category_for(ask.command.as_deref(), &ask.text, &party), |e| e.category.clone()),
+        category: expert.as_ref().map_or_else(|| category_for(action.map(|a| a.id).or(ask.command.as_deref()), &ask.text, &party), |e| e.category.clone()),
         command: ask.command.clone(),
         reply_to: ask.reply_to.clone(),
         text: ask.text.clone(),
@@ -189,6 +206,9 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         if !brief.is_empty() {
             contract.push_str(&format!("\n\n## The author's briefing for you in this project\n\n{brief}"));
         }
+    }
+    if let Some(action) = action {
+        contract = format!("{contract}\n\n# What the author asked for: {}\n\n{}", action.label, action.instructions);
     }
     let mut without_tools = !backend.uses_tools();
     let mut request = if without_tools {

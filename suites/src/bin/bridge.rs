@@ -152,7 +152,7 @@ impl Bridge {
                 document_text: input["documentText"].as_str().unwrap_or_default().to_string(),
                 model: settings.model,
                 persona: input["persona"].as_str().map(String::from),
-                command: input["persona"].as_str().map(|_| "ask".to_string()),
+                command: input["persona"].as_str().map(|_| "ask".to_string()).or_else(|| input["command"].as_str().map(String::from)),
             };
             let mut events = stream.try_clone().map_err(|e| e.to_string())?;
             runtime.block_on(session.ask(backend.as_ref(), ask, &mut |event| {

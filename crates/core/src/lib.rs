@@ -2,6 +2,7 @@
 //! network. Most of it is ported from the CoWriting plugin for Claude Code; each module names
 //! the plugin file it follows, and `fixtures/goldens` holds the plugin's own output to compare with.
 
+pub mod actions;
 pub mod backend;
 pub mod briefs;
 pub mod contract;

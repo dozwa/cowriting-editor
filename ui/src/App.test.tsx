@@ -729,3 +729,32 @@ test('saying no to the old log leaves it alone, and moving sends the text as it 
   // the moved document is saved where it is now
   expect(within(screen.getByRole('banner')).getByText('saved')).toBeTruthy()
 })
+
+test('an action button asks with what was typed, or its own question, and names the action', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const actions = within(screen.getByRole('group', { name: 'Ready-made requests' }))
+  // explaining needs something to explain
+  expect((actions.getByRole('button', { name: 'Explain' }) as HTMLButtonElement).disabled).toBe(true)
+
+  await user.click(actions.getByRole('button', { name: 'Language' }))
+  await waitFor(() => expect(calls.asked.length).toBe(1))
+  expect(calls.asked[0]).toMatchObject({ text: 'Check the language of the whole document.', command: 'language', persona: null, replyTo: null })
+  // in the thread the next message is a reply: no action buttons there
+  await waitFor(() => expect(screen.queryByRole('group', { name: 'Ready-made requests' })).toBeNull())
+
+  await user.click(screen.getByRole('button', { name: 'New question' }))
+  await user.type(screen.getByLabelText('Ask the AI'), 'effect size')
+  await user.click(within(screen.getByRole('group', { name: 'Ready-made requests' })).getByRole('button', { name: 'Explain' }))
+  await waitFor(() => expect(calls.asked.length).toBe(2))
+  expect(calls.asked[1]).toMatchObject({ text: 'effect size', command: 'explain' })
+})
+
+test('the status bar says Claude Code when Claude Code answers', async () => {
+  const { api } = standIn({ settings: { backend: 'claude-code', model: 'haiku', baseUrl: '' } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  expect(await screen.findByText('haiku · Claude Code')).toBeTruthy()
+})

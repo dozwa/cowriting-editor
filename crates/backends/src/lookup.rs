@@ -158,7 +158,15 @@ pub fn parse_better_bibtex(items: &Value, limit: usize) -> Vec<Hit> {
         let key = item["citekey"].as_str().or(item["citation-key"].as_str()).filter(|key| !key.is_empty());
         Hit { citekey: key.map(String::from), title: text(&item["title"]), authors: author_line(&names), year: parse_work(item).year, doi: text(&item["DOI"]), file: String::new() }
     };
-    items.iter().take(limit).map(hit).collect()
+    // one work kept in two libraries (the author's own and a group's) under one key is one hit
+    let mut hits: Vec<Hit> = Vec::new();
+    for found in items.iter().map(hit) {
+        if !hits.iter().any(|h| h.citekey.is_some() && h.citekey == found.citekey && h.title == found.title) {
+            hits.push(found);
+        }
+    }
+    hits.truncate(limit);
+    hits
 }
 
 /// Searches the author's Zotero through Better BibTeX, which knows every item's citekey. None when it is not there.

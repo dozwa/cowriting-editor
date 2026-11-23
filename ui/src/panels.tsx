@@ -60,12 +60,22 @@ type AskProps = {
   /** Said above the question field: an untested model, a model without tools. */
   notice: string
   party: PartyView | null
-  onAsk(text: string, replyTo: string | null, persona: string | null): void
+  onAsk(text: string, replyTo: string | null, persona: string | null, command?: string): void
   onAnnotate(id: string, use: Use, note: string): void
   onJump(line: number): void
   onNew(): void
   onSettings(): void
 }
+
+/** The ready-made requests; what each tells the AI is in the core (`crates/core/src/actions.rs`). */
+export const ACTIONS: { id: string; label: string; hint: string; request: string }[] = [
+  { id: 'feedback', label: 'Feedback', hint: 'What works, the three biggest problems, one next step. Type a section’s name first to narrow it.', request: 'Feedback on the whole document.' },
+  { id: 'socratic', label: 'Socratic', hint: 'Questions, one at a time, that help you think a section through. No text.', request: 'Help me think this text through with questions.' },
+  { id: 'structure', label: 'Structure', hint: 'How your text is built: reverse outline, argument map, where the thread breaks.', request: 'Check the structure of the whole document.' },
+  { id: 'language', label: 'Language', hint: 'Grammar, spelling and punctuation, each with the corrected form and the rule. Listed in the disclosure as language correction.', request: 'Check the language of the whole document.' },
+  { id: 'explain', label: 'Explain', hint: 'Explains a concept, method or theory for your own understanding. Type what you want explained first.', request: '' },
+  { id: 'consistency', label: 'Consistency', hint: 'Terms, abbreviations, citation keys, numbering: a checklist of what does not agree.', request: 'Check the whole document for consistency.' },
+]
 
 export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, onAnnotate, onJump, onNew, onSettings }: AskProps) {
   const [text, setText] = useState('')
@@ -89,6 +99,14 @@ export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, o
     const question = text.trim()
     if (question === '' || live !== null) return
     onAsk(question, isReply && last !== undefined ? last.id : null, to === '' ? null : to)
+    setText('')
+  }
+
+  /** An action button: what is typed narrows it; with nothing typed it asks its own question. */
+  const start = (action: (typeof ACTIONS)[number]) => {
+    const typed = text.trim()
+    if (live !== null || (typed === '' && action.request === '')) return
+    onAsk(typed === '' ? action.request : typed, null, null, action.id)
     setText('')
   }
 
@@ -157,6 +175,15 @@ export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, o
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send()
             }}
           />
+          {!isReply && to === '' && (
+            <div className="actions" role="group" aria-label="Ready-made requests">
+              {ACTIONS.map(action => (
+                <button key={action.id} type="button" title={action.hint} disabled={live !== null || (action.request === '' && text.trim() === '')} onClick={() => start(action)}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="row">
             <button className="primary" type="submit" disabled={live !== null || text.trim() === ''}>
               {live !== null ? 'Answering…' : isReply ? 'Reply' : 'Ask'}

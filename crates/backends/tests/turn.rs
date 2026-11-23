@@ -323,3 +323,55 @@ async fn an_expert_the_author_made_for_this_document_is_asked_like_the_others() 
     assert_eq!(response.personas, ["health-economist"]);
     assert_eq!(thread_of(&entries, &response.reference, &workspace.party(), "Assistant")[0].who, "The Health Economist");
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn an_action_tells_the_model_what_to_do_is_logged_under_its_purpose_and_holds_for_the_replies() {
+    let (_, workspace) = workspace();
+    let reply = json!({ "replies": [{ "text": "| Line | Original | Corrected | Rule |" }] });
+
+    // a button with nothing typed asks its own question, and the log says which action it was
+    let (backend, outcome, _) = turn(&workspace, reply.clone(), Ask { command: Some("language".into()), ..ask("") }).await;
+    let first = outcome.unwrap().id;
+    let request = &backend.requests()[0];
+    assert!(request.system.contains("# What the author asked for: Language"));
+    assert!(request.system.contains("| Line | Original | Corrected | Rule |"));
+    assert!(request.system.contains("never"), "the assist-only rules still come first");
+    assert!(matches!(&request.messages[0].content[0], Block::Text { text } if text == "Check the language of the whole document."));
+    let entries = workspace.log.read().unwrap();
+    let asked: Vec<(Option<&str>, &str, &str)> =
+        entries.iter().filter_map(|e| if let LogEntry::Prompt(p) = e { Some((p.command.as_deref(), p.category.as_str(), p.text.as_str())) } else { None }).collect();
+    assert_eq!(asked, [(Some("language"), "language", "Check the language of the whole document.")]);
+
+    // what the author typed is what is asked; the action only adds the instructions
+    let (backend, outcome, _) = turn(&workspace, reply.clone(), Ask { command: Some("feedback".into()), ..ask("Only the methods, please.") }).await;
+    outcome.unwrap();
+    assert!(backend.requests()[0].system.contains("# What the author asked for: Feedback"));
+    assert!(matches!(&backend.requests()[0].messages[0].content[0], Block::Text { text } if text == "Only the methods, please."));
+
+    // a reply in the thread is still that action, and is counted under the same purpose
+    let (backend, outcome, _) = turn(&workspace, reply.clone(), Ask { reply_to: Some(first), ..ask("Why is line 3 wrong?") }).await;
+    outcome.unwrap();
+    assert!(backend.requests()[0].system.contains("# What the author asked for: Language"));
+    let entries = workspace.log.read().unwrap();
+    let last = entries.iter().rev().find_map(|e| if let LogEntry::Prompt(p) = e { Some((p.command.clone(), p.category.clone())) } else { None }).unwrap();
+    assert_eq!(last, (None, "language".to_string()));
+    let stats = compute_stats(&entries, "2026-11-23", &workspace.party());
+    assert_eq!(stats.by_category.get("language"), Some(&2));
+
+    // an ordinary question gets no action, and an expert keeps its own perspective
+    let (backend, outcome, _) = turn(&workspace, reply.clone(), ask("Is line 3 clear?")).await;
+    outcome.unwrap();
+    assert!(!backend.requests()[0].system.contains("# What the author asked for"));
+    let (backend, outcome, _) = turn(&workspace, reply.clone(), Ask { command: Some("feedback".into()), persona: Some("statistics-nerd".into()), ..ask("Review.") }).await;
+    outcome.unwrap();
+    assert!(!backend.requests()[0].system.contains("# What the author asked for"));
+
+    // explaining needs something to explain, and nothing at all is no question: neither is logged or sent
+    let before = workspace.log.read().unwrap().len();
+    for empty in [Ask { command: Some("explain".into()), ..ask(" ") }, ask("")] {
+        let (backend, outcome, _) = turn(&workspace, reply.clone(), empty).await;
+        assert!(matches!(outcome, Err(TurnError::Invalid(_))));
+        assert!(backend.requests().is_empty());
+    }
+    assert_eq!(workspace.log.read().unwrap().len(), before);
+}

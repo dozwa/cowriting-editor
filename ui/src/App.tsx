@@ -303,7 +303,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
     }
   }
 
-  const ask = async (text: string, replyTo: string | null, persona: string | null) => {
+  const ask = async (text: string, replyTo: string | null, persona: string | null, command?: string) => {
     if (editor.current === null || live !== null) return
     setError('')
     setTab('ask')
@@ -318,7 +318,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
         return now
       })
     try {
-      const result = await api.ask({ text, replyTo, persona, documentText: editor.current.getText() }, onEvent)
+      const result = await api.ask({ text, replyTo, persona, ...(command === undefined ? {} : { command }), documentText: editor.current.getText() }, onEvent)
       setWithoutTools(result.withoutTools)
       setThread(await api.thread(result.id))
     } catch (e) {
@@ -489,7 +489,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       </div>
       <footer className="status">
         <span>
-          {settings === null ? '' : isScripted ? 'Scripted answers (no model)' : `${settings.model} · ${settings.baseUrl !== '' ? settings.baseUrl : settings.backend === 'anthropic' ? 'Anthropic' : 'OpenAI'}`}
+          {settings === null ? '' : isScripted ? 'Scripted answers (no model)' : `${settings.model} · ${settings.baseUrl !== '' ? settings.baseUrl : settings.backend === 'anthropic' ? 'Anthropic' : settings.backend === 'claude-code' ? 'Claude Code' : 'OpenAI'}`}
           {settings !== null && !isScripted && settings.modelStatus !== 'tested' && <span className="flag" title={MODEL_NOTICE[settings.modelStatus]}>{settings.modelStatus === 'failed' ? 'failed the rule test' : 'untested model'}</span>}
         </span>
         <span className="spacer" />

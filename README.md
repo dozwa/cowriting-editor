@@ -44,6 +44,16 @@ the export dialog offers it as well and remembers your choice. Page size, fonts 
 Word file are set in Word. The reference list is in pandoc's default style (Chicago author-date);
 choosing a style is not built. Licences of the two programs: `src-tauri/tools/`.
 
+## Ready-made requests
+
+Under the question field of the Ask tab are six buttons: **Feedback** (what works, the three
+biggest problems, one next step), **Socratic** (questions, one at a time), **Structure** (reverse
+outline and argument map), **Language** (grammar and spelling with the corrected form and the
+rule), **Explain** (a concept, for your own understanding) and **Consistency** (terms,
+abbreviations, citation keys). What you typed narrows the request; with nothing typed the button
+asks about the whole document. Each is logged under its purpose, so the disclosure lists language
+corrections apart from feedback. They are the plugin's commands of the same names.
+
 ## Live review and scope
 
 **Live review** is off until you turn it on in the Live tab. While it is on, the paragraphs you

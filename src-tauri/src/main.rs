@@ -175,6 +175,8 @@ struct AskInput {
     reply_to: Option<String>,
     /// The expert to ask; none for the assistant itself.
     persona: Option<String>,
+    /// The action button that started this ('feedback', …), if one did.
+    command: Option<String>,
     /// The editor's text as it is now, saved or not.
     document_text: String,
 }
@@ -195,7 +197,7 @@ async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, 
     let session = editor.session()?;
     let settings = read_settings(&app);
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
-    let command = input.persona.as_ref().map(|_| "ask".to_string());
+    let command = input.persona.as_ref().map(|_| "ask".to_string()).or(input.command);
     let ask = Ask { text: input.text, reply_to: input.reply_to, persona: input.persona, document_text: input.document_text, model: settings.model, command };
     let outcome = session
         .ask(backend.as_ref(), ask, &mut |event| {

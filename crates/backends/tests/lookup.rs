@@ -87,6 +87,16 @@ fn better_bibtex_gives_every_hit_its_citekey_and_names_the_keys_it_lacks() {
         (Some("smith2020"), "Smith, World Health Organization", "2020", "10.1000/walk.2020")
     );
     assert_eq!((hits[1].citekey.as_deref(), hits[1].year.as_str()), (Some("lee2021"), ""));
+    // the same work in the author's library and in a group's is listed once; two works under one key are both listed
+    let twice = json!([
+        { "id": "http://zotero.org/users/1/items/A", "citekey": "smith2020", "title": "Walking breaks" },
+        { "id": "http://zotero.org/groups/2/items/B", "citekey": "smith2020", "title": "Walking breaks" },
+        { "id": "http://zotero.org/groups/2/items/C", "citekey": "smith2020", "title": "Another paper" },
+        { "title": "No key" },
+        { "title": "No key" }
+    ]);
+    let titles: Vec<String> = parse_better_bibtex(&twice, 10).into_iter().map(|h| h.title).collect();
+    assert_eq!(titles, ["Walking breaks", "Another paper", "No key", "No key"]);
     assert_eq!(keys_not_found("not found: ghost1999, lecun2015"), ["ghost1999", "lecun2015"]);
     assert_eq!(keys_not_found("Translator not found"), Vec::<String>::new());
 }

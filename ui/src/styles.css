@@ -199,3 +199,10 @@ dialog .choice label input { width: auto; }
 .sources .warn { color: var(--warn); }
 .scope.editing { display: grid; gap: 8px; padding: 12px 14px; }
 .scope.editing textarea { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+
+.composer .actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.composer .actions button { font-size: 12px; padding: 2px 8px; }
+/* a long citekey breaks instead of widening the panel */
+.sources { overflow-x: hidden; }
+.sources code, .sources li, .sources p { overflow-wrap: anywhere; }
+.sources form input { min-width: 0; }

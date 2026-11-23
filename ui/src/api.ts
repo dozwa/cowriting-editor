@@ -198,7 +198,7 @@ export const api = {
   removeBibliography: (path: string) => invoke<void>('remove_bibliography', { path }),
   searchSources: (query: string, documentText: string) => invoke<SourceHits>('search_sources', { query, documentText }),
   checkReferences: (documentText: string) => invoke<SourcesView['checked']>('check_references', { documentText }),
-  ask: (input: { text: string; replyTo: string | null; persona: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
+  ask: (input: { text: string; replyTo: string | null; persona: string | null; command?: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
     const channel = new Channel<AskEvent>()
     channel.onmessage = onEvent
     return invoke<AskResult>('ask', { input, onEvent: channel })
