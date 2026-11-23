@@ -3,7 +3,9 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { confirm, open, save } from '@tauri-apps/plugin-dialog'
 
-export type Opened = { path: string; name: string; text: string; language: string }
+/** An AI log in the document's folder whose document is gone. */
+export type Orphan = { name: string; isSameText: boolean; questions: number }
+export type Opened = { path: string; name: string; text: string; language: string; orphans: Orphan[] }
 
 export type BibFile = { path: string; name: string; format: string; entries: number; isFromDocument: boolean; error?: string }
 export type RefRecord = { doi: string; title: string; year: string }
@@ -161,6 +163,12 @@ export const api = {
   confirmLeave: () => confirm('This document has changes that are not saved. Leave it anyway?', { title: 'Unsaved changes', kind: 'warning' }),
   openDocument: (path: string) => invoke<Opened>('open_document', { path }),
   newDocument: (path: string) => invoke<Opened>('new_document', { path }),
+  /** The author says this document is the renamed one that log was kept for. */
+  adoptLog: (name: string) => invoke<Opened>('adopt_log', { name }),
+  /** Asks the author where the document should go; null when they cancel. */
+  pickMove: (current: string) => save({ filters: MARKDOWN, defaultPath: current }),
+  /** Moves or renames the open document, with its log. */
+  moveDocument: (target: string, text: string) => invoke<Opened>('move_document', { target, text }),
   /** Saves; returns the AI text found in what changed since the last save, now logged. */
   saveDocument: (text: string) => invoke<AiTextRow[]>('save_document', { text }),
   /** Text that was just pasted or dropped: compared with the logged answers; returns what was found, now logged. */

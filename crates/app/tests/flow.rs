@@ -516,3 +516,60 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
         assert!(String::from_utf8_lossy(&pdf).replace("MediaBox [", "MediaBox[").contains(&format!("/MediaBox[0 0 {width}")), "{name} is {width} points wide");
     }
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_document_that_moves_or_was_renamed_keeps_its_log() {
+    let folder = Folder::new("move");
+    std::fs::write(folder.path("thesis.md"), TEXT).unwrap();
+    std::fs::write(folder.path("script.json"), json!({ "replies": [{ "text": "Who are the subjects?" }] }).to_string()).unwrap();
+    let (session, opened) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    assert!(opened.orphans.is_empty());
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let backend = make_backend(&settings, None).unwrap();
+    session.ask(backend.as_ref(), Ask { text: "Is line 3 clear?".into(), document_text: TEXT.into(), model: "scripted".into(), ..Default::default() }, &mut |_| {}).await.unwrap();
+    let log_before = std::fs::read_to_string(
+        folder.path(".cowriting/thesis.md/ai-log").to_string() + "/" + &session.workspace.host.list(&folder.path(".cowriting/thesis.md/ai-log")).unwrap()[0],
+    )
+    .unwrap();
+
+    // moved inside the editor, with unsaved changes: the text, the log and the snapshot arrive, the old place is empty
+    let edited = format!("{TEXT}\nA new paragraph.\n");
+    assert!(session.move_document(&folder.path("thesis.md"), &edited).is_err());
+    assert!(session.move_document(&folder.path("thesis.txt"), &edited).is_err());
+    session.move_document(&folder.path("drafts/chapter-1.md"), &edited).unwrap();
+    let files = folder.files();
+    assert!(!files.iter().any(|file| file == "thesis.md" || file.starts_with(".cowriting/")), "{files:?}");
+    assert_eq!(std::fs::read_to_string(folder.path("drafts/chapter-1.md")).unwrap(), edited);
+    let (moved, opened) = Session::open(Arc::new(DiskHost), &folder.path("drafts/chapter-1.md")).unwrap();
+    assert!(opened.orphans.is_empty());
+    let view = moved.log_view(&edited).unwrap();
+    assert_eq!((view.turns.len(), view.turns[0].asked.as_str()), (1, "Is line 3 clear?"));
+    let month = moved.workspace.host.list(&folder.path("drafts/.cowriting/chapter-1.md/ai-log")).unwrap();
+    assert_eq!(std::fs::read_to_string(folder.path(&format!("drafts/.cowriting/chapter-1.md/ai-log/{}", month[0]))).unwrap(), log_before, "the log moved, byte for byte");
+    let info: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(folder.path("drafts/.cowriting/chapter-1.md/doc.json")).unwrap()).unwrap();
+    assert_eq!(info["file"], "chapter-1.md");
+
+    // a place that has a log of its own is refused: neither log may be lost
+    std::fs::write(folder.path("drafts/other.md"), "# Other\n").unwrap();
+    let (other, _) = Session::open(Arc::new(DiskHost), &folder.path("drafts/other.md")).unwrap();
+    assert!(other.move_document(&folder.path("drafts/chapter-1.md"), "# Other\n").unwrap_err().contains("has an AI log of its own"));
+    assert_eq!(std::fs::read_to_string(folder.path("drafts/chapter-1.md")).unwrap(), edited);
+
+    // renamed outside the editor: the log is not taken silently, the author is asked, and then it is theirs
+    std::fs::rename(folder.path("drafts/chapter-1.md"), folder.path("drafts/intro.md")).unwrap();
+    let (renamed, opened) = Session::open(Arc::new(DiskHost), &folder.path("drafts/intro.md")).unwrap();
+    assert_eq!(serde_json::to_value(&opened.orphans).unwrap(), json!([{ "name": "chapter-1.md", "isSameText": true, "questions": 1 }]));
+    assert!(renamed.log_view(&edited).unwrap().turns.is_empty(), "nothing is taken over unasked");
+    assert!(renamed.adopt("nothing.md").is_err());
+    renamed.adopt("chapter-1.md").unwrap();
+    let (renamed, opened) = Session::open(Arc::new(DiskHost), &folder.path("drafts/intro.md")).unwrap();
+    assert!(opened.orphans.is_empty());
+    assert_eq!(renamed.log_view(&edited).unwrap().turns.len(), 1);
+    assert!(!Path::new(&folder.path("drafts/.cowriting/chapter-1.md")).exists());
+
+    // a document that has its own log is never offered another one, and a changed text is said to be changed
+    std::fs::rename(folder.path("drafts/intro.md"), folder.path("drafts/intro-2.md")).unwrap();
+    std::fs::write(folder.path("drafts/intro-2.md"), "# Something else entirely\n").unwrap();
+    let (_, opened) = Session::open(Arc::new(DiskHost), &folder.path("drafts/intro-2.md")).unwrap();
+    assert_eq!((opened.orphans[0].name.as_str(), opened.orphans[0].is_same_text), ("intro.md", false));
+}

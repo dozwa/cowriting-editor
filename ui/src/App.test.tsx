@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
-import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, PdfChoice, SourcesView } from './api'
+import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView } from './api'
 import { App } from './App'
 import type { Editor, EditorHandlers } from './editor'
 import { linkLines } from './text'
@@ -26,9 +26,9 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { 
 }
 let lastEditor: Editor & { jumps: number[] }
 
-function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[] } = {}) {
+function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[] } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   let plan = ''
   let bibFiles: BibFile[] = []
@@ -78,8 +78,17 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     pickDocument: async () => null,
     pickNewDocument: async () => null,
     confirmLeave: async () => true,
-    openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en' }),
-    newDocument: async path => ({ path, name: 'new.md', text: '', language: 'en' }),
+    openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: options.orphans ?? [] }),
+    adoptLog: async name => {
+      calls.adopted.push(name)
+      return { path: '/work/thesis.md', name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: [] }
+    },
+    pickMove: async () => '/work/drafts/chapter-1.md',
+    moveDocument: async (target, text) => {
+      calls.moved.push([target, text])
+      return { path: target, name: 'chapter-1.md', text, language: 'en', orphans: [] }
+    },
+    newDocument: async path => ({ path, name: 'new.md', text: '', language: 'en', orphans: [] }),
     saveDocument: async text => {
       calls.saved.push(text)
       return detect(text, 'typed', 0, text)
@@ -685,4 +694,38 @@ test('Claude Code is chosen without a key or an address, and the dialog says who
   expect((dialog.getByLabelText(/^Model/) as HTMLInputElement).value).toBe('sonnet')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'claude-code', model: 'sonnet', baseUrl: '' }, null]]))
+})
+
+test('a renamed document is offered its old log, and takes it only when the author says so', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ orphans: [{ name: 'draft.md', isSameText: true, questions: 4 }] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const offer = await screen.findByText(/This folder holds an AI log for/)
+  expect(offer.textContent).toContain('draft.md (4 questions)')
+  expect(offer.textContent).toContain('Its last saved text is exactly this document.')
+  expect(calls.adopted).toEqual([])
+  await user.click(screen.getByRole('button', { name: 'Yes, continue its log' }))
+  await waitFor(() => expect(calls.adopted).toEqual(['draft.md']))
+  await waitFor(() => expect(screen.queryByText(/This folder holds an AI log for/)).toBeNull())
+})
+
+test('saying no to the old log leaves it alone, and moving sends the text as it is in the editor', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ orphans: [{ name: 'draft.md', isSameText: false, questions: 1 }] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  expect((await screen.findByText(/This folder holds an AI log for/)).textContent).toContain('Its last saved text differs from this document.')
+  await user.click(screen.getByRole('button', { name: 'No, this is a new document' }))
+  expect(screen.queryByText(/This folder holds an AI log for/)).toBeNull()
+  expect(calls.adopted).toEqual([])
+
+  await user.type(screen.getByLabelText('Document'), ' Not saved yet.')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Move…' }))
+  await screen.findByText('chapter-1.md')
+  expect(calls.moved.length).toBe(1)
+  expect(calls.moved[0]![0]).toBe('/work/drafts/chapter-1.md')
+  expect(calls.moved[0]![1]).toContain('Not saved yet.')
+  // the moved document is saved where it is now
+  expect(within(screen.getByRole('banner')).getByText('saved')).toBeTruthy()
 })

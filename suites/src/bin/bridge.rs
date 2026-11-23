@@ -97,6 +97,12 @@ impl Bridge {
             }
             "scope" => Ok(json!(self.session()?.scope_view(&text("documentText")))),
             "set_scope" => self.session()?.set_scope(&text("text"), &text("documentText")).map(|_| Value::Null),
+            "adopt_log" => {
+                self.session()?.adopt(&text("name"))?;
+                self.open()
+            }
+            // the bridge serves one document at one place
+            "pick_move" => Ok(Value::Null),
             "sources" => Ok(json!(self.session()?.sources_view(&text("documentText")))),
             // no dialog here: the file beside the document, if there is one
             "pick_bibliography" => {

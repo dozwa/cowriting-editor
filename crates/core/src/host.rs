@@ -17,6 +17,10 @@ pub trait Host: Send + Sync {
     fn exists(&self, path: &str) -> bool;
     /// The names of the files directly in a folder.
     fn list(&self, path: &str) -> io::Result<Vec<String>>;
+    /// The names of the folders directly in a folder.
+    fn folders(&self, path: &str) -> io::Result<Vec<String>>;
+    /// Moves a file, or a folder with everything in it, creating the folders above its new place.
+    fn rename(&self, from: &str, to: &str) -> io::Result<()>;
     /// Now, as ISO 8601 in UTC with milliseconds: `2026-11-23T10:00:00.000Z`.
     fn now(&self) -> String;
     /// A new log id: 12 hex characters.
@@ -84,6 +88,45 @@ impl Host for DiskHost {
         Ok(names)
     }
 
+    fn folders(&self, path: &str) -> io::Result<Vec<String>> {
+        let mut names = Vec::new();
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                names.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+        Ok(names)
+    }
+
+    fn rename(&self, from: &str, to: &str) -> io::Result<()> {
+        if let Some(parent) = Path::new(to).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        if std::fs::rename(from, to).is_ok() {
+            return Ok(());
+        }
+        // another drive: copy everything, then remove the original
+        fn copy(from: &Path, to: &Path) -> io::Result<()> {
+            if from.is_dir() {
+                std::fs::create_dir_all(to)?;
+                for entry in std::fs::read_dir(from)? {
+                    let entry = entry?;
+                    copy(&entry.path(), &to.join(entry.file_name()))?;
+                }
+                Ok(())
+            } else {
+                std::fs::copy(from, to).map(|_| ())
+            }
+        }
+        copy(Path::new(from), Path::new(to))?;
+        if Path::new(from).is_dir() {
+            std::fs::remove_dir_all(from)
+        } else {
+            std::fs::remove_file(from)
+        }
+    }
+
     fn now(&self) -> String {
         iso_utc(SystemTime::now())
     }
@@ -148,6 +191,28 @@ impl Host for MemoryHost {
     fn list(&self, path: &str) -> io::Result<Vec<String>> {
         let folder = format!("{}/", path.trim_end_matches('/'));
         Ok(self.files.lock().unwrap().keys().filter_map(|k| k.strip_prefix(&folder)).filter(|rest| !rest.contains('/')).map(String::from).collect())
+    }
+
+    fn folders(&self, path: &str) -> io::Result<Vec<String>> {
+        let folder = format!("{}/", path.trim_end_matches('/'));
+        let files = self.files.lock().unwrap();
+        let mut names: Vec<String> = files.keys().filter_map(|k| k.strip_prefix(&folder)).filter_map(|rest| rest.split_once('/')).map(|(name, _)| name.to_string()).collect();
+        names.dedup();
+        Ok(names)
+    }
+
+    fn rename(&self, from: &str, to: &str) -> io::Result<()> {
+        let mut files = self.files.lock().unwrap();
+        let below = format!("{from}/");
+        let moved: Vec<String> = files.keys().filter(|k| k.as_str() == from || k.starts_with(&below)).cloned().collect();
+        if moved.is_empty() {
+            return Err(io::Error::new(io::ErrorKind::NotFound, from.to_string()));
+        }
+        for old in moved {
+            let text = files.remove(&old).expect("just listed");
+            files.insert(format!("{to}{}", &old[from.len()..]), text);
+        }
+        Ok(())
     }
 
     fn now(&self) -> String {

@@ -43,6 +43,20 @@ pub struct Opened {
     pub text: String,
     /// The manuscript's language, 'en' or 'de'.
     pub language: String,
+    /// AI logs in this folder whose document is gone, offered when this document has none: it may be that document, renamed.
+    pub orphans: Vec<Orphan>,
+}
+
+/// An AI log without its document.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Orphan {
+    /// The file name the log was kept for.
+    pub name: String,
+    /// That document's last saved text is exactly this document's text.
+    pub is_same_text: bool,
+    /// How many questions the log holds.
+    pub questions: usize,
 }
 
 /// One logged turn as the Log tab lists it.
@@ -378,7 +392,8 @@ impl Session {
     pub fn open(host: Arc<dyn Host>, path: &str) -> Result<(Session, Opened), String> {
         let text = host.read(path).map_err(|e| format!("{path} could not be opened: {e}"))?;
         let workspace = Workspace::open(host, path, EDITOR_VERSION);
-        let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone() };
+        let orphans = if workspace.sidecar.info(workspace.host.as_ref()).is_some() { Vec::new() } else { orphans_of(&workspace, &text) };
+        let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone(), orphans };
         // live review left on: what is in the document now is the baseline, as when it is turned on
         let baseline = LiveSettings::load(&workspace).is_on.then(|| opened.text.clone());
         let live = Mutex::new(LiveState { baseline, ..Default::default() });
@@ -612,6 +627,37 @@ impl Session {
         Ok(file)
     }
 
+    /// Takes over the AI log of a document that is no longer in this folder: the author says this is that document, renamed.
+    pub fn adopt(&self, name: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let (from, _) =
+            sidecar.orphans(host).into_iter().find(|(other, _)| other.name == name).ok_or_else(|| format!("This folder has no AI log for {name} without its document."))?;
+        sidecar.adopt(host, &from).map_err(|e| format!("The AI log could not be taken over: {e}"))
+    }
+
+    /// Moves or renames the document, and its AI log, notes and settings with it. The text given is what is written.
+    pub fn move_document(&self, target: &str, document_text: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let to = cowriting_core::sidecar::Sidecar::for_document(target);
+        if std::path::Path::new(target) == std::path::Path::new(&sidecar.document) {
+            return Err("That is where the document already is.".into());
+        }
+        let lower = target.to_lowercase();
+        if !(lower.ends_with(".md") || lower.ends_with(".markdown")) {
+            return Err("The document needs a name that ends in .md.".into());
+        }
+        if host.exists(&to.dir()) {
+            return Err(format!("{} has an AI log of its own there. Choose another name, so that neither log is lost.", to.name));
+        }
+        // the new file first, then the log, the old file last: whatever fails, nothing is lost
+        host.write(target, document_text).map_err(|e| format!("{target} could not be written: {e}"))?;
+        if host.exists(&sidecar.dir()) {
+            to.adopt(host, sidecar).map_err(|e| format!("The document is at its new place, but its AI log could not be moved from {}: {e}", sidecar.dir()))?;
+            to.ensure(host, document_text).map_err(error)?;
+        }
+        host.remove(&sidecar.document).map_err(|e| format!("The document and its log are at the new place; the old file could not be removed: {e}"))
+    }
+
     /// The author's comment on a logged passage of AI text. The entry itself is never changed or removed.
     pub fn comment_ai_text(&self, id: &str, note: &str) -> Result<(), String> {
         let entries = self.workspace.log.read().map_err(error)?;
@@ -747,4 +793,21 @@ impl Session {
 /// What this computer has to export with, and whether Zotero can give the references.
 pub async fn export_tools() -> ExportTools {
     ExportTools { has_zotero: cowriting_backends::lookup::has_better_bibtex().await, ..export::local_tools() }
+}
+
+fn orphans_of(workspace: &Workspace, text: &str) -> Vec<Orphan> {
+    let hash = cowriting_core::sidecar::content_hash(text);
+    let questions = |other: &cowriting_core::sidecar::Sidecar| {
+        let log = cowriting_core::log::Log::new(workspace.host.clone(), other.log_dir(), other.rewrites_dir());
+        log.read().map_or(0, |entries| entries.iter().filter(|e| matches!(e, LogEntry::Prompt(_))).count())
+    };
+    let mut found: Vec<Orphan> = workspace
+        .sidecar
+        .orphans(workspace.host.as_ref())
+        .iter()
+        .map(|(other, info)| Orphan { name: other.name.clone(), is_same_text: info.last_hash == hash, questions: questions(other) })
+        .collect();
+    // the one with this very text first
+    found.sort_by_key(|orphan| !orphan.is_same_text);
+    found
 }

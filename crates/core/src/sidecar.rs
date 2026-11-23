@@ -167,6 +167,23 @@ impl Sidecar {
         Ok(info)
     }
 
+    /// Takes over another document's sidecar: the AI log, notes and everything else move here.
+    /// Refused when this document already has one, so no log is ever overwritten.
+    pub fn adopt(&self, host: &dyn Host, from: &Sidecar) -> io::Result<()> {
+        if host.exists(&self.dir()) {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{} already has an AI log of its own", self.name)));
+        }
+        host.rename(&from.dir(), &self.dir())
+    }
+
+    /// Sidecars in this document's folder whose document is no longer there: a renamed or deleted file's log.
+    pub fn orphans(&self, host: &dyn Host) -> Vec<(Sidecar, DocInfo)> {
+        let mut names = host.folders(&format!("{}/{SIDECAR_FOLDER}", self.folder)).unwrap_or_default();
+        names.sort();
+        let beside = |name: &String| Sidecar::for_document(&format!("{}/{name}", self.folder));
+        names.iter().map(beside).filter(|other| !host.exists(&other.document)).filter_map(|other| other.info(host).map(|info| (other, info))).collect()
+    }
+
     pub fn write_info(&self, host: &dyn Host, info: &DocInfo) -> io::Result<()> {
         host.write(&self.doc_json(), &format!("{}\n", serde_json::to_string_pretty(info).expect("doc.json is plain data")))
     }

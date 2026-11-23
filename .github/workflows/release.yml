@@ -1,0 +1,55 @@
+name: Release
+
+# A tag like v0.2.0 builds the installers for the three systems and puts them into a draft
+# release. With the signing secrets set (see RELEASING.md) the macOS and Windows installers are
+# signed; without them the same installers are built unsigned.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux packages the window needs
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libdbus-1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+        working-directory: ui
+      - name: pandoc and Typst for the installer
+        run: python3 scripts/fetch-tools.py
+      - name: Build, signed where the secrets are set
+        run: ui/node_modules/.bin/tauri build
+        env:
+          # macOS: Developer ID certificate and notarisation (empty when not set: unsigned build)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Put the installers into a draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes "Draft: check the installers before publishing."
+          shopt -s nullglob
+          gh release upload "$GITHUB_REF_NAME" --clobber target/release/bundle/dmg/*.dmg target/release/bundle/nsis/*.exe target/release/bundle/appimage/*.AppImage target/release/bundle/deb/*.deb

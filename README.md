@@ -12,7 +12,7 @@ AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM S
 provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
 can be briefed and asked, and you can add experts of your own. References can be searched and
 checked, and the document exports to PDF and Word. The AI can also be your own installed Claude
-Code. There are no signed installers yet.
+Code. There are no signed installers yet, and the app does not update itself (see `RELEASING.md`).
 
 ## Sources
 
@@ -74,6 +74,14 @@ For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the
 (`verify.json`) and the references an export took from Zotero (`export/references.json`). What you tell the
 experts is in `party.md`, experts you made in `party/<id>.md`: plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.
+
+## Renaming and moving
+
+"Move…" renames or moves the open document and takes its folder of logs and notes along. If you
+rename a file outside the editor, its log stays behind under the old name. When you then open the
+file, the editor says so and asks whether this is that document; it never attaches a log on its
+own. A log is offered only from the same folder, so a file moved to another folder outside the
+editor has to be moved back, or its `.cowriting/<name>/` folder moved along by hand.
 
 ## What is sent where
 

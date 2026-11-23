@@ -67,6 +67,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [checkNote, setCheckNote] = useState('')
   /** What the editor just logged about AI text in the document, said once. */
   const [found, setFound] = useState('')
+  /** The author said the logs without a document are not this one's. */
+  const [orphansSeen, setOrphansSeen] = useState(false)
 
   const fail = (e: unknown) => setError(typeof e === 'string' ? e : e instanceof Error ? e.message : String(e))
 
@@ -210,6 +212,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const show = useCallback(
     async (opened: Opened) => {
       setDoc(opened)
+      setOrphansSeen(false)
       setThread([])
       setLive(null)
       setError('')
@@ -266,6 +269,25 @@ export function App({ api, makeEditor = createEditor }: Props) {
     try {
       const path = await api.pickDocument()
       if (path !== null) await show(await api.openDocument(path))
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  /** Rename or move: the text as it is in the editor goes to the new place, the log with it. */
+  const move = async () => {
+    if (doc === null || editor.current === null) return
+    try {
+      const target = await api.pickMove(doc.path)
+      if (target !== null) await show(await api.moveDocument(target, editor.current.getText()))
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  const adopt = async (name: string) => {
+    try {
+      await show(await api.adoptLog(name))
     } catch (e) {
       fail(e)
     }
@@ -376,6 +398,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
         <button onClick={open}>Open…</button>
         <button onClick={create}>New…</button>
         <button onClick={() => void save()} disabled={!isDirty}>Save</button>
+        <button onClick={() => void move()} title="Rename or move this document. Its AI log goes with it.">Move…</button>
         <span className="name" title={doc.path}>
           {doc.name}
           <span className={isDirty ? 'state dirty' : 'state'}>{isDirty ? 'not saved' : 'saved'}</span>
@@ -386,6 +409,18 @@ export function App({ api, makeEditor = createEditor }: Props) {
         <button onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0} title={log.stats.turns === 0 ? 'Nothing to disclose yet: the AI has not been asked' : undefined}>Disclosure…</button>
         <button onClick={() => setDialog('settings')}>Settings…</button>
       </header>
+      {doc.orphans.length > 0 && !orphansSeen && (
+        <div className="notice" role="note">
+          {doc.orphans.slice(0, 3).map(orphan => (
+            <p key={orphan.name}>
+              This folder holds an AI log for <strong>{orphan.name}</strong> ({plural(orphan.questions, 'question')}), and that file is gone.{' '}
+              {orphan.isSameText ? 'Its last saved text is exactly this document.' : 'Its last saved text differs from this document.'} Is {doc.name} that document, renamed?{' '}
+              <button className="link" onClick={() => void adopt(orphan.name)}>Yes, continue its log</button>
+            </p>
+          ))}
+          <button className="link" onClick={() => setOrphansSeen(true)}>No, this is a new document</button>
+        </div>
+      )}
       {found !== '' && (
         <p className="found" role="status">
           {found}{' '}

@@ -127,6 +127,22 @@ fn new_document(editor: State<Editor>, path: String) -> Result<Opened, String> {
     open_document(editor, path)
 }
 
+/// The author says this document is the renamed one a log in its folder was kept for.
+#[tauri::command]
+fn adopt_log(editor: State<Editor>, name: String) -> Result<Opened, String> {
+    let session = editor.session()?;
+    session.adopt(&name)?;
+    let path = session.workspace.sidecar.document.clone();
+    open_document(editor, path)
+}
+
+/// Moves or renames the open document, with its log.
+#[tauri::command]
+fn move_document(editor: State<Editor>, target: String, text: String) -> Result<Opened, String> {
+    editor.session()?.move_document(&target, &text)?;
+    open_document(editor, target)
+}
+
 #[tauri::command]
 fn save_document(editor: State<Editor>, text: String) -> Result<Vec<AiTextRow>, String> {
     editor.session()?.save(&text)
@@ -335,6 +351,8 @@ fn main() {
             open_document,
             new_document,
             save_document,
+            adopt_log,
+            move_document,
             ask,
             log_view,
             thread,
