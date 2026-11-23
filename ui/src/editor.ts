@@ -78,7 +78,14 @@ export type Editor = {
   destroy(): void
 }
 
-export function createEditor(parent: HTMLElement, handlers: { onChange(): void; onSave(): void }): Editor {
+export type EditorHandlers = {
+  onChange(): void
+  onSave(): void
+  /** Text was pasted or dropped into the document; `line` is where it starts now, 1-based. */
+  onPaste(pasted: string, line: number): void
+}
+
+export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Editor {
   const view = new EditorView({
     parent,
     state: EditorState.create({
@@ -98,7 +105,14 @@ export function createEditor(parent: HTMLElement, handlers: { onChange(): void; 
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ spellcheck: 'true', 'aria-label': 'Document' }),
         EditorView.updateListener.of(update => {
-          if (update.docChanged) handlers.onChange()
+          if (!update.docChanged) return
+          handlers.onChange()
+          for (const transaction of update.transactions) {
+            if (!transaction.isUserEvent('input.paste') && !transaction.isUserEvent('input.drop')) continue
+            transaction.changes.iterChanges((_fromA, _toA, fromB, _toB, inserted) => {
+              if (inserted.length > 0) handlers.onPaste(inserted.toString(), transaction.newDoc.lineAt(fromB).number)
+            })
+          }
         }),
       ],
     }),

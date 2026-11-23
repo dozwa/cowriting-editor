@@ -52,5 +52,12 @@ const out = {
   logFiles: cases.logFiles.map(c => ({ rewritten: core.rewrittenLogFiles(c.before, c.after), stray: core.strayLogFiles(c.before, c.after, c.month) })),
   changedFiles: cases.changedFiles.map(c => core.changedFiles(c.before, c.after)),
   monthFile: cases.monthFile.map(ts => core.monthFile(new Date(ts))),
+  briefs: {
+    parsed: core.parseBriefs(cases.briefs.text),
+    for: Object.fromEntries(cases.briefs.for.map(id => [id, core.briefFor(core.parseBriefs(cases.briefs.text), id)])),
+    set: cases.briefs.set.map(c => core.setBrief(cases.briefs.text, c.key, c.body)),
+    append: cases.briefs.append.map(c => core.appendBrief(cases.briefs.text, c.key, c.lines)),
+    empty: cases.briefs.empty.map(c => core.setBrief('', c.key, c.body)),
+  },
 }
 process.stdout.write(`${JSON.stringify(out, null, 2)}\n`)

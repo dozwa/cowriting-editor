@@ -1,20 +1,62 @@
 {
   "now": "2026-10-07T12:00:00.000Z",
   "category": [
-    { "command": "cowrite:feedback", "text": "" },
-    { "command": "cw:socratic", "text": "" },
-    { "command": "structure", "text": "" },
-    { "command": "cowrite:sources", "text": "x" },
-    { "command": "explain", "text": "x" },
-    { "command": "submit", "text": "x" },
-    { "command": "cowrite:pane", "text": "log" },
-    { "command": "cowrite:summon", "text": "statistics-nerd please" },
-    { "command": "cowrite:ask", "text": "  cowrite:librarian  what now" },
-    { "command": "cowrite:ask", "text": "nobody at all" },
-    { "command": "something-else", "text": "" },
-    { "command": null, "text": "Use the cowrite:terminologist agent to review main.tex" },
-    { "command": null, "text": "Use the cowrite:unknown agent" },
-    { "command": null, "text": "just a question" }
+    {
+      "command": "cowrite:feedback",
+      "text": ""
+    },
+    {
+      "command": "cw:socratic",
+      "text": ""
+    },
+    {
+      "command": "structure",
+      "text": ""
+    },
+    {
+      "command": "cowrite:sources",
+      "text": "x"
+    },
+    {
+      "command": "explain",
+      "text": "x"
+    },
+    {
+      "command": "submit",
+      "text": "x"
+    },
+    {
+      "command": "cowrite:pane",
+      "text": "log"
+    },
+    {
+      "command": "cowrite:summon",
+      "text": "statistics-nerd please"
+    },
+    {
+      "command": "cowrite:ask",
+      "text": "  cowrite:librarian  what now"
+    },
+    {
+      "command": "cowrite:ask",
+      "text": "nobody at all"
+    },
+    {
+      "command": "something-else",
+      "text": ""
+    },
+    {
+      "command": null,
+      "text": "Use the cowrite:terminologist agent to review main.tex"
+    },
+    {
+      "command": null,
+      "text": "Use the cowrite:unknown agent"
+    },
+    {
+      "command": null,
+      "text": "just a question"
+    }
   ],
   "readable": [
     "<agent-message from=\"a1\">\n[Subagent hand-back]\n## Findings\n\n| Where | Term |\n|---|---|\n| main.md:12 | subjects |\n\n\n\nWhy do you say subjects here?\n</agent-message>",
@@ -48,13 +90,106 @@
     ]
   },
   "logFiles": [
-    { "before": { "2026-09.jsonl": "a\n", "2026-10.jsonl": "b\n" }, "after": { "2026-09.jsonl": "a\n", "2026-10.jsonl": "b\nc\n" }, "month": "2026-10.jsonl" },
-    { "before": { "2026-09.jsonl": "a\n", "2026-10.jsonl": "b\n" }, "after": { "2026-09.jsonl": "A\n", "2026-11.jsonl": "x\n", "notes.txt": "hi" }, "month": "2026-11.jsonl" },
-    { "before": {}, "after": { "2026-10.jsonl": "b\n", "copy.jsonl": "b\n" }, "month": "2026-10.jsonl" }
+    {
+      "before": {
+        "2026-09.jsonl": "a\n",
+        "2026-10.jsonl": "b\n"
+      },
+      "after": {
+        "2026-09.jsonl": "a\n",
+        "2026-10.jsonl": "b\nc\n"
+      },
+      "month": "2026-10.jsonl"
+    },
+    {
+      "before": {
+        "2026-09.jsonl": "a\n",
+        "2026-10.jsonl": "b\n"
+      },
+      "after": {
+        "2026-09.jsonl": "A\n",
+        "2026-11.jsonl": "x\n",
+        "notes.txt": "hi"
+      },
+      "month": "2026-11.jsonl"
+    },
+    {
+      "before": {},
+      "after": {
+        "2026-10.jsonl": "b\n",
+        "copy.jsonl": "b\n"
+      },
+      "month": "2026-10.jsonl"
+    }
   ],
   "changedFiles": [
-    { "before": { "a.md": "1:10", "b.md": "2:20" }, "after": { "a.md": "1:10", "b.md": "3:21", "c.md": "4:1" } },
-    { "before": { "a.md": "1:10" }, "after": {} }
+    {
+      "before": {
+        "a.md": "1:10",
+        "b.md": "2:20"
+      },
+      "after": {
+        "a.md": "1:10",
+        "b.md": "3:21",
+        "c.md": "4:1"
+      }
+    },
+    {
+      "before": {
+        "a.md": "1:10"
+      },
+      "after": {}
+    }
   ],
-  "monthFile": ["2026-01-31T23:59:59.999Z", "2026-12-01T00:00:00.000Z"]
+  "monthFile": [
+    "2026-01-31T23:59:59.999Z",
+    "2026-12-01T00:00:00.000Z"
+  ],
+  "briefs": {
+    "text": "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n",
+    "for": [
+      "reviewer-2",
+      "librarian",
+      "terminologist",
+      "architect"
+    ],
+    "set": [
+      {
+        "key": "reviewer-2",
+        "body": "  Go easy on the sampling: it is a pilot.  "
+      },
+      {
+        "key": "terminologist",
+        "body": "ICD-11 terms only"
+      },
+      {
+        "key": "architect",
+        "body": "Check the red thread.\nTwo lines."
+      },
+      {
+        "key": "everyone",
+        "body": "Replaced."
+      }
+    ],
+    "append": [
+      {
+        "key": "reviewer-2",
+        "lines": "- do not flag the sample size again"
+      },
+      {
+        "key": "statistics-nerd",
+        "lines": "- report effect sizes\n- no p-hacking talk"
+      },
+      {
+        "key": "everyone",
+        "lines": "   "
+      }
+    ],
+    "empty": [
+      {
+        "key": "architect",
+        "body": "First expert in an empty file."
+      }
+    ]
+  }
 }

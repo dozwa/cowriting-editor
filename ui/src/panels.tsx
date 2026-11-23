@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { LogView, ThreadMessage, TurnRow, Use } from './api'
+import type { AiTextRow, LogView, PartyView, ThreadMessage, TurnRow, Use } from './api'
+import { Sprite } from './experts'
 import type { Live } from './App'
 import { linkLines, plural, USE_LABELS, when } from './text'
 
@@ -58,28 +59,36 @@ type AskProps = {
   isReady: boolean
   /** Said above the question field: an untested model, a model without tools. */
   notice: string
-  onAsk(text: string, replyTo: string | null): void
+  party: PartyView | null
+  onAsk(text: string, replyTo: string | null, persona: string | null): void
   onAnnotate(id: string, use: Use, note: string): void
   onJump(line: number): void
   onNew(): void
   onSettings(): void
 }
 
-export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnotate, onJump, onNew, onSettings }: AskProps) {
+export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, onAnnotate, onJump, onNew, onSettings }: AskProps) {
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
   const byId = new Map(turns.map(t => [t.id, t]))
   const last = thread[thread.length - 1]
   const isReply = thread.length > 0
+  const [asked, setAsked] = useState('')
+  const expertOf = (id: string) => party?.experts.find(e => e.id === id)
+  // a reply goes to whoever spoke last in the thread
+  const inThread = [...thread].reverse().find(m => m.role === 'ai')?.persona ?? ''
+  const to = isReply ? inThread : asked
+  const toName = to === '' ? '' : (expertOf(to)?.name ?? to)
 
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' })
-  }, [thread, live?.text])
+    // also once the log knows the new turn: its choices appear under the answer
+  }, [thread, live?.text, turns.length])
 
   const send = () => {
-    const asked = text.trim()
-    if (asked === '' || live !== null) return
-    onAsk(asked, isReply && last !== undefined ? last.id : null)
+    const question = text.trim()
+    if (question === '' || live !== null) return
+    onAsk(question, isReply && last !== undefined ? last.id : null, to === '' ? null : to)
     setText('')
   }
 
@@ -99,6 +108,7 @@ export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnota
           return (
             <article key={`${message.id}-${i}`} className={message.role}>
               <h3>
+                {isAnswer && expertOf(message.persona) !== undefined && party !== null && <Sprite expert={expertOf(message.persona)!} shared={party.sharedPalette} size={20} />}
                 {message.role === 'author' ? 'You' : message.who} <span className="muted">{when(message.ts)}</span>
                 {isAnswer && turn?.isAiText && <span className="flag" title="This answer contains text the AI wrote for the manuscript. It is listed in your disclosure.">AI text</span>}
               </h3>
@@ -114,7 +124,7 @@ export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnota
               <p className="said">{live.asked}</p>
             </article>
             <article className="ai" aria-busy="true">
-              <h3>Assistant</h3>
+              <h3>{live.who}</h3>
               {live.steps.map((step, i) => (
                 <p key={i} className="step">{step}</p>
               ))}
@@ -139,7 +149,7 @@ export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnota
           {notice !== '' && <p className="notice" role="note">{notice}</p>}
           <textarea
             aria-label={isReply ? 'Reply' : 'Ask the AI'}
-            placeholder={isReply ? 'Reply…' : 'Ask about your text…'}
+            placeholder={isReply ? (toName === '' ? 'Reply…' : `Reply to ${toName}…`) : toName === '' ? 'Ask about your text…' : `Ask ${toName}…`}
             rows={3}
             value={text}
             onChange={e => setText(e.target.value)}
@@ -152,6 +162,14 @@ export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnota
               {live !== null ? 'Answering…' : isReply ? 'Reply' : 'Ask'}
             </button>
             {isReply && live === null && <button type="button" onClick={onNew}>New question</button>}
+            {!isReply && party !== null && (
+              <select aria-label="Who to ask" value={asked} onChange={e => setAsked(e.target.value)}>
+                <option value="">Assistant</option>
+                {party.experts.filter(e => e.isMember).map(e => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            )}
             <span className="spacer" />
             <span className="muted">Sends your question and the document</span>
           </div>
@@ -161,7 +179,41 @@ export function AskPanel({ thread, live, turns, isReady, notice, onAsk, onAnnota
   )
 }
 
-export function LogPanel({ log, onOpen }: { log: LogView; onOpen(id: string): void }) {
+/** One passage of AI text in the document, with the author's comment on it. */
+function AiTextItem({ row, onOpen, onJump, onComment }: { row: AiTextRow; onOpen(id: string): void; onJump(line: number): void; onComment(id: string, note: string): void }) {
+  const [note, setNote] = useState(row.note)
+  return (
+    <li>
+      <span className="top">
+        <span className="flag">{row.kind === 'correction' ? 'language correction' : 'AI text'}</span>
+        <span>
+          {row.source === 'paste' ? 'pasted' : 'typed'} · {plural(row.words, 'word')} · {row.match === 'exact' ? 'word for word' : 'close to the answer'}
+        </span>
+        <span className="muted">{when(row.ts)}</span>
+      </span>
+      <span className="quote">“{row.excerpt}”</span>
+      <span className="muted">
+        {row.stillInText ? 'Still in your text' : 'No longer in your text'}
+        {row.stillInText && row.line > 0 && (
+          <>
+            {' · '}
+            <button className="link" onClick={() => onJump(row.line)}>line {row.line}</button>
+          </>
+        )}
+        {' · from the answer to '}
+        <button className="link" onClick={() => onOpen(row.turn)}>“{row.asked}”</button>
+      </span>
+      <span className="row">
+        <input aria-label={`Comment on “${row.excerpt.slice(0, 40)}”`} placeholder="Comment for your disclosure (optional)" value={note} onChange={e => setNote(e.target.value)} />
+        <button onClick={() => onComment(row.id, note)} disabled={note.trim() === row.note.trim()}>Save</button>
+      </span>
+    </li>
+  )
+}
+
+type LogProps = { log: LogView; onOpen(id: string): void; onJump(line: number): void; onComment(id: string, note: string): void }
+
+export function LogPanel({ log, onOpen, onJump, onComment }: LogProps) {
   const { stats } = log
   if (log.turns.length === 0 && log.guard.length === 0) {
     return <p className="hint">Nothing is logged yet. Every question you ask the AI and every answer will be listed here.</p>
@@ -171,7 +223,7 @@ export function LogPanel({ log, onOpen }: { log: LogView; onOpen(id: string): vo
   return (
     <div className="log">
       <p className="summary">
-        {plural(stats.turns, 'AI input')} · {stats.unannotated} to classify{stats.aiText > 0 ? ` · ${stats.aiText} with AI text` : ''}
+        {plural(stats.turns, 'AI input')} · {stats.unannotated} to classify{stats.aiText > 0 ? ` · ${stats.aiText} with AI text` : ''}{log.aiText.length > 0 ? ` · ${plural(log.aiText.length, 'passage')} taken over` : ''}
       </p>
       <ul>
         {turns.map(turn => (
@@ -180,6 +232,7 @@ export function LogPanel({ log, onOpen }: { log: LogView; onOpen(id: string): vo
               <span className="top">
                 <span className={turn.isOpen ? 'use open' : 'use'}>{turn.use === '' ? (turn.isOpen ? '• to classify' : '· no choice needed') : USE_LABELS[turn.use].button}</span>
                 {turn.isAiText && <span className="flag">AI text</span>}
+                {turn.who !== '' && <span className="by">{turn.who}</span>}
                 <span className="muted">{when(turn.ts)}</span>
               </span>
               <span className="asked">{turn.replyTo !== null ? '↳ ' : ''}{turn.asked}</span>
@@ -188,6 +241,17 @@ export function LogPanel({ log, onOpen }: { log: LogView; onOpen(id: string): vo
           </li>
         ))}
       </ul>
+      {log.aiText.length > 0 && (
+        <>
+          <h3>AI text that entered your document</h3>
+          <p className="muted">The editor compares what you paste or type with the AI's answers. Nothing is blocked. Entries stay in the log even when you rewrite the passage; text from other AI tools cannot be detected.</p>
+          <ul className="ai-text">
+            {log.aiText.map(row => (
+              <AiTextItem key={`${row.id}-${row.note}`} row={row} onOpen={onOpen} onJump={onJump} onComment={onComment} />
+            ))}
+          </ul>
+        </>
+      )}
       {log.guard.length > 0 && (
         <>
           <h3>Writes the AI tried and the editor refused</h3>

@@ -5,7 +5,7 @@
 //! web view has no file or network access of its own, so the document, the log and the API key
 //! are only ever touched here.
 
-use cowriting_app::{list_models, make_backend, model_status, tested_models, BackendSettings, ExportOptions, Exported, LogView, Opened, Session};
+use cowriting_app::{list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, ExportOptions, Exported, LogView, Opened, PartyView, Session};
 use cowriting_core::host::DiskHost;
 use cowriting_core::turn::{Ask, TurnEvent};
 use cowriting_core::types::ThreadMessage;
@@ -124,8 +124,18 @@ fn new_document(editor: State<Editor>, path: String) -> Result<Opened, String> {
 }
 
 #[tauri::command]
-fn save_document(editor: State<Editor>, text: String) -> Result<(), String> {
+fn save_document(editor: State<Editor>, text: String) -> Result<Vec<AiTextRow>, String> {
     editor.session()?.save(&text)
+}
+
+#[tauri::command]
+fn report_paste(editor: State<Editor>, pasted: String, line: usize, document_text: String) -> Result<Vec<AiTextRow>, String> {
+    editor.session()?.report_paste(&pasted, line, &document_text)
+}
+
+#[tauri::command]
+fn comment_ai_text(editor: State<Editor>, id: String, note: String) -> Result<(), String> {
+    editor.session()?.comment_ai_text(&id, &note)
 }
 
 /// What the window hears while an answer arrives.
@@ -143,6 +153,8 @@ enum AskEvent {
 struct AskInput {
     text: String,
     reply_to: Option<String>,
+    /// The expert to ask; none for the assistant itself.
+    persona: Option<String>,
     /// The editor's text as it is now, saved or not.
     document_text: String,
 }
@@ -163,7 +175,8 @@ async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, 
     let session = editor.session()?;
     let settings = read_settings(&app);
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
-    let ask = Ask { text: input.text, reply_to: input.reply_to, document_text: input.document_text, model: settings.model, command: None };
+    let command = input.persona.as_ref().map(|_| "ask".to_string());
+    let ask = Ask { text: input.text, reply_to: input.reply_to, persona: input.persona, document_text: input.document_text, model: settings.model, command };
     let outcome = session
         .ask(backend.as_ref(), ask, &mut |event| {
             let _ = on_event.send(match event {
@@ -200,6 +213,26 @@ fn annotate(editor: State<Editor>, reference: String, r#use: String, note: Strin
 }
 
 #[tauri::command]
+fn party(editor: State<Editor>) -> Result<PartyView, String> {
+    Ok(editor.session()?.party_view())
+}
+
+#[tauri::command]
+fn set_brief(editor: State<Editor>, key: String, body: String) -> Result<(), String> {
+    editor.session()?.set_brief(&key, &body)
+}
+
+#[tauri::command]
+fn set_member(editor: State<Editor>, id: String, is_member: bool) -> Result<(), String> {
+    editor.session()?.set_member(&id, is_member)
+}
+
+#[tauri::command]
+fn add_expert(editor: State<Editor>, name: String, role: String, looks_at: String) -> Result<String, String> {
+    editor.session()?.add_expert(&name, &role, &looks_at)
+}
+
+#[tauri::command]
 fn export_disclosure(editor: State<Editor>, options: ExportOptions) -> Result<Exported, String> {
     editor.session()?.export(&options)
 }
@@ -219,7 +252,13 @@ fn main() {
             log_view,
             thread,
             annotate,
-            export_disclosure
+            export_disclosure,
+            party,
+            set_brief,
+            set_member,
+            add_expert,
+            report_paste,
+            comment_ai_text
         ])
         .run(tauri::generate_context!())
         .expect("the editor's window could not be opened");

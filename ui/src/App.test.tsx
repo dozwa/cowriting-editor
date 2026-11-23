@@ -3,16 +3,22 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
-import type { Api, AskEvent, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use } from './api'
+import type { AiTextRow, Api, AskEvent, Expert, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use } from './api'
 import { App } from './App'
-import type { Editor } from './editor'
+import type { Editor, EditorHandlers } from './editor'
 import { linkLines } from './text'
 
 /** A text field in place of the real editor, which needs a browser's layout. */
-const plainEditor = (parent: HTMLElement, handlers: { onChange(): void; onSave(): void }): Editor & { jumps: number[] } => {
+const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { jumps: number[] } => {
   const field = document.createElement('textarea')
   field.setAttribute('aria-label', 'Document')
   field.addEventListener('input', () => handlers.onChange())
+  // as the real editor does: told once the pasted text is in the document, with the line it starts on
+  field.addEventListener('paste', event => {
+    const pasted = event.clipboardData?.getData('text') ?? ''
+    const line = field.value.slice(0, field.selectionStart).split('\n').length
+    setTimeout(() => handlers.onPaste(pasted, line))
+  })
   parent.append(field)
   const jumps: number[] = []
   lastEditor = { getText: () => field.value, setText: text => void (field.value = text), jumpToLine: line => void jumps.push(line), focus: () => {}, destroy: () => field.remove(), jumps }
@@ -22,11 +28,27 @@ let lastEditor: Editor & { jumps: number[] }
 
 function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [] }
-  const view = (): LogView => ({
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [] }
+  const aiText: AiTextRow[] = []
+  // the stand-in's detection: text the answer said, word for word
+  const detect = (text: string, source: 'paste' | 'typed', line: number, documentText: string): AiTextRow[] => {
+    const turn = turns.find(t => t.answer !== '' && text.includes(t.answer))
+    if (turn === undefined || aiText.some(row => row.turn === turn.id)) return []
+    const row: AiTextRow = { id: `a${aiText.length + 1}`, ts: '2026-11-23T10:05:00.000Z', source, match: 'exact', kind: 'text', words: turn.answer.split(/\s+/).length, excerpt: turn.answer, line, turn: turn.id, asked: turn.asked, note: '', stillInText: documentText.includes(turn.answer) }
+    aiText.unshift(row)
+    return [row]
+  }
+  const figure = { palette: { H: '#6b4226' }, sprite: ['.HH.', 'HSSH'] }
+  const experts: Expert[] = [
+    { id: 'reviewer-2', name: 'Reviewer #2', short: 'Reviewer #2', role: 'Weaknesses, limitations, tough questions', category: 'feedback', isCustom: false, isMember: true, brief: '', ...figure },
+    { id: 'clinician', name: 'The Clinician', short: 'Clinician', role: 'Clinical relevance', category: 'content', isCustom: false, isMember: false, brief: '', ...figure },
+  ]
+  let everyone = ''
+  const view = (text = ''): LogView => ({
     stats: { turns: turns.length, today: turns.length, unannotated: turns.filter(t => t.isOpen).length, aiText: 0, annotations: turns.filter(t => t.use !== '').length, rejected: 0, guardEvents: 0 },
     turns: [...turns].reverse(),
     guard: options.refuse && turns.length > 0 ? [{ ts: '2026-11-23T10:00:00Z', tool: 'write_note', input: 'write_note ../../thesis.md', files: [], refused: true, turn: 't1' }] : [],
+    aiText: aiText.map(row => ({ ...row, stillInText: text.includes(row.excerpt) })),
     words: 7,
   })
   let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
@@ -46,7 +68,18 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     confirmLeave: async () => true,
     openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en' }),
     newDocument: async path => ({ path, name: 'new.md', text: '', language: 'en' }),
-    saveDocument: async text => void calls.saved.push(text),
+    saveDocument: async text => {
+      calls.saved.push(text)
+      return detect(text, 'typed', 0, text)
+    },
+    reportPaste: async (pasted, line, documentText) => {
+      calls.pasted.push([pasted, line])
+      return detect(pasted, 'paste', line, documentText)
+    },
+    commentAiText: async (id, note) => {
+      calls.comments.push([id, note])
+      aiText.find(row => row.id === id)!.note = note
+    },
     ask: async (input, onEvent: (event: AskEvent) => void) => {
       calls.asked.push(input)
       const id = `t${turns.length + 1}`
@@ -54,15 +87,15 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       onEvent({ kind: 'started', id })
       onEvent({ kind: 'tool', name: 'read_document' })
       onEvent({ kind: 'text', text: answer })
-      turns.push({ id, ts: '2026-11-23T10:00:00Z', category: 'general', asked: input.text, answer, excerpt: answer, model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: ['read_document'], use: '', note: '', isOpen: true, isAiText: false, replyTo: input.replyTo })
+      turns.push({ id, ts: '2026-11-23T10:00:00Z', category: 'general', asked: input.text, answer, excerpt: answer, model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: ['read_document'], use: '', note: '', isOpen: true, isAiText: false, replyTo: input.replyTo, persona: input.persona ?? '', who: experts.find(e => e.id === input.persona)?.name ?? '' })
       return { id, answer, isAiText: false, refused: 0, cutOff: null, withoutTools: options.withoutTools ?? false }
     },
-    logView: async () => view(),
+    logView: async text => view(text),
     thread: async id => {
       const out: ThreadMessage[] = []
       for (const turn of turns) {
         if (turn.replyTo !== null) out.push({ id: turn.id, role: 'author', who: 'You', persona: '', ts: turn.ts, text: turn.asked })
-        out.push({ id: turn.id, role: 'ai', who: 'Assistant', persona: '', ts: turn.ts, text: turn.answer })
+        out.push({ id: turn.id, role: 'ai', who: turn.who === '' ? 'Assistant' : turn.who, persona: turn.persona, ts: turn.ts, text: turn.answer })
         if (turn.id === id) break
       }
       return out
@@ -71,6 +104,22 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       calls.annotated.push([reference, use, note])
       const turn = turns.find(t => t.id === reference)!
       Object.assign(turn, { use, note, isOpen: false })
+    },
+    party: async () => ({ experts: experts.map(e => ({ ...e })), everyone, sharedPalette: { S: '#f2c9a0' } }),
+    setBrief: async (key, body) => {
+      calls.party.push(['brief', key, body])
+      if (key === 'everyone') everyone = body
+      else experts.find(e => e.id === key)!.brief = body
+    },
+    setMember: async (id, isMember) => {
+      calls.party.push(['member', id, isMember])
+      experts.find(e => e.id === id)!.isMember = isMember
+    },
+    addExpert: async (name, role, looksAt) => {
+      calls.party.push(['add', name, role, looksAt])
+      if (name === 'Reviewer #2') throw 'There is already an expert called “Reviewer #2”, or the name has no letters to make an id from.'
+      experts.push({ id: 'health-economist', name, short: name, role, category: 'content', isCustom: true, isMember: true, brief: '', ...figure })
+      return 'health-economist'
     },
     exportDisclosure: async o => (calls.exported.push(o), { paths: ['/work/.cowriting/thesis.md/disclosure/ai-register.en.md'], register: '# AI register (disclosure of AI use)' }),
   }
@@ -93,7 +142,7 @@ test('the author asks, reads the answer, classifies it, and the log shows the ch
   await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
   await user.click(screen.getByRole('button', { name: 'Ask' }))
   await screen.findByText(/why subjects and not participants/)
-  expect(calls.asked).toEqual([{ text: 'Any feedback?', replyTo: null, documentText: '# Thesis\n\nWe recruited 48 subjects.\nMore.' }])
+  expect(calls.asked).toEqual([{ text: 'Any feedback?', replyTo: null, persona: null, documentText: '# Thesis\n\nWe recruited 48 subjects.\nMore.' }])
   expect(calls.saved).toEqual([]) // asking does not save the document
 
   // a line the answer names leads there in the editor
@@ -222,4 +271,122 @@ test('mentions of a line become jumps, except inside code', () => {
   // as models write it: capitalised, inside bold
   expect(linkLines('- **Line 14:** unclear')).toBe('- **[Line 14](#line-14):** unclear')
   expect(linkLines('```\nline 1\n```\nl. 7')).toBe('```\nline 1\n```\n[l. 7](#line-7)')
+})
+
+test('the author briefs an expert, asks it for a review, and replies to it', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Experts' }))
+
+  // the party first, the others after; each with its figure
+  const names = screen.getAllByRole('listitem').map(item => within(item).getByRole('img').getAttribute('aria-label'))
+  expect(names).toEqual(['Reviewer #2', 'The Clinician'])
+
+  await user.type(screen.getByLabelText('Briefing for every expert'), 'A pilot study.')
+  await user.click(within(screen.getByLabelText('Briefing for every expert').parentElement!).getByRole('button', { name: 'Save' }))
+  const reviewer = within(screen.getAllByRole('listitem')[0]!)
+  await user.click(reviewer.getByRole('button', { name: 'Brief' }))
+  await user.type(screen.getByLabelText('Briefing for Reviewer #2'), 'Go easy on the sampling.')
+  await user.click(within(screen.getByLabelText('Briefing for Reviewer #2').parentElement!).getByRole('button', { name: 'Save' }))
+  await within(screen.getAllByRole('listitem')[0]!).findByRole('button', { name: 'Briefed' })
+  await user.click(screen.getByLabelText('The Clinician is in the party'))
+  await waitFor(() => expect(calls.party).toEqual([['brief', 'everyone', 'A pilot study.'], ['brief', 'reviewer-2', 'Go easy on the sampling.'], ['member', 'clinician', true]]))
+
+  // a review is a logged question to that expert, shown under the expert's name
+  await user.click(within(screen.getAllByRole('listitem')[0]!).getByRole('button', { name: 'Ask for a review' }))
+  await screen.findByText(/why subjects and not participants/)
+  expect(calls.asked[0]).toMatchObject({ text: 'Please review my document.', persona: 'reviewer-2', replyTo: null })
+  expect(screen.getByRole('heading', { name: /Reviewer #2/ })).toBeTruthy()
+
+  // the reply goes to the same expert, not to the assistant
+  await user.type(screen.getByLabelText('Reply'), 'It is the usual term.')
+  await user.click(screen.getByRole('button', { name: 'Reply' }))
+  await waitFor(() => expect(calls.asked[1]).toMatchObject({ text: 'It is the usual term.', persona: 'reviewer-2', replyTo: 't1' }))
+
+  // a new question can go to any member of the party, or to the assistant
+  await user.click(screen.getByRole('button', { name: 'New question' }))
+  const who = screen.getByLabelText('Who to ask') as HTMLSelectElement
+  expect([...who.options].map(o => o.text)).toEqual(['Assistant', 'Reviewer #2', 'The Clinician'])
+  await user.selectOptions(who, 'clinician')
+  await user.type(screen.getByLabelText('Ask the AI'), 'Does this matter to patients?')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await waitFor(() => expect(calls.asked[2]).toMatchObject({ persona: 'clinician', replyTo: null }))
+
+  await user.click(screen.getByRole('tab', { name: /Log/ }))
+  expect(screen.getAllByText('Reviewer #2').length).toBeGreaterThan(0)
+})
+
+test('the author adds an expert of their own, and a name that is taken is refused in plain words', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Experts' }))
+  await user.click(screen.getByRole('button', { name: 'New expert…' }))
+  expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true)
+
+  await user.type(screen.getByLabelText('Name'), 'Reviewer #2')
+  await user.type(screen.getByLabelText('Field'), 'x')
+  await user.type(screen.getByLabelText('What they look at'), 'y')
+  await user.click(screen.getByRole('button', { name: 'Add' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('There is already an expert called')
+  expect(screen.getAllByRole('listitem').length).toBe(2)
+
+  await user.clear(screen.getByLabelText('Name'))
+  await user.type(screen.getByLabelText('Name'), 'The Health Economist')
+  await user.click(screen.getByRole('button', { name: 'Add' }))
+  await waitFor(() => expect(screen.getAllByRole('listitem').length).toBe(3))
+  expect(calls.party.at(-1)).toEqual(['add', 'The Health Economist', 'x', 'y'])
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByLabelText('Name')).toBeNull() // the form closes once the expert exists
+})
+
+test('AI text pasted into the document is logged, said once, and can be commented; the text is left alone', async () => {
+  const user = userEvent.setup()
+  const answer = 'Participants were randomly assigned to one of the two conditions by a colleague.'
+  const { api, calls } = standIn({ answer })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const field = (await screen.findByLabelText('Document')) as HTMLTextAreaElement
+
+  // pasting before anything was asked, or pasting one's own words, says nothing
+  await user.click(field)
+  await user.paste('My own sentence about the offices.')
+  await waitFor(() => expect(calls.pasted.length).toBe(1))
+  expect(screen.queryByRole('status')).toBeNull()
+
+  await user.type(screen.getByLabelText('Ask the AI'), 'Write it for me.')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await screen.findAllByText(answer)
+
+  await user.click(field)
+  await user.paste(`\n${answer}`)
+  const notice = await screen.findByRole('status')
+  expect(notice.textContent).toContain('Logged: 13 words you pasted match text from an AI answer. Nothing was changed')
+  expect(field.value.endsWith(answer)).toBe(true) // nothing blocked, nothing marked
+  expect(calls.pasted[1]).toEqual([`\n${answer}`, 4])
+  expect(calls.saved).toEqual([]) // reporting a paste does not save the document
+
+  await user.click(within(notice).getByRole('button', { name: 'Show in the log' }))
+  expect(screen.queryByRole('status')).toBeNull()
+  const row = within(screen.getByRole('heading', { name: 'AI text that entered your document' }).parentElement!).getAllByRole('listitem').at(-1)!
+  expect(row.textContent).toContain('pasted · 13 words · word for word')
+  expect(row.textContent).toContain('Still in your text')
+  expect(row.textContent).toContain('from the answer to “Write it for me.”')
+  await user.click(within(row).getByRole('button', { name: 'line 4' }))
+  expect(lastEditor.jumps).toEqual([4])
+
+  await user.type(within(row).getByLabelText(/^Comment on/), 'A placeholder.')
+  await user.click(within(row).getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.comments).toEqual([['a1', 'A placeholder.']]))
+
+  // the author rewrites the passage: the entry stays and says so; saving finds nothing new
+  await user.clear(field)
+  await user.type(field, 'A colleague drew lots.')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(screen.getByText(/No longer in your text/)).toBeTruthy())
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.getByDisplayValue('A placeholder.')).toBeTruthy() // the comment is kept
 })

@@ -122,6 +122,43 @@ pub struct GuardEntry {
     pub extra: Map<String, Value>,
 }
 
+/// AI text that entered the manuscript: a passage that matches a logged answer (editor logs only).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct AiTextEntry {
+    pub id: String,
+    pub ts: String,
+    #[serde(default)]
+    pub session: String,
+    #[serde(default)]
+    pub paper: String,
+    /// The turn whose answer the passage matches.
+    #[serde(rename = "ref")]
+    pub reference: String,
+    /// 'paste' (pasted or dropped) or 'typed' (found when the document was saved).
+    #[serde(default)]
+    pub source: String,
+    /// 'exact' or 'near'.
+    #[serde(default, rename = "match")]
+    pub match_: String,
+    /// 'text', or 'correction' for an answer about grammar and spelling.
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub words: usize,
+    /// The share of the passage's word runs that are the answer's.
+    #[serde(default)]
+    pub share: f64,
+    #[serde(default)]
+    pub excerpt: String,
+    #[serde(default)]
+    pub hash: String,
+    /// The line of the document it was found at, 1-based; 0 when unknown.
+    #[serde(default)]
+    pub line: usize,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum Known {
@@ -129,6 +166,8 @@ enum Known {
     Response(ResponseEntry),
     Annotation(AnnotationEntry),
     Guard(GuardEntry),
+    #[serde(rename = "ai_text")]
+    AiText(AiTextEntry),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -137,6 +176,7 @@ pub enum LogEntry {
     Response(ResponseEntry),
     Annotation(AnnotationEntry),
     Guard(GuardEntry),
+    AiText(AiTextEntry),
     /// An entry of a type this version does not know, or one it knows but cannot read: kept, not used.
     Other(Value),
 }
@@ -152,6 +192,7 @@ impl LogEntry {
             Ok(Known::Response(e)) => LogEntry::Response(e),
             Ok(Known::Annotation(e)) => LogEntry::Annotation(e),
             Ok(Known::Guard(e)) => LogEntry::Guard(e),
+            Ok(Known::AiText(e)) => LogEntry::AiText(e),
             Err(_) => LogEntry::Other(value),
         })
     }
@@ -163,6 +204,7 @@ impl LogEntry {
             LogEntry::Response(e) => Known::Response(e.clone()),
             LogEntry::Annotation(e) => Known::Annotation(e.clone()),
             LogEntry::Guard(e) => Known::Guard(e.clone()),
+            LogEntry::AiText(e) => Known::AiText(e.clone()),
             LogEntry::Other(v) => return v.to_string(),
         };
         serde_json::to_string(&known).expect("a log entry is plain data")

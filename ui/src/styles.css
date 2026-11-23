@@ -140,3 +140,30 @@ dialog .hint { margin: 12px 0; }
 dialog .choice label { display: flex; gap: 8px; align-items: baseline; font-weight: 400; margin: 0; }
 dialog .choice label input { width: auto; }
 .ok { color: var(--accent); font-size: 13px; }
+
+.sprite { flex: none; image-rendering: pixelated; vertical-align: middle; }
+.messages h3 .sprite { margin-right: 6px; }
+.experts { overflow: auto; padding: 8px 0; }
+.experts section { padding: 8px 14px; display: grid; gap: 6px; }
+.experts h3 { font-size: 13px; }
+.experts ul { list-style: none; margin: 0; padding: 0; }
+.expert { display: flex; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.expert.out { opacity: 0.6; }
+.expert .who { display: grid; gap: 4px; min-width: 0; flex: 1; font-size: 13px; }
+.expert .who strong { font-size: 14px; }
+.member { display: flex; gap: 4px; align-items: center; margin-left: auto; color: var(--muted); }
+.member input { width: auto; }
+.brief { display: grid; gap: 6px; }
+.new-expert { display: grid; gap: 8px; }
+.composer select { width: auto; max-width: 11rem; }
+.turn .by { font-weight: 600; }
+
+.found { background: var(--flag-bg); color: var(--flag); padding: 8px 12px; }
+.ai-text { list-style: none; margin: 0; padding: 0; }
+.ai-text li { display: grid; gap: 4px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+.ai-text .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.ai-text .flag { margin-left: 0; }
+.ai-text .quote { font-family: var(--serif, Georgia, serif); }
+.ai-text .row input { flex: 1; min-width: 0; }
+.log h3 + .muted { padding: 0 14px 8px; font-size: 12px; }
+.ai-text button.link { text-align: left; display: inline; }

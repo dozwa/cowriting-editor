@@ -24,14 +24,53 @@ export type TurnRow = {
   isOpen: boolean
   isAiText: boolean
   replyTo: string | null
+  /** the expert who answered: id and name; '' for the assistant itself */
+  persona: string
+  who: string
 }
 
+export type Expert = {
+  id: string
+  name: string
+  short: string
+  role: string
+  category: string
+  isCustom: boolean
+  palette: Record<string, string>
+  sprite: string[]
+  isMember: boolean
+  /** what the author told this expert about the document */
+  brief: string
+}
+
+export type PartyView = { experts: Expert[]; everyone: string; sharedPalette: Record<string, string> }
+
 export type GuardRow = { ts: string; tool: string; input: string; files: string[]; refused: boolean; turn: string | null }
+
+/** A passage of the document that matches a logged answer. */
+export type AiTextRow = {
+  id: string
+  ts: string
+  source: 'paste' | 'typed'
+  match: 'exact' | 'near'
+  /** 'correction': from an answer about grammar and spelling */
+  kind: 'text' | 'correction'
+  words: number
+  excerpt: string
+  line: number
+  /** the turn whose answer it matches, and what the author had asked */
+  turn: string
+  asked: string
+  note: string
+  stillInText: boolean
+}
 
 export type LogView = {
   stats: { turns: number; today: number; unannotated: number; aiText: number; annotations: number; rejected: number; guardEvents: number }
   turns: TurnRow[]
   guard: GuardRow[]
+  /** AI text the editor saw enter the document, newest first. */
+  aiText: AiTextRow[]
   words: number
 }
 
@@ -71,8 +110,12 @@ export const api = {
   confirmLeave: () => confirm('This document has changes that are not saved. Leave it anyway?', { title: 'Unsaved changes', kind: 'warning' }),
   openDocument: (path: string) => invoke<Opened>('open_document', { path }),
   newDocument: (path: string) => invoke<Opened>('new_document', { path }),
-  saveDocument: (text: string) => invoke<void>('save_document', { text }),
-  ask: (input: { text: string; replyTo: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
+  /** Saves; returns the AI text found in what changed since the last save, now logged. */
+  saveDocument: (text: string) => invoke<AiTextRow[]>('save_document', { text }),
+  /** Text that was just pasted or dropped: compared with the logged answers; returns what was found, now logged. */
+  reportPaste: (pasted: string, line: number, documentText: string) => invoke<AiTextRow[]>('report_paste', { pasted, line, documentText }),
+  commentAiText: (id: string, note: string) => invoke<void>('comment_ai_text', { id, note }),
+  ask: (input: { text: string; replyTo: string | null; persona: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
     const channel = new Channel<AskEvent>()
     channel.onmessage = onEvent
     return invoke<AskResult>('ask', { input, onEvent: channel })
@@ -81,6 +124,11 @@ export const api = {
   thread: (id: string) => invoke<ThreadMessage[]>('thread', { id }),
   annotate: (reference: string, use: Use, note: string) => invoke<void>('annotate', { reference, use, note }),
   exportDisclosure: (options: ExportOptions) => invoke<Exported>('export_disclosure', { options }),
+  party: () => invoke<PartyView>('party'),
+  setBrief: (key: string, body: string) => invoke<void>('set_brief', { key, body }),
+  setMember: (id: string, isMember: boolean) => invoke<void>('set_member', { id, isMember }),
+  /** Makes an expert of the author's own for this document; returns its id. */
+  addExpert: (name: string, role: string, looksAt: string) => invoke<string>('add_expert', { name, role, looksAt }),
 }
 
 export type Api = typeof api

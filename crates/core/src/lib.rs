@@ -3,11 +3,13 @@
 //! the plugin file it follows, and `fixtures/goldens` holds the plugin's own output to compare with.
 
 pub mod backend;
+pub mod briefs;
 pub mod contract;
 pub mod disclosure;
 pub mod guard;
 pub mod host;
 pub mod log;
+pub mod paste_tracking;
 pub mod personas;
 pub mod sidecar;
 pub mod stats;

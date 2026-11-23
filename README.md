@@ -9,15 +9,26 @@ and writes the same log format.
 
 **State: early.** What works: open and save a markdown file, ask, classify, log, disclosure. The
 AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM Studio), or any
-provider with an OpenAI-compatible API. Not built yet: Claude Code as a backend, experts, live
-review, scope, sources, and the detection of AI text pasted into the manuscript. There are no
-signed installers yet.
+provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
+can be briefed and asked, and you can add experts of your own. Not built yet: Claude Code as a
+backend, live review, scope, and sources. There are no signed installers yet.
+
+## AI text in your document
+
+The editor compares what you paste, drop or type into the document with the answers in this
+document's log. A passage that matches one (eight words or more in a row, or a paragraph that
+is mostly an answer's wording) is logged and listed in the disclosure, with the question it came
+from and whether it is still in the text. Nothing is blocked and nothing is marked in your text.
+Entries are never removed; you can add a comment. Your own words that an answer quoted back,
+code, references, links and citation keys are not compared. Text from other AI tools cannot be
+detected, and the disclosure says so.
 
 ## What it does with your files
 
 For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the log
 (`ai-log/YYYY-MM.jsonl`), the document as it was at each question (`snapshots/`), the AI's notes
-(`notes/`, the only place it can write) and the disclosure (`disclosure/`). Nothing is created
+(`notes/`, the only place it can write) and the disclosure (`disclosure/`). What you tell the
+experts is in `party.md`, experts you made in `party/<id>.md`: plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.
 
 ## What is sent where

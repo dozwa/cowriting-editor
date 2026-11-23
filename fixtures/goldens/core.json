@@ -560,5 +560,32 @@
   "monthFile": [
     "2026-01.jsonl",
     "2026-12.jsonl"
-  ]
+  ],
+  "briefs": {
+    "parsed": {
+      "everyone": "This second section for everyone wins.",
+      "reviewer-2": "Be hard on the sampling.",
+      "librarian": "Only sources after 2015."
+    },
+    "for": {
+      "reviewer-2": "About the project:\nThis second section for everyone wins.\n\nWhat to look for:\nBe hard on the sampling.",
+      "librarian": "About the project:\nThis second section for everyone wins.\n\nWhat to look for:\nOnly sources after 2015.",
+      "terminologist": "About the project:\nThis second section for everyone wins.",
+      "architect": "About the project:\nThis second section for everyone wins."
+    },
+    "set": [
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nGo easy on the sampling: it is a pilot.\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n",
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n\n## terminologist — The Terminologist\n<!-- nothing yet -->\nICD-11 terms only\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n",
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n\n## architect — The Architect\nCheck the red thread.\nTwo lines.\n",
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nReplaced.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n"
+    ],
+    "append": [
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n- do not flag the sample size again\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n",
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n\n## statistics-nerd — Statistics Nerd\n- report effect sizes\n- no p-hacking talk\n",
+      "# Party briefing\n\n<!-- What every expert should know. -->\n\n## everyone — the whole party\n<!-- the project in a few lines -->\nA field study on walking breaks, for a psychology journal.\nBritish spelling.\n\n## reviewer-2 — Reviewer #2\nBe hard on the sampling.\n\n## Terminologist\n<!-- nothing yet -->\n\n## all\nThis second section for everyone wins.\n\n## nobody — not a persona\nIgnored.\n\n## cowrite:librarian – with a prefix and an en dash\nOnly sources after 2015.\n"
+    ],
+    "empty": [
+      "\n\n## architect — The Architect\nFirst expert in an empty file.\n"
+    ]
+  }
 }

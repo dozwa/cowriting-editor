@@ -5,10 +5,11 @@
 //! `prompt.submit` and `turn.complete` hooks in `plugin/hooks/register.tsx`.
 
 use crate::backend::{Backend, Block, Message, ModelRequest, Role, Stop};
+use crate::briefs::{brief_for, parse_briefs};
 use crate::contract::contract_text;
 use crate::host::Host;
 use crate::log::{category_for, Log, AI_TEXT_MARKER};
-use crate::personas::Party;
+use crate::personas::{Party, EXPERT_RULES};
 use crate::sidecar::Sidecar;
 use crate::thread::thread_of;
 use crate::tools::{execute, numbered, tool_defs, ToolContext};
@@ -24,7 +25,6 @@ pub struct Workspace {
     pub host: Arc<dyn Host>,
     pub sidecar: Sidecar,
     pub log: Log,
-    pub party: Party,
     /// One id per run of the app.
     pub session: String,
     /// The editor's version, as the log records it.
@@ -38,7 +38,14 @@ impl Workspace {
         let sidecar = Sidecar::for_document(document);
         let log = Log::new(host.clone(), sidecar.log_dir(), sidecar.rewrites_dir());
         let language = sidecar.info(host.as_ref()).map_or("en".to_string(), |info| info.language);
-        Workspace { session: host.new_id(), host, sidecar, log, party: Party::default(), editor: editor.to_string(), language }
+        Workspace { session: host.new_id(), host, sidecar, log, editor: editor.to_string(), language }
+    }
+}
+
+impl Workspace {
+    /// The document's party as its sidecar has it now.
+    pub fn party(&self) -> Party {
+        Party::load(self.host.as_ref(), &self.sidecar)
     }
 }
 
@@ -50,6 +57,8 @@ pub struct Ask {
     pub command: Option<String>,
     /// The logged turn this one replies to.
     pub reply_to: Option<String>,
+    /// The expert who is asked; None for the assistant itself.
+    pub persona: Option<String>,
     /// The document as the editor holds it now.
     pub document_text: String,
     pub model: String,
@@ -92,13 +101,15 @@ pub enum TurnError {
     Io(io::Error),
     /// The model gave no answer at all. The question is in the log; there is no turn.
     Backend(String),
+    /// The question cannot be asked as it is; nothing was logged or sent.
+    Invalid(String),
 }
 
 impl std::fmt::Display for TurnError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TurnError::Io(error) => write!(f, "The AI log could not be written, so nothing was sent: {error}"),
-            TurnError::Backend(message) => f.write_str(message),
+            TurnError::Backend(message) | TurnError::Invalid(message) => f.write_str(message),
         }
     }
 }
@@ -139,6 +150,11 @@ fn system_without_tools(contract: &str, document_text: &str) -> String {
 
 pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on_event: &mut (dyn FnMut(TurnEvent) + Send)) -> Result<TurnOutcome, TurnError> {
     let host = workspace.host.as_ref();
+    let party = workspace.party();
+    let expert = match ask.persona.as_deref() {
+        Some(id) => Some(party.by_id(id).cloned().ok_or_else(|| TurnError::Invalid(format!("This document's party has no expert “{id}”.")))?),
+        None => None,
+    };
     workspace.sidecar.ensure(host, &ask.document_text)?;
     let before = workspace.log.snapshot()?;
     let earlier = workspace.log.read()?;
@@ -150,7 +166,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         ts: host.now(),
         session: workspace.session.clone(),
         paper: workspace.sidecar.name.clone(),
-        category: category_for(ask.command.as_deref(), &ask.text, &workspace.party),
+        category: expert.as_ref().map_or_else(|| category_for(ask.command.as_deref(), &ask.text, &party), |e| e.category.clone()),
         command: ask.command.clone(),
         reply_to: ask.reply_to.clone(),
         text: ask.text.clone(),
@@ -159,12 +175,21 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
     host.write(&format!("{}/{id}.md", workspace.sidecar.snapshots_dir()), &ask.document_text)?;
     on_event(TurnEvent::Started { id: id.clone() });
 
-    let mut messages = ask.reply_to.as_deref().map(|to| history(&earlier, to, &workspace.party)).unwrap_or_default();
+    let mut messages = ask.reply_to.as_deref().map(|to| history(&earlier, to, &party)).unwrap_or_default();
     match messages.last_mut() {
         Some(Message { role: Role::User, content }) => content.push(Block::Text { text: ask.text.clone() }),
         _ => messages.push(Message::user(ask.text.clone())),
     }
-    let contract = contract_text(&workspace.sidecar.name, &workspace.language);
+    let mut contract = contract_text(&workspace.sidecar.name, &workspace.language);
+    if let Some(expert) = &expert {
+        // one call per expert: the contract, its perspective, the party's rules, the author's briefing
+        let briefs = parse_briefs(&host.read(&workspace.sidecar.party_md()).unwrap_or_default(), &party);
+        let brief = brief_for(&briefs, &expert.id);
+        contract = format!("{contract}\n\n# Your role in this conversation\n\n{}\n\n{EXPERT_RULES}", expert.prompt);
+        if !brief.is_empty() {
+            contract.push_str(&format!("\n\n## The author's briefing for you in this project\n\n{brief}"));
+        }
+    }
     let mut without_tools = !backend.uses_tools();
     let mut request = if without_tools {
         ModelRequest { system: system_without_tools(&contract, &ask.document_text), messages, tools: Vec::new(), model: ask.model.clone() }
@@ -284,6 +309,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         editor: Some(workspace.editor.clone()),
         backend: Some(backend.id().to_string()),
         provider: Some(backend.provider()),
+        personas: expert.iter().map(|e| e.id.clone()).collect(),
         tools_used: tools_used.clone(),
         ai_text_flag,
         answer: text.clone(),

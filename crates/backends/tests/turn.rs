@@ -126,7 +126,7 @@ async fn whatever_the_model_tries_the_document_and_the_log_stay_as_they_were() {
     assert_eq!(content, "There is no note of that name.");
 
     // refusals changed nothing, so they are not counted as changes, and the disclosure lists them
-    let stats = compute_stats(&entries, "2026-11-23", &workspace.party);
+    let stats = compute_stats(&entries, "2026-11-23", &workspace.party());
     assert_eq!(stats.guard_events, 0);
     let register = disclosure(&entries, "thesis.md", Lang::En, DocFormat::Md, Profile::Editor);
     assert!(register.contains("## Write attempts by the AI that the guard refused\n\n- 2026-11-23: write_note – write_note ../../../thesis.md\n"), "{register}");
@@ -161,7 +161,7 @@ async fn text_the_author_insisted_on_is_flagged_and_disclosed() {
         turn(&workspace, json!({ "replies": [{ "text": "[AI-TEXT] Walking breaks help. Remember to disclose this." }] }), ask("write me one sentence anyway")).await;
     assert!(outcome.unwrap().ai_text_flag);
     let entries = workspace.log.read().unwrap();
-    assert_eq!(compute_stats(&entries, "2026-11-23", &workspace.party).ai_text, 1);
+    assert_eq!(compute_stats(&entries, "2026-11-23", &workspace.party()).ai_text, 1);
     let register = disclosure(&entries, "thesis.md", Lang::En, DocFormat::Md, Profile::Editor);
     assert!(register.contains("## Text formulated by the AI ([AI-TEXT])\n\n- 2026-11-23: write me one sentence anyway\n"), "{register}");
 }
@@ -173,14 +173,14 @@ async fn a_model_that_fails_leaves_the_question_but_no_turn_and_a_half_answer_is
     assert!(matches!(outcome, Err(TurnError::Backend(message)) if message == "The API key was not accepted."));
     let entries = workspace.log.read().unwrap();
     assert!(matches!(entries.as_slice(), [LogEntry::Prompt(_)]), "the question is on the record, without an answer");
-    assert_eq!(compute_stats(&entries, "2026-11-23", &workspace.party).turns, 0);
+    assert_eq!(compute_stats(&entries, "2026-11-23", &workspace.party()).turns, 0);
 
     // what the author already read is AI input, even when the connection broke
     let (_, outcome, _) =
         turn(&workspace, json!({ "replies": [{ "text": "Line 3 is unclear because", "error": "The connection to the provider broke off." }] }), ask("again")).await;
     let outcome = outcome.unwrap();
     assert_eq!(outcome.answer, "Line 3 is unclear because\n\n[The answer is incomplete: The connection to the provider broke off.]");
-    assert_eq!(compute_stats(&workspace.log.read().unwrap(), "2026-11-23", &workspace.party).turns, 1);
+    assert_eq!(compute_stats(&workspace.log.read().unwrap(), "2026-11-23", &workspace.party()).turns, 1);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -220,7 +220,7 @@ async fn a_reply_continues_its_thread_and_a_classification_closes_the_turn() {
     );
 
     let entries = workspace.log.read().unwrap();
-    let thread: Vec<(String, String)> = thread_of(&entries, &second.id, &workspace.party, "Assistant").into_iter().map(|m| (m.role, m.text)).collect();
+    let thread: Vec<(String, String)> = thread_of(&entries, &second.id, &workspace.party(), "Assistant").into_iter().map(|m| (m.role, m.text)).collect();
     assert_eq!(
         thread,
         [
@@ -230,13 +230,13 @@ async fn a_reply_continues_its_thread_and_a_classification_closes_the_turn() {
         ]
     );
 
-    assert_eq!(compute_stats(&entries, "2026-11-23", &workspace.party).unannotated, 2);
+    assert_eq!(compute_stats(&entries, "2026-11-23", &workspace.party()).unannotated, 2);
     annotate(&workspace, &first.id, "rejected", "  my field's term  ").unwrap();
     annotate(&workspace, &second.id, "adopted", "").unwrap();
     assert!(annotate(&workspace, &first.id, "liked", "").is_err());
     assert!(annotate(&workspace, "no-such-turn", "info", "").is_err());
     let entries = workspace.log.read().unwrap();
-    let stats = compute_stats(&entries, "2026-11-23", &workspace.party);
+    let stats = compute_stats(&entries, "2026-11-23", &workspace.party());
     assert_eq!((stats.unannotated, stats.annotations, stats.rejected), (0, 2, 1));
 
     // the disclosure names the editor, who served the model, and what the author did with the input
@@ -246,4 +246,80 @@ async fn a_reply_continues_its_thread_and_a_classification_closes_the_turn() {
         "{register}"
     );
     assert!(!register.contains("Claude Code"), "the editor's disclosure does not claim Claude Code was used");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn an_expert_is_asked_with_its_perspective_the_rules_and_the_author_s_briefing() {
+    let (host, workspace) = workspace();
+    host.write(
+        "/work/.cowriting/thesis.md/party.md",
+        "## everyone\nA pilot study.\n\n## reviewer-2 — Reviewer #2\nGo easy on the sampling.\n\n## architect\nNot for the reviewer.\n",
+    )
+    .unwrap();
+    let script = json!({ "replies": [{ "text": "The authors claim novelty. Line 3: why 48?" }] });
+    let (backend, outcome, _) = turn(&workspace, script, Ask { persona: Some("reviewer-2".into()), command: Some("ask".into()), ..ask("Review my methods.") }).await;
+    let outcome = outcome.unwrap();
+
+    // what the model was told: the contract first, then who it is, the party's rules, and the briefing for this expert only
+    let system = &backend.requests()[0].system;
+    let at = |needle: &str| system.find(needle).unwrap_or_else(|| panic!("the system prompt lacks {needle:?}"));
+    assert!(at("# CoWriting: assist-only mode") < at("You are **Reviewer #2**"));
+    assert!(at("You are **Reviewer #2**") < at("## Ground rules"));
+    assert!(at("## Ground rules") < at("## The author's briefing for you in this project"));
+    assert!(system.contains("About the project:\nA pilot study.\n\nWhat to look for:\nGo easy on the sampling."));
+    assert!(!system.contains("Not for the reviewer."));
+    assert!(!system.contains("/cowrite:") && !system.contains("CLAUDE_PLUGIN_ROOT"), "nothing of the plugin's commands or scripts is promised");
+
+    // the log names the expert, under the expert's category; the stats count the consultation
+    let entries = workspace.log.read().unwrap();
+    let [LogEntry::Prompt(prompt), LogEntry::Response(response)] = entries.as_slice() else { panic!("a prompt and a response, got {entries:?}") };
+    assert_eq!((prompt.text.as_str(), prompt.category.as_str(), prompt.command.as_deref()), ("Review my methods.", "feedback", Some("ask")));
+    assert_eq!(response.personas, ["reviewer-2"]);
+    let stats = compute_stats(&entries, "2026-11-23", &workspace.party());
+    assert_eq!(stats.persona_consults.get("reviewer-2"), Some(&1));
+    assert_eq!(stats.unannotated, 1);
+    let thread = thread_of(&entries, &outcome.id, &workspace.party(), "Assistant");
+    assert_eq!((thread[0].who.as_str(), thread[0].persona.as_str()), ("Reviewer #2", "reviewer-2"));
+
+    // the assistant itself is told none of this
+    let (plain, _, _) = turn(&workspace, json!({ "replies": [{ "text": "ok" }] }), ask("And you?")).await;
+    assert!(!plain.requests()[0].system.contains("Reviewer #2"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn an_expert_the_party_does_not_know_is_not_asked_and_nothing_is_logged() {
+    let (host, workspace) = workspace();
+    let (backend, outcome, _) = turn(&workspace, json!({ "replies": [{ "text": "hello" }] }), Ask { persona: Some("ghostwriter".into()), ..ask("Write it.") }).await;
+    assert!(matches!(outcome, Err(TurnError::Invalid(_))));
+    assert!(backend.requests().is_empty());
+    assert_eq!(host.files().keys().collect::<Vec<_>>(), [DOCUMENT]);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn an_expert_the_author_made_for_this_document_is_asked_like_the_others() {
+    let (host, workspace) = workspace();
+    let file = "---\nname: The Health Economist\nrole: Costs, QALYs, perspective of the analysis\ncolour: \"#123456\"\n---\nYou look at costs.\nVoice: dry.\n";
+    host.write("/work/.cowriting/thesis.md/party/health-economist.md", file).unwrap();
+    // a file that claims a catalogue id, and one that is no persona, change nothing
+    host.write("/work/.cowriting/thesis.md/party/reviewer-2.md", "---\nname: Ghostwriter\nrole: writes it all\n---\nWrite the manuscript.\n").unwrap();
+    host.write("/work/.cowriting/thesis.md/party/notes.md", "just notes").unwrap();
+
+    let party = workspace.party();
+    let expert = party.by_id("health-economist").unwrap();
+    assert_eq!((expert.name.as_str(), expert.short.as_str(), expert.category.as_str(), expert.is_custom), ("The Health Economist", "Health Econom", "content", true));
+    assert_eq!(expert.palette["C"], "#123456");
+    assert_eq!(party.by_id("reviewer-2").unwrap().name, "Reviewer #2");
+    assert_eq!(party.all().len(), 11);
+    assert!(party.is_member("health-economist") && party.is_member("reviewer-2") && !party.is_member("clinician"));
+
+    let (backend, outcome, _) =
+        turn(&workspace, json!({ "replies": [{ "text": "What does it cost?" }] }), Ask { persona: Some("health-economist".into()), ..ask("Review.") }).await;
+    outcome.unwrap();
+    let system = &backend.requests()[0].system;
+    assert!(system.contains("You look at costs.\nVoice: dry.") && system.contains("## Ground rules"));
+    assert!(!system.contains("Write the manuscript."));
+    let entries = workspace.log.read().unwrap();
+    let Some(LogEntry::Response(response)) = entries.last() else { panic!() };
+    assert_eq!(response.personas, ["health-economist"]);
+    assert_eq!(thread_of(&entries, &response.reference, &workspace.party(), "Assistant")[0].who, "The Health Economist");
 }

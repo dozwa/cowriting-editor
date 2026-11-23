@@ -1,0 +1,19 @@
+{
+  "about": "Labelled passages for paste tracking. 'expect' is what a person would call it: 'exact' (taken over word for word), 'near' (taken over and lightly changed) or null (the author's own, too short to tell, or never compared).",
+  "question": "Is my methods section complete?",
+  "document": "## Methods\n\nWe recruited 48 participants from two offices in the same city.\nThey took walking breaks or stayed seated.\n",
+  "answer": "Line 3 says \"We recruited 48 participants from two offices in the same city.\" but not how they were assigned. A reader will want to know whether assignment was random and who carried it out.\n\n[AI-TEXT] Participants were randomly assigned to the walking or the sitting condition by a colleague who was not involved in data collection.\n\nYou could check this source yourself:\nSmith, J. (2020). Walking breaks and attention in office workers during long meetings. Journal of Work, 12(3), 45-67. https://doi.org/10.1000/xyz\n\n```r\nassignment <- sample(rep(c(\"walk\", \"sit\"), each = 24)) # shuffles the two conditions over all of the participants\n```\n",
+  "cases": [
+    { "name": "the AI's sentence, pasted", "passage": "Participants were randomly assigned to the walking or the sitting condition by a colleague who was not involved in data collection.", "expect": "exact" },
+    { "name": "the same with other spacing, case and punctuation", "passage": "participants were randomly assigned to the walking\nor the sitting condition, by a colleague who was not involved in data collection", "expect": "exact" },
+    { "name": "the AI's sentence inside a longer paragraph of the author's", "passage": "We thought about this for a long time. Participants were randomly assigned to the walking or the sitting condition by a colleague who was not involved in data collection. Then the study began in March.", "expect": "exact" },
+    { "name": "a few words changed", "passage": "Participants were randomly allocated to the walking or the sitting condition by one colleague who was not involved in data gathering.", "expect": "near" },
+    { "name": "the author's own sentence, which the answer quoted", "passage": "We recruited 48 participants from two offices in the same city.", "expect": null },
+    { "name": "a phrase of the answer", "passage": "whether assignment was random", "expect": null },
+    { "name": "seven words of the answer", "passage": "A reader will want to know whether", "expect": null },
+    { "name": "the author's own answer to the hint", "passage": "A colleague from another department drew lots, so nobody on the team chose who walked and who stayed seated.", "expect": null },
+    { "name": "a reference the answer named", "passage": "Smith, J. (2020). Walking breaks and attention in office workers during long meetings. Journal of Work, 12(3), 45-67. https://doi.org/10.1000/xyz", "expect": null },
+    { "name": "code the answer gave", "passage": "```r\nassignment <- sample(rep(c(\"walk\", \"sit\"), each = 24)) # shuffles the two conditions over all of the participants\n```", "expect": null },
+    { "name": "the AI's sentence as inline code", "passage": "`Participants were randomly assigned to the walking or the sitting condition by a colleague who was not involved in data collection.`", "expect": null }
+  ]
+}

@@ -70,10 +70,16 @@ impl Bridge {
             }
             "pick_document" => Ok(json!(self.document)),
             "open_document" | "new_document" => self.open(),
-            "save_document" => self.session()?.save(&text("text")).map(|_| Value::Null),
+            "save_document" => self.session()?.save(&text("text")).map(|found| json!(found)),
+            "report_paste" => self.session()?.report_paste(&text("pasted"), args["line"].as_u64().unwrap_or(0) as usize, &text("documentText")).map(|found| json!(found)),
+            "comment_ai_text" => self.session()?.comment_ai_text(&text("id"), &text("note")).map(|_| Value::Null),
             "log_view" => self.session()?.log_view(&text("documentText")).map(|view| json!(view)),
             "thread" => self.session()?.thread(&text("id")).map(|thread| json!(thread)),
             "annotate" => self.session()?.annotate(&text("reference"), &text("use"), &text("note")).map(|_| Value::Null),
+            "party" => Ok(json!(self.session()?.party_view())),
+            "set_brief" => self.session()?.set_brief(&text("key"), &text("body")).map(|_| Value::Null),
+            "set_member" => self.session()?.set_member(&text("id"), args["isMember"].as_bool().unwrap_or(false)).map(|_| Value::Null),
+            "add_expert" => self.session()?.add_expert(&text("name"), &text("role"), &text("looksAt")).map(|id| json!(id)),
             "export_disclosure" => {
                 let options: ExportOptions = serde_json::from_value(args["options"].clone()).map_err(|e| e.to_string())?;
                 self.session()?.export(&options).map(|exported| json!(exported))
@@ -98,7 +104,8 @@ impl Bridge {
                 reply_to: input["replyTo"].as_str().map(String::from),
                 document_text: input["documentText"].as_str().unwrap_or_default().to_string(),
                 model: settings.model,
-                command: None,
+                persona: input["persona"].as_str().map(String::from),
+                command: input["persona"].as_str().map(|_| "ask".to_string()),
             };
             let mut events = stream.try_clone().map_err(|e| e.to_string())?;
             runtime.block_on(session.ask(backend.as_ref(), ask, &mut |event| {

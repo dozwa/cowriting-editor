@@ -260,6 +260,12 @@ fn tex_section(lines: &[String], note: &str, none: &str) -> Vec<String> {
 /// The AI register for a document called `name`: one row per purpose, then what must be named
 /// one by one (AI-written text, changes during tool calls, refused writes).
 pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocFormat, profile: Profile) -> String {
+    disclosure_with_document(entries, name, lang, format, profile, None)
+}
+
+/// The register, with the document as it is now: passages of AI text the editor logged are then
+/// said to be still in the text or not.
+pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, format: DocFormat, profile: Profile, document: Option<&str>) -> String {
     let de = lang == Lang::De;
     let pick = |en: &str, german: &str| if de { german.to_string() } else { en.to_string() };
     let all = turns(entries);
@@ -309,7 +315,54 @@ pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocForma
         });
     }
 
-    let ai_text: Vec<String> = all.iter().filter(|t| t.response.ai_text_flag).map(|t| format!("{}: {}", day(&t.prompt.ts), py_squash(&t.prompt.text, Some(120)))).collect();
+    let mut ai_text: Vec<String> = all.iter().filter(|t| t.response.ai_text_flag).map(|t| format!("{}: {}", day(&t.prompt.ts), py_squash(&t.prompt.text, Some(120)))).collect();
+    // what the editor saw enter the document from a logged answer; grammar corrections are listed apart
+    let mut corrections: Vec<String> = Vec::new();
+    if profile == Profile::Editor {
+        for found in entries.iter().filter_map(|e| if let LogEntry::AiText(found) = e { Some(found) } else { None }) {
+            let asked = all.iter().find(|t| t.prompt.id == found.reference).map(|t| py_squash(&t.prompt.text, Some(80))).unwrap_or_default();
+            let comment = entries.iter().rev().find_map(|e| match e {
+                LogEntry::Annotation(a) if a.reference == found.id => a.note.clone(),
+                _ => None,
+            });
+            let how = match (found.source.as_str(), de) {
+                ("paste", false) => "pasted",
+                ("paste", true) => "eingefügt",
+                (_, false) => "typed",
+                (_, true) => "getippt",
+            };
+            let closeness = match (found.match_.as_str(), de) {
+                ("exact", false) => "word for word",
+                ("exact", true) => "wörtlich",
+                (_, false) => "close to the answer",
+                (_, true) => "nah an der Antwort",
+            };
+            let state = document.map(|text| match (crate::paste_tracking::still_in_text(found, text), de) {
+                (true, false) => "; still in the text",
+                (true, true) => "; noch im Text",
+                (false, false) => "; no longer in the text",
+                (false, true) => "; nicht mehr im Text",
+            });
+            let mut line = if de {
+                format!("{}: „{}“ ({how}, {} Wörter, {closeness}; aus der Antwort auf „{asked}“{})", day(&found.ts), found.excerpt, found.words, state.unwrap_or(""))
+            } else {
+                format!("{}: “{}” ({how}, {} words, {closeness}; from the answer to “{asked}”{})", day(&found.ts), found.excerpt, found.words, state.unwrap_or(""))
+            };
+            if let Some(comment) = comment.filter(|c| !c.trim().is_empty()) {
+                line.push_str(&if de { format!(" – Kommentar: {}", comment.trim()) } else { format!(" – comment: {}", comment.trim()) });
+            }
+            if found.kind == "correction" {
+                corrections.push(line)
+            } else {
+                ai_text.push(line)
+            }
+        }
+    }
+    let corrections_head = pick("Language corrections taken over from AI answers", "Aus KI-Antworten übernommene Sprachkorrekturen");
+    let detection_note = pick(
+        "The editor compares what is pasted or typed into the document with the AI's logged answers and lists matches here. Text from other AI tools cannot be detected.",
+        "Der Editor vergleicht, was in das Dokument eingefügt oder getippt wird, mit den protokollierten KI-Antworten und führt Übereinstimmungen hier auf. Text aus anderen KI-Werkzeugen kann nicht erkannt werden.",
+    );
     let guards: Vec<&GuardEntry> = entries.iter().filter_map(|e| if let LogEntry::Guard(g) = e { Some(g) } else { None }).collect();
     let changed = guards.iter().filter(|g| !g.refused);
     // only the manuscript is declared; a changed bibliography or setting is in the log, not the register
@@ -414,6 +467,13 @@ pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocForma
             } else {
                 out.extend(ai_text.iter().map(|line| format!("- {line}")));
             }
+            if profile == Profile::Editor {
+                out.extend([String::new(), detection_note.clone()]);
+                if !corrections.is_empty() {
+                    out.extend([String::new(), format!("## {corrections_head}"), String::new()]);
+                    out.extend(corrections.iter().map(|line| format!("- {line}")));
+                }
+            }
             for (heading, lines, note) in [(&guard_head, &guard_lines, &guard_note), (&log_head, &log_lines, &log_note), (&refused_head, &refused_lines, &refused_note)] {
                 out.extend([String::new(), format!("## {heading}"), String::new()]);
                 out.extend(md_section(lines, note, &none));
@@ -454,9 +514,16 @@ pub fn disclosure(entries: &[LogEntry], name: &str, lang: Lang, format: DocForma
                 out.push(e(&none));
             } else {
                 out.push("\\begin{itemize}".into());
-                // the date is written as it is; only the prompt's text is escaped
-                out.extend(all.iter().filter(|t| t.response.ai_text_flag).map(|t| format!("  \\item {}: {}", day(&t.prompt.ts), e(&py_squash(&t.prompt.text, Some(120))))));
+                out.extend(ai_text.iter().map(|line| format!("  \\item {}", e(line))));
                 out.push("\\end{itemize}".into());
+            }
+            if profile == Profile::Editor {
+                out.push(e(&detection_note));
+                if !corrections.is_empty() {
+                    out.extend([format!("\\subsection*{{{}}}", e(&corrections_head)), "\\begin{itemize}".to_string()]);
+                    out.extend(corrections.iter().map(|line| format!("  \\item {}", e(line))));
+                    out.push("\\end{itemize}".into());
+                }
             }
             for (heading, lines, note) in [(&guard_head, &guard_lines, &guard_note), (&log_head, &log_lines, &log_note), (&refused_head, &refused_lines, &refused_note)] {
                 out.push(format!("\\subsection*{{{}}}", e(heading)));

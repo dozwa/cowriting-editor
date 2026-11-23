@@ -90,6 +90,21 @@ impl Sidecar {
         format!("{}/log-rewrites", self.dir())
     }
 
+    /// The author's briefing of the experts.
+    pub fn party_md(&self) -> String {
+        format!("{}/party.md", self.dir())
+    }
+
+    /// The document's own experts, one file each.
+    pub fn party_dir(&self) -> String {
+        format!("{}/party", self.dir())
+    }
+
+    /// Which experts are in the document's party.
+    pub fn party_json(&self) -> String {
+        format!("{}/party.json", self.dir())
+    }
+
     pub fn doc_json(&self) -> String {
         format!("{}/doc.json", self.dir())
     }

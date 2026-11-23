@@ -19,6 +19,8 @@ export const bridgeApi: Api = {
   openDocument: path => call('open_document', { path }),
   newDocument: path => call('new_document', { path }),
   saveDocument: text => call('save_document', { text }),
+  reportPaste: (pasted, line, documentText) => call('report_paste', { pasted, line, documentText }),
+  commentAiText: (id, note) => call('comment_ai_text', { id, note }),
   ask: async (input, onEvent) => {
     const response = await fetch('/bridge/ask', { method: 'POST', body: JSON.stringify({ input }) })
     const reader = response.body!.getReader()
@@ -44,4 +46,8 @@ export const bridgeApi: Api = {
   thread: id => call('thread', { id }),
   annotate: (reference, use, note) => call('annotate', { reference, use, note }),
   exportDisclosure: options => call('export_disclosure', { options }),
+  party: () => call('party'),
+  setBrief: (key, body) => call('set_brief', { key, body }),
+  setMember: (id, isMember) => call('set_member', { id, isMember }),
+  addExpert: (name, role, looksAt) => call('add_expert', { name, role, looksAt }),
 }

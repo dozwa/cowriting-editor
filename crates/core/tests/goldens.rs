@@ -136,3 +136,25 @@ fn the_guard_decides_about_a_paper_folder_as_the_plugin_does() {
     let changed: Vec<Vec<String>> = cases["changedFiles"].as_array().unwrap().iter().map(|c| changed_files(&snapshot(&c["before"]), &snapshot(&c["after"]))).collect();
     assert_eq!(json!(changed), goldens["changedFiles"]);
 }
+
+#[test]
+fn briefs_are_read_and_rewritten_as_the_plugin_does() {
+    use cowriting_core::briefs::{append_brief, brief_for, parse_briefs, set_brief};
+    let (cases, goldens) = (cases(), core_goldens());
+    let (cases, goldens, party) = (&cases["briefs"], &goldens["briefs"], Party::default());
+    let text = cases["text"].as_str().unwrap();
+    let field = |case: &serde_json::Value, key: &str| case[key].as_str().unwrap().to_string();
+
+    let parsed = parse_briefs(text, &party);
+    assert_eq!(json!(parsed), goldens["parsed"]);
+    for id in cases["for"].as_array().unwrap() {
+        let id = id.as_str().unwrap();
+        assert_eq!(json!(brief_for(&parsed, id)), goldens["for"][id], "what {id} is told");
+    }
+    let set: Vec<Option<String>> = cases["set"].as_array().unwrap().iter().map(|c| set_brief(text, &field(c, "key"), &field(c, "body"), &party)).collect();
+    assert_eq!(json!(set), goldens["set"]);
+    let appended: Vec<Option<String>> = cases["append"].as_array().unwrap().iter().map(|c| append_brief(text, &field(c, "key"), &field(c, "lines"), &party)).collect();
+    assert_eq!(json!(appended), goldens["append"]);
+    let empty: Vec<Option<String>> = cases["empty"].as_array().unwrap().iter().map(|c| set_brief("", &field(c, "key"), &field(c, "body"), &party)).collect();
+    assert_eq!(json!(empty), goldens["empty"]);
+}
