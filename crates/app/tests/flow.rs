@@ -354,3 +354,144 @@ async fn the_author_plans_checks_the_points_and_lets_experts_watch() {
     assert!(!reopened.live_view().is_on && reopened.live_view().personas == ["architect"]);
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), TEXT);
 }
+
+/// Crossref with one record.
+struct OneRecord;
+
+#[async_trait::async_trait]
+impl cowriting_core::sources::References for OneRecord {
+    async fn work(&self, doi: &str) -> Result<Option<cowriting_core::sources::Record>, String> {
+        Ok((doi == "10.1000/Walk.2020").then(|| cowriting_core::sources::Record {
+            doi: doi.into(),
+            title: "Walking breaks and attention in office workers".into(),
+            year: "2020".into(),
+        }))
+    }
+
+    async fn candidates(&self, _query: &str) -> Result<Vec<cowriting_core::sources::Record>, String> {
+        Ok(Vec::new())
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_authors_references_are_read_searched_and_checked_but_never_written() {
+    let folder = Folder::new("sources");
+    let text = "---\nbibliography: refs.bib\n---\n\n# Walking breaks\n\nBreaks help [@smith2020; @ghost1999].\n";
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/literature");
+    std::fs::write(folder.path("thesis.md"), text).unwrap();
+    std::fs::copy(fixtures.join("refs.bib"), folder.path("refs.bib")).unwrap();
+    std::fs::create_dir_all(folder.path("elsewhere")).unwrap();
+    std::fs::copy(fixtures.join("refs.ris"), folder.path("elsewhere/more.ris")).unwrap();
+    let bib_before = std::fs::read(folder.path("refs.bib")).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+
+    // the front matter's file is found without any setup, and looking writes nothing
+    let view = session.sources_view(text);
+    assert_eq!((view.files.len(), view.entries, view.cited), (1, 4, 2));
+    assert_eq!(view.missing, ["ghost1999"]);
+    assert!(view.checked.is_none());
+    assert_eq!(folder.files(), ["elsewhere/more.ris", "refs.bib", "thesis.md"]);
+
+    // a file from elsewhere is added by the author; anything else is refused
+    assert!(session.add_bibliography(&folder.path("thesis.md"), text).is_err());
+    assert!(session.add_bibliography(&folder.path("nowhere.bib"), text).is_err());
+    session.add_bibliography(&folder.path("elsewhere/more.ris"), text).unwrap();
+    session.add_bibliography(&folder.path("elsewhere/more.ris"), text).unwrap();
+    let view = session.sources_view(text);
+    assert_eq!(
+        view.files.iter().map(|f| (f.name.as_str(), f.format.as_str(), f.entries, f.is_from_document)).collect::<Vec<_>>(),
+        [("refs.bib", "BibTeX", 4, true), ("more.ris", "RIS", 5, false)]
+    );
+    assert_eq!(session.search_bibliography("sitting", text).iter().map(|hit| hit.file.as_str()).collect::<Vec<_>>(), ["refs.bib", "more.ris"]);
+
+    // the check keeps what it found; no AI is asked, so the log stays empty
+    let checked = session.check_references(&OneRecord, text).await.unwrap();
+    assert_eq!(checked.rows.len(), 9);
+    assert_eq!(serde_json::to_value(&checked.rows[0]).unwrap()["status"], "ok");
+    assert_eq!(serde_json::to_value(&checked.rows[1]).unwrap()["status"], "not_found");
+    assert_eq!(session.sources_view(text).checked, Some(checked));
+    assert!(session.log_view(text).unwrap().turns.is_empty());
+
+    session.remove_bibliography(&folder.path("elsewhere/more.ris")).unwrap();
+    assert_eq!(session.sources_view(text).files.len(), 1);
+    assert!(Path::new(&folder.path("elsewhere/more.ris")).exists(), "taking a file off the list leaves the file");
+    assert_eq!(std::fs::read(folder.path("refs.bib")).unwrap(), bib_before);
+    assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
+}
+
+#[test]
+fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
+    use cowriting_app::export::{check_target, find_program, pandoc_args, references};
+    use cowriting_app::FileFormat;
+    let folder = Folder::new("export");
+    let text = "---\ntitle: Walking breaks\nbibliography: refs.bib\n---\n\n# Walking breaks\n\nBreaks help [@smith2020; @ghost1999], as the library says [@fromzotero2024].\n\n# References\n";
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/literature");
+    std::fs::write(folder.path("thesis.md"), text).unwrap();
+    let bib =
+        "@article{smith2020, author = {Smith, Jane and Lee, Min-Jung and Berg, Pieter}, title = {Walking breaks and attention}, journal = {Journal of Work}, year = {2020}}\n";
+    std::fs::write(folder.path("refs.bib"), bib).unwrap();
+    std::fs::copy(fixtures.join("refs.nbib"), folder.path("pubmed.nbib")).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    session.add_bibliography(&folder.path("pubmed.nbib"), text).unwrap();
+    let zotero = json!([{ "id": "fromzotero2024", "type": "article-journal", "title": "Standing meetings", "author": [{ "family": "Okafor", "given": "Ada" }], "issued": { "date-parts": [[2024]] } }]).to_string();
+
+    // which references go in: Zotero's for the cited keys first, then the files pandoc can read; a key nobody holds is named
+    let bibliography = cowriting_app::export::bibliography_of(&session.workspace, text);
+    let used = references(&bibliography, text, Some(("/kept/references.json", &zotero)));
+    assert_eq!(
+        (used.files.clone(), used.from_zotero, used.missing.clone()),
+        (vec!["/kept/references.json".to_string(), folder.path("refs.bib")], 1, vec!["ghost1999".to_string()])
+    );
+    let offline = references(&bibliography, text, None);
+    assert_eq!((offline.files.len(), offline.from_zotero, offline.missing), (1, 0, vec!["fromzotero2024".to_string(), "ghost1999".to_string()]));
+    let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some("xelatex"));
+    assert_eq!(
+        args.join(" "),
+        format!(
+            "--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine xelatex",
+            folder.path("refs.bib")
+        )
+    );
+    assert!(!pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], Some("xelatex")).contains(&"--pdf-engine".to_string()));
+
+    // the target is a file of the chosen kind and never the document
+    assert!(check_target(FileFormat::Pdf, &folder.path("thesis.docx"), &folder.path("thesis.md")).is_err());
+    assert!(session.export_document(FileFormat::Docx, &folder.path("thesis.md"), text, None).is_err());
+    assert_eq!(session.export_target(FileFormat::Pdf), folder.path("thesis.pdf"));
+    assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
+
+    // the real thing, where pandoc is installed (CI installs it and insists)
+    let Some(pandoc) = find_program("pandoc") else {
+        assert!(std::env::var_os("COWRITING_NEED_PANDOC").is_none(), "pandoc is not installed");
+        eprintln!("pandoc is not installed: the export itself was not run");
+        return;
+    };
+    let made = session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), text, Some(&zotero)).unwrap();
+    assert_eq!((made.cited, made.from_zotero, made.missing.clone()), (3, 1, vec!["ghost1999".to_string()]));
+    assert!(made.warnings.iter().any(|warning| warning.contains("ghost1999")), "{:?}", made.warnings);
+    let back = std::process::Command::new(pandoc).args([folder.path("thesis.docx").as_str(), "--to", "plain", "--wrap", "none"]).output().unwrap();
+    let plain = String::from_utf8_lossy(&back.stdout);
+    // citations are resolved, the unknown key is left visible, and the reference list has both sources
+    assert!(plain.contains("(Smith et al. 2020; ghost1999?)") && plain.contains("(Okafor 2024)"), "{plain}");
+    assert!(plain.contains("Okafor, Ada. 2024") && plain.contains("Smith, Jane, Min-Jung Lee, and Pieter Berg. 2020"), "{plain}");
+    // a bibliography pandoc cannot read: the author is told which file and where, and no file is made
+    std::fs::write(folder.path("refs.bib"), format!("{bib}@misc{{broken, title = {{unclosed\n")).unwrap();
+    let refused = session.export_document(FileFormat::Docx, &folder.path("second.docx"), text, None).unwrap_err();
+    assert!(refused.contains("refs.bib") && refused.contains("line"), "{refused}");
+    assert!(!Path::new(&folder.path("second.docx")).exists());
+    std::fs::write(folder.path("refs.bib"), bib).unwrap();
+    // the export wrote the Word file and the references it took from Zotero, and left everything else as it was
+    assert_eq!(
+        folder.files(),
+        [
+            ".cowriting/thesis.md/doc.json",
+            ".cowriting/thesis.md/export/references.json",
+            ".cowriting/thesis.md/sources.json",
+            "pubmed.nbib",
+            "refs.bib",
+            "thesis.docx",
+            "thesis.md"
+        ]
+    );
+    assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
+}

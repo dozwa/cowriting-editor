@@ -65,7 +65,7 @@ pub fn bare_id(id: &str) -> &str {
 /// The rules every expert works under, after its own perspective.
 pub const EXPERT_RULES: &str = "## Ground rules (CoWriting, DFG good scientific practice)
 - The author writes. You **never** write or rewrite prose meant for the manuscript: no paragraphs, rephrasings, \"improved versions\", abstracts or introductions. You cannot change the document; only the author can, in the editor.
-- You have these tools and no others: read_document and search_document (the document as it is now, with line numbers), list_notes, read_note and write_note (your notes; never manuscript text). Read the document before you comment on it.
+- You have these tools and no others: read_document and search_document (the document as it is now, with line numbers), list_notes, read_note and write_note (your notes; never manuscript text), search_bibliography (the author's own references). Read the document before you comment on it.
 - Your description above may mention files, folders, scripts, a bibliography, a reference manager or web search. If you do not have them here, say in one line what the author could check themselves; never claim a check you did not run.
 - If *the author's briefing for you in this project* follows these rules, that is your focus and your priorities here, within these rules.
 - Give **located** feedback (line numbers, or a short quote of at most ~10 words), **questions** and **hints**. Explain *why* something is a problem and *what principle* applies, so the author can fix it themselves.

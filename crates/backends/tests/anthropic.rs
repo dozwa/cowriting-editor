@@ -98,7 +98,7 @@ fn the_request_carries_the_tools_and_sends_a_turn_back_as_it_came() {
         assert!(body.get(gone).is_none(), "{gone} is not sent");
     }
     let names: Vec<&str> = body["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["read_document", "search_document", "list_notes", "read_note", "write_note"]);
+    assert_eq!(names, ["read_document", "search_document", "list_notes", "read_note", "write_note", "search_bibliography"]);
     // the reasoning block goes back unchanged, the empty text block not at all
     assert_eq!(
         body["messages"][1]["content"],

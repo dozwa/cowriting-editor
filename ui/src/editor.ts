@@ -72,6 +72,8 @@ const livePreview = ViewPlugin.fromClass(
 export type Editor = {
   getText(): string
   setText(text: string): void
+  /** Puts text where the cursor is, in place of what is selected. */
+  insert(text: string): void
   /** Puts the cursor on a 1-based line and scrolls it into view. */
   jumpToLine(line: number): void
   focus(): void
@@ -120,6 +122,10 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
   return {
     getText: () => view.state.doc.toString(),
     setText: text => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: 0 } }),
+    insert: text => {
+      view.dispatch(view.state.replaceSelection(text))
+      view.focus()
+    },
     jumpToLine: line => {
       const target = view.state.doc.line(Math.min(Math.max(1, line), view.state.doc.lines))
       view.dispatch({ selection: { anchor: target.from }, effects: EditorView.scrollIntoView(target.from, { y: 'center' }) })

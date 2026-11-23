@@ -2,6 +2,8 @@
 //! export the disclosure. The window (`src-tauri`) only passes these on, so everything here runs
 //! and is tested without one.
 
+pub mod export;
+
 use cowriting_backends::anthropic::AnthropicBackend;
 use cowriting_backends::fake::FakeBackend;
 use cowriting_backends::openai::{OpenAiBackend, OPENAI_BASE_URL};
@@ -14,6 +16,7 @@ use cowriting_core::paste_tracking::{check, is_logged, sources, still_in_text, F
 use cowriting_core::personas::{id_from_name, is_custom_id, persona_file, shared_palette, Persona};
 use cowriting_core::review::{check_points, live_review, read_check, read_plan, CheckSummary, LiveHint, LiveOutcome, LiveSettings, LiveState};
 use cowriting_core::scope::{scope_progress, ScopeProgress};
+use cowriting_core::sources::{added_files, check_references, cited_keys, format_name, load_bibliography, save_added_files, search, BibFile, CheckedRef, Hit, References, Status};
 use cowriting_core::stats::compute_stats;
 use cowriting_core::thread::thread_of;
 use cowriting_core::turn::{annotate, run_turn, Ask, TurnEvent, TurnOutcome, Workspace};
@@ -22,6 +25,7 @@ use cowriting_core::types::{LogEntry, Stats, ThreadMessage};
 use cowriting_core::watch::PAUSE_MS;
 use cowriting_core::words::{changed_paragraphs, paragraphs};
 use cowriting_core::words::{count_words, Format};
+pub use export::{DocumentExport, ExportTools, FileFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -267,6 +271,36 @@ pub struct LiveView {
     pub pause_ms: u64,
 }
 
+/// The document's references as the Sources tab shows them.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourcesView {
+    pub files: Vec<BibFile>,
+    /// How many references the files hold.
+    pub entries: usize,
+    /// How many different keys the document cites.
+    pub cited: usize,
+    /// Keys the document cites that no bibliography file holds.
+    pub missing: Vec<String>,
+    /// What the last check against Crossref found.
+    pub checked: Option<VerifyFile>,
+}
+
+/// What a reference check found (`verify.json`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VerifyFile {
+    pub ts: String,
+    pub rows: Vec<CheckedRef>,
+}
+
+/// The hits of a search, and where they are from.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct SourceHits {
+    /// 'zotero' or 'bibliography'.
+    pub from: String,
+    pub hits: Vec<Hit>,
+}
+
 /// The author's plan and how far the text has come.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -451,6 +485,119 @@ impl Session {
         check_points(&self.workspace, backend, model, document_text).await.map_err(error)
     }
 
+    pub fn sources_view(&self, document_text: &str) -> SourcesView {
+        let host = self.workspace.host.as_ref();
+        let bibliography = load_bibliography(host, &self.workspace.sidecar, document_text);
+        let cited = cited_keys(document_text);
+        // a key the files do not hold is only missing when there are files to hold it
+        let missing = if bibliography.files.is_empty() {
+            Vec::new()
+        } else {
+            cited.iter().filter(|key| !bibliography.entries.iter().any(|e| !e.derived && &e.key == *key)).cloned().collect()
+        };
+        let checked = host.read(&self.workspace.sidecar.verify_json()).ok().and_then(|text| serde_json::from_str(&text).ok());
+        SourcesView { entries: bibliography.entries.len(), files: bibliography.files, cited: cited.len(), missing, checked }
+    }
+
+    /// Adds a bibliography file of the author's to this document. The file is read, never written.
+    pub fn add_bibliography(&self, path: &str, document_text: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        if format_name(path).is_none() {
+            return Err("That is not a bibliography format the editor reads: .bib, .json (CSL), .ris or .nbib.".into());
+        }
+        host.read(path).map_err(|e| format!("The file could not be read: {e}"))?;
+        let mut files = added_files(host, sidecar);
+        if load_bibliography(host, sidecar, document_text).files.iter().any(|known| known.path == path) {
+            return Ok(());
+        }
+        files.push(path.to_string());
+        sidecar.ensure(host, document_text).map_err(error)?;
+        save_added_files(host, sidecar, &files).map_err(|e| format!("The list of files could not be saved: {e}"))
+    }
+
+    /// Takes a file the author added out of the list again. The file itself is left alone.
+    pub fn remove_bibliography(&self, path: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let files: Vec<String> = added_files(host, sidecar).into_iter().filter(|known| known != path).collect();
+        save_added_files(host, sidecar, &files).map_err(|e| format!("The list of files could not be saved: {e}"))
+    }
+
+    /// The references in the document's bibliography files that hold every word of the query.
+    pub fn search_bibliography(&self, query: &str, document_text: &str) -> Vec<Hit> {
+        search(&load_bibliography(self.workspace.host.as_ref(), &self.workspace.sidecar, document_text).entries, query, 15)
+    }
+
+    /// The author's running Zotero first (through Better BibTeX, which knows the citekeys, else its own API); their bibliography files when Zotero is not reachable.
+    pub async fn search_sources(&self, query: &str, document_text: &str) -> SourceHits {
+        let zotero = match cowriting_backends::lookup::better_bibtex_search(query, 15).await {
+            Some(hits) => Some(hits),
+            None => cowriting_backends::lookup::zotero_search(query, 15).await,
+        };
+        match zotero {
+            Some(hits) => SourceHits { from: "zotero".into(), hits },
+            None => SourceHits { from: "bibliography".into(), hits: self.search_bibliography(query, document_text) },
+        }
+    }
+
+    /// Makes a PDF or Word file of the document with pandoc. `zotero` is what the author's Zotero holds for the
+    /// cited keys, as CSL JSON; without it only the document's bibliography files are used.
+    pub fn export_document(&self, format: FileFormat, target: &str, document_text: &str, zotero: Option<&str>) -> Result<DocumentExport, String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        export::check_target(format, target, &sidecar.document)?;
+        let tools = export::local_tools();
+        if format == FileFormat::Pdf && tools.pdf_engine.is_none() && tools.has_pandoc {
+            return Err(
+                "A PDF needs a program that typesets it, and none is installed: a LaTeX distribution (TeX Live, MacTeX, MiKTeX) or Typst. Word export works without.".into()
+            );
+        }
+        let kept = sidecar.export_references_json();
+        if let Some(csl) = zotero {
+            sidecar.ensure(host, document_text).map_err(error)?;
+            host.write(&kept, csl).map_err(|e| format!("The references could not be saved: {e}"))?;
+        }
+        let used = export::references(&export::bibliography_of(&self.workspace, document_text), document_text, zotero.map(|csl| (kept.as_str(), csl)));
+        let args = export::pandoc_args(format, target, &sidecar.folder, &used.files, tools.pdf_engine.as_deref());
+        let warnings = export::run_pandoc(document_text, &sidecar.folder, &args)?;
+        Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
+    }
+
+    /// The export with the references looked up in the author's Zotero, when it is running.
+    pub async fn export_document_online(&self, format: FileFormat, target: &str, document_text: &str) -> Result<DocumentExport, String> {
+        let cited: Vec<String> = cited_keys(document_text).into_iter().collect();
+        let zotero = cowriting_backends::lookup::better_bibtex_export(&cited).await;
+        self.export_document(format, target, document_text, zotero.as_ref().map(|(csl, _)| csl.as_str()))
+    }
+
+    /// Where an export goes when the author does not choose: beside the document, under its name.
+    pub fn export_target(&self, format: FileFormat) -> String {
+        let sidecar = &self.workspace.sidecar;
+        let stem = sidecar.name.rsplit_once('.').map_or(sidecar.name.as_str(), |(stem, _)| stem);
+        std::path::Path::new(&sidecar.folder).join(format!("{stem}.{}", format.extension())).to_string_lossy().into_owned()
+    }
+
+    /// The reference check against Crossref itself.
+    pub async fn check_references_online(&self, document_text: &str) -> Result<VerifyFile, String> {
+        self.check_references(&cowriting_backends::lookup::Crossref::default(), document_text).await
+    }
+
+    /// Checks every reference against Crossref (or a stand-in) and keeps the result. No AI is involved, so nothing is logged.
+    pub async fn check_references(&self, references: &dyn References, document_text: &str) -> Result<VerifyFile, String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let bibliography = load_bibliography(host, sidecar, document_text);
+        if bibliography.entries.is_empty() {
+            return Err("There are no references to check: add a bibliography file first.".into());
+        }
+        let rows = check_references(&bibliography.entries, references).await;
+        if rows.iter().all(|row| row.status == Status::Error) {
+            return Err(format!("The check could not be made: {}", rows[0].detail.clone().unwrap_or_default()));
+        }
+        let file = VerifyFile { ts: host.now(), rows };
+        sidecar.ensure(host, document_text).map_err(error)?;
+        host.write(&sidecar.verify_json(), &format!("{}\n", serde_json::to_string_pretty(&file).expect("plain data")))
+            .map_err(|e| format!("The result could not be saved: {e}"))?;
+        Ok(file)
+    }
+
     /// The author's comment on a logged passage of AI text. The entry itself is never changed or removed.
     pub fn comment_ai_text(&self, id: &str, note: &str) -> Result<(), String> {
         let entries = self.workspace.log.read().map_err(error)?;
@@ -581,4 +728,9 @@ impl Session {
         }
         Ok(Exported { paths, register })
     }
+}
+
+/// What this computer has to export with, and whether Zotero can give the references.
+pub async fn export_tools() -> ExportTools {
+    ExportTools { has_zotero: cowriting_backends::lookup::has_better_bibtex().await, ..export::local_tools() }
 }

@@ -1,0 +1,7 @@
+[
+  {"id": "smith2020", "type": "article-journal", "title": "Walking breaks and attention in office workers", "author": [{"family": "Smith", "given": "Jane"}, {"literal": "World Health Organization"}, {"name": "Berg"}, {"given": "Nobody"}], "issued": {"date-parts": [[2020, 3, 1]]}, "DOI": "10.1000/walk.2020", "container-title": "Journal of Work", "volume": 12, "peer-reviewed": true},
+  {"id": 42, "title": "A numbered record", "issued": {"raw": "2018-12-01"}, "author": null},
+  {"title": "Only a title", "issued": {"literal": "circa 1999"}, "DOI": "DOI:10.1000/only"},
+  {"note": "no title, id or DOI: skipped"},
+  {"DOI": "http://dx.doi.org/10.1000/bare;", "issued": {"date-parts": [[]]}}
+]

@@ -3,4 +3,5 @@
 
 pub mod anthropic;
 pub mod fake;
+pub mod lookup;
 pub mod openai;

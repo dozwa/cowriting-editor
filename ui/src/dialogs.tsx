@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import type { Api, ExportOptions, Exported, ModelChoice, Settings, SettingsView } from './api'
+import type { Api, ExportOptions, Exported, ModelChoice, Settings, SettingsView, DocumentExport, ExportTools, FileFormat } from './api'
 
 function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -185,6 +185,71 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
       <div className="row end">
         <button onClick={onClose}>Close</button>
         <button className="primary" onClick={() => void write()}>{exported === null ? 'Write the disclosure' : 'Write again'}</button>
+      </div>
+    </Dialog>
+  )
+}
+
+/** The document as a PDF or a Word file, made by pandoc, with the references behind its citekeys. */
+export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): string; onClose(): void }) {
+  const [setup, setSetup] = useState<{ tools: ExportTools; targets: Record<FileFormat, string> } | null>(null)
+  const [format, setFormat] = useState<FileFormat>('pdf')
+  const [made, setMade] = useState<DocumentExport | null>(null)
+  const [isWorking, setWorking] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.exportSetup().then(([tools, pdf, docx]) => setSetup({ tools, targets: { pdf, docx } }), e => setError(String(e)))
+  }, [api])
+
+  const write = async () => {
+    if (setup === null) return
+    try {
+      const target = await api.pickExport(format, setup.targets[format])
+      if (target === null) return
+      setWorking(true)
+      setMade(null)
+      setMade(await api.exportDocument(format, target, getText()))
+      setError('')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const tools = setup?.tools
+  const cannot = tools === undefined ? '' : !tools.hasPandoc ? 'pandoc is not installed on this computer. Install it from pandoc.org, then open this dialog again.' : format === 'pdf' && tools.pdfEngine === null ? 'A PDF needs a program that typesets it (TeX Live, MacTeX, MiKTeX or Typst), and none is installed. Word export works without.' : ''
+  return (
+    <Dialog title="Export the document" onClose={onClose}>
+      <p>Makes a PDF or a Word file of the document as it is in the editor now. Citations like <code>[@smith2020]</code> become references. Your document is not changed.</p>
+      <label>
+        Format
+        <select value={format} onChange={e => (setFormat(e.target.value as FileFormat), setMade(null))}>
+          <option value="pdf">PDF</option>
+          <option value="docx">Word (.docx)</option>
+        </select>
+      </label>
+      {tools !== undefined && (
+        <p className="muted">
+          {tools.hasZotero ? 'References come from your Zotero library by citekey (Better BibTeX), then from your bibliography files.' : 'Zotero with Better BibTeX is not running: references come from your bibliography files only.'}
+          {format === 'pdf' && tools.pdfEngine !== null && ` The PDF is typeset by ${tools.pdfEngine}.`}
+        </p>
+      )}
+      {cannot !== '' && <p className="hint">{cannot}</p>}
+      {error !== '' && <p className="error" role="alert">{error}</p>}
+      {made !== null && (
+        <div role="status">
+          <p>Written to <code>{made.path}</code>.</p>
+          <p className="muted">
+            {made.cited === 0 ? 'The document cites nothing.' : `${made.cited} cited, ${made.fromZotero} of them from Zotero.`}
+            {made.missing.length > 0 && ` Not found anywhere, and left as they are in the text: ${made.missing.map(key => `@${key}`).join(', ')}.`}
+          </p>
+        </div>
+      )}
+      <div className="actions">
+        <button onClick={onClose}>Close</button>
+        <button className="primary" disabled={setup === null || cannot !== '' || isWorking} onClick={() => void write()}>{isWorking ? 'Exporting…' : 'Export'}</button>
       </div>
     </Dialog>
   )

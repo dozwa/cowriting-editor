@@ -14,6 +14,7 @@ pub mod personas;
 pub mod review;
 pub mod scope;
 pub mod sidecar;
+pub mod sources;
 pub mod stats;
 pub mod text;
 pub mod thread;

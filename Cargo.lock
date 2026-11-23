@@ -460,6 +460,7 @@ dependencies = [
 name = "cowriting-app"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "cowriting-backends",
  "cowriting-core",
  "serde",

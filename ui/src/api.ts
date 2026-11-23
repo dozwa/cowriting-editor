@@ -5,6 +5,17 @@ import { confirm, open, save } from '@tauri-apps/plugin-dialog'
 
 export type Opened = { path: string; name: string; text: string; language: string }
 
+export type BibFile = { path: string; name: string; format: string; entries: number; isFromDocument: boolean; error?: string }
+export type RefRecord = { doi: string; title: string; year: string }
+export type CheckedRef = { key: string; derived: boolean; file: string; title: string; year: string; doi: string; status: 'ok' | 'mismatch' | 'not_found' | 'no_doi' | 'error'; found?: RefRecord; suggestion?: string; detail?: string }
+export type SourcesView = { files: BibFile[]; entries: number; cited: number; missing: string[]; checked: { ts: string; rows: CheckedRef[] } | null }
+export type RefHit = { citekey: string | null; title: string; authors: string; year: string; doi: string; file?: string }
+export type SourceHits = { from: 'zotero' | 'bibliography'; hits: RefHit[] }
+
+export type FileFormat = 'pdf' | 'docx'
+export type ExportTools = { hasPandoc: boolean; pdfEngine: string | null; hasZotero: boolean }
+export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[] }
+
 export type Use = 'adopted' | 'adapted' | 'rejected' | 'info'
 
 export type TurnRow = {
@@ -163,6 +174,21 @@ export const api = {
   setScope: (text: string, documentText: string) => invoke<void>('set_scope', { text, documentText }),
   /** Sends the plan's points and the document to the model; logged. */
   checkPoints: (documentText: string) => invoke<CheckSummary>('check_points', { documentText }),
+  /** What there is to export with, and where a PDF and a Word file would go. */
+  exportSetup: () => invoke<[ExportTools, string, string]>('export_setup'),
+  /** Asks the author where the export goes; null when they cancel. */
+  pickExport: (format: FileFormat, suggested: string) => save({ filters: [{ name: format === 'pdf' ? 'PDF' : 'Word', extensions: [format] }], defaultPath: suggested }),
+  exportDocument: (format: FileFormat, target: string, documentText: string) => invoke<DocumentExport>('export_document', { format, target, documentText }),
+  sources: (documentText: string) => invoke<SourcesView>('sources', { documentText }),
+  /** Asks the author for a bibliography file; null when they cancel. */
+  pickBibliography: async (): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Bibliography', extensions: ['bib', 'bibtex', 'json', 'ris', 'nbib'] }] })
+    return typeof path === 'string' ? path : null
+  },
+  addBibliography: (path: string, documentText: string) => invoke<void>('add_bibliography', { path, documentText }),
+  removeBibliography: (path: string) => invoke<void>('remove_bibliography', { path }),
+  searchSources: (query: string, documentText: string) => invoke<SourceHits>('search_sources', { query, documentText }),
+  checkReferences: (documentText: string) => invoke<SourcesView['checked']>('check_references', { documentText }),
   ask: (input: { text: string; replyTo: string | null; persona: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
     const channel = new Channel<AskEvent>()
     channel.onmessage = onEvent

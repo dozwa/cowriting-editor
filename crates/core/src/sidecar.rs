@@ -120,6 +120,21 @@ impl Sidecar {
         format!("{}/live.json", self.dir())
     }
 
+    /// The bibliography files the author added in the editor.
+    pub fn sources_json(&self) -> String {
+        format!("{}/sources.json", self.dir())
+    }
+
+    /// The references an export takes from the author's Zotero, for pandoc.
+    pub fn export_references_json(&self) -> String {
+        format!("{}/export/references.json", self.dir())
+    }
+
+    /// What the last reference check found.
+    pub fn verify_json(&self) -> String {
+        format!("{}/verify.json", self.dir())
+    }
+
     pub fn doc_json(&self) -> String {
         format!("{}/doc.json", self.dir())
     }

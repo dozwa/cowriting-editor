@@ -10,9 +10,36 @@ and writes the same log format.
 **State: early.** What works: open and save a markdown file, ask, classify, log, disclosure. The
 AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM Studio), or any
 provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
-can be briefed and asked, and you can add experts of your own. Not built yet: Claude Code as a
-backend, sources, and export to Word (.docx) for the final formatting. There are no signed
-installers yet.
+can be briefed and asked, and you can add experts of your own. References can be searched and
+checked, and the document exports to PDF and Word. Not built yet: Claude Code as a backend. There
+are no signed installers yet.
+
+## Sources
+
+Your bibliography is whatever your document's front matter names (`bibliography: refs.bib`, as
+pandoc reads it) plus any file you add in the Sources tab: BibTeX, CSL JSON, RIS or a PubMed
+export. The editor reads these files and never changes them.
+
+- **Find a reference** searches your Zotero library when Zotero is running (through Better
+  BibTeX, which knows the citekeys), otherwise your bibliography files. "Cite" puts `[@key]` where
+  your cursor is.
+- **Check the references** looks up every DOI at Crossref and compares title and year. A reference
+  without a DOI is looked up by title; a DOI found that way is a suggestion for you to check, never
+  a verification. No AI is involved.
+- The Sources tab names keys your text cites that no bibliography file holds.
+- The AI can search your bibliography files (`search_bibliography`). It cannot search Zotero or the
+  web, and it cannot change a reference.
+
+## Export to PDF and Word
+
+"Export…" makes a PDF or a Word file of the document as it is in the editor, with
+[pandoc](https://pandoc.org). The references behind your citekeys come from your Zotero library
+(Better BibTeX) when it is running, then from your bibliography files. Keys found nowhere are named
+after the export and stay in the text as they are. Your document is not changed.
+
+The export needs pandoc on your computer, and for a PDF a typesetting program (TeX Live, MacTeX,
+MiKTeX or Typst). **The installers do not bring these along yet**; the dialog says what is missing.
+The reference list is in pandoc's default style (Chicago author-date); choosing a style is not built.
 
 ## Live review and scope
 
@@ -40,14 +67,17 @@ detected, and the disclosure says so.
 
 For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the log
 (`ai-log/YYYY-MM.jsonl`), the document as it was at each question (`snapshots/`), the AI's notes
-(`notes/`, the only place it can write) and the disclosure (`disclosure/`). What you tell the
+(`notes/`, the only place it can write), the disclosure (`disclosure/`), the last reference check
+(`verify.json`) and the references an export took from Zotero (`export/references.json`). What you tell the
 experts is in `party.md`, experts you made in `party/<id>.md`: plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.
 
 ## What is sent where
 
 When you ask, your question and your document go to the provider you set up. With a model on
-your own computer nothing leaves it. Nothing is sent otherwise. An API key is kept in the system's
+your own computer nothing leaves it. A reference check sends each reference's DOI, or its title,
+first author and year, to crossref.org, and nothing of your text. Zotero is asked on your own
+computer only. Nothing is sent otherwise. An API key is kept in the system's
 key store. The disclosure names the provider and the model that answered.
 
 ## Which models keep to the rules
@@ -97,8 +127,9 @@ To try it without a model: `COWRITING_BACKEND=fake:/path/to/script.json COWRITIN
 ## Layout
 
 - `crates/core`: log, guard, stats, disclosure, the turn loop. No window, no network.
-- `crates/backends`: the Claude API, OpenAI-compatible APIs, and a scripted stand-in.
-- `crates/app`: one open document, as the window uses it.
+- `crates/backends`: the Claude API, OpenAI-compatible APIs, a scripted stand-in, and the lookups
+  at Crossref and in Zotero.
+- `crates/app`: one open document, as the window uses it; the export through pandoc.
 - `src-tauri`: the window's commands, settings, key store.
 - `ui`: editor and panels (TypeScript, React, CodeMirror). No file or network access.
 - `suites`: the behaviour rules and the runner that asks real models.

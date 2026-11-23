@@ -61,6 +61,7 @@ def plugin_output(plugin: Path) -> dict[str, str]:
         if not (Path(tmp) / "register.js").exists():
             sys.exit("The plugin's hooks module did not compile.")
         out["scope.json"] = run("node", str(REPO / "scripts" / "scope-goldens.mjs"), tmp, str(FIXTURES))
+    out["sources.json"] = run(sys.executable, "-I", str(REPO / "scripts" / "sources-goldens.py"), str(plugin), str(FIXTURES))
     out["PLUGIN_COMMIT"] = run("git", "rev-parse", "HEAD", cwd=plugin)
     return out
 

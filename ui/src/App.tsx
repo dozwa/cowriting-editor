@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel } from './plan'
-import { DisclosureDialog, SettingsDialog } from './dialogs'
+import { SourcesPanel } from './sources'
+import { DisclosureDialog, SettingsDialog, ExportDialog } from './dialogs'
 import { createEditor, type Editor } from './editor'
 import { AskPanel, LogPanel } from './panels'
 import { MODEL_NOTICE, plural, when } from './text'
@@ -29,6 +30,7 @@ const TOOL_STEPS: Record<string, string> = {
   read_document: 'reading your document',
   search_document: 'searching your document',
   list_notes: 'looking at its notes',
+  search_bibliography: 'searching your references',
   read_note: 'reading a note',
   write_note: 'writing a note',
 }
@@ -47,12 +49,12 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [doc, setDoc] = useState<Opened | null>(null)
   const [isDirty, setDirty] = useState(false)
   const [settings, setSettings] = useState<SettingsView | null>(null)
-  const [tab, setTab] = useState<'ask' | 'experts' | 'live' | 'scope' | 'log'>('ask')
+  const [tab, setTab] = useState<'ask' | 'experts' | 'live' | 'scope' | 'sources' | 'log'>('ask')
   const [log, setLog] = useState<LogView>(EMPTY_LOG)
   const [thread, setThread] = useState<ThreadMessage[]>([])
   const [live, setLive] = useState<Live | null>(null)
   const [error, setError] = useState('')
-  const [dialog, setDialog] = useState<'settings' | 'disclosure' | null>(null)
+  const [dialog, setDialog] = useState<'settings' | 'disclosure' | 'export' | null>(null)
   const [isWithoutTools, setWithoutTools] = useState(false)
   const [party, setParty] = useState<PartyView | null>(null)
   const [watching, setWatching] = useState<LiveView | null>(null)
@@ -60,6 +62,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   /** Hints that arrived while the Live tab was not open. */
   const [newHints, setNewHints] = useState(0)
   const [scope, setScope] = useState<ScopeView | null>(null)
+  const [sources, setSources] = useState<SourcesView | null>(null)
   const [isChecking, setChecking] = useState(false)
   const [checkNote, setCheckNote] = useState('')
   /** What the editor just logged about AI text in the document, said once. */
@@ -72,6 +75,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       const text = editor.current?.getText() ?? ''
       setLog(await api.logView(text))
       setScope(await api.scope(text))
+      setSources(await api.sources(text))
     } catch (e) {
       fail(e)
     }
@@ -150,6 +154,20 @@ export function App({ api, makeEditor = createEditor }: Props) {
     }
   }
 
+  /** Something the author does to their references; the tab shows the result. */
+  const withSources = async <T,>(act: (text: string) => Promise<T>): Promise<T | null> => {
+    const text = editor.current?.getText() ?? ''
+    try {
+      const result = await act(text)
+      setSources(await api.sources(text))
+      setError('')
+      return result
+    } catch (e) {
+      fail(e)
+      return null
+    }
+  }
+
   const saveScope = async (text: string): Promise<boolean> => {
     if (editor.current === null) return false
     try {
@@ -201,6 +219,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setParty(await api.party())
       setWatching(await api.liveView())
       setScope(await api.scope(opened.text))
+      setSources(await api.sources(opened.text))
       setWatchStatus('')
       setNewHints(0)
       editor.current?.focus()
@@ -363,6 +382,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
         </span>
         <span className="spacer" />
         <span className="muted">{plural(log.words, 'word')}</span>
+        <button onClick={() => setDialog('export')}>Export…</button>
         <button onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0} title={log.stats.turns === 0 ? 'Nothing to disclose yet: the AI has not been asked' : undefined}>Disclosure…</button>
         <button onClick={() => setDialog('settings')}>Settings…</button>
       </header>
@@ -388,6 +408,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
               Live{newHints > 0 && <span className="badge" title={`${plural(newHints, 'new hint')}`}>{newHints}</span>}
             </button>
             <button role="tab" aria-selected={tab === 'scope'} onClick={() => setTab('scope')}>Scope</button>
+            <button role="tab" aria-selected={tab === 'sources'} onClick={() => (setTab('sources'), void refreshLog())}>Sources</button>
             <button role="tab" aria-selected={tab === 'log'} onClick={() => setTab('log')}>
               Log{open_ > 0 && <span className="badge" title={`${plural(open_, 'answer')} to classify`}>{open_}</span>}
             </button>
@@ -407,6 +428,18 @@ export function App({ api, makeEditor = createEditor }: Props) {
             <LivePanel view={watching} party={party} status={watchStatus} isReady={settings?.isReady ?? true} onChange={(isOn, personas) => void changeWatching(isOn, personas)} onJump={line => editor.current?.jumpToLine(line)} onOpen={openTurn} />
           ) : tab === 'scope' && scope !== null ? (
             <ScopePanel view={scope} canCheck={settings?.isReady ?? true} isChecking={isChecking} note={checkNote} onSave={saveScope} onCheck={() => void checkPoints()} onJump={line => editor.current?.jumpToLine(line)} />
+          ) : tab === 'sources' && sources !== null ? (
+            <SourcesPanel
+              view={sources}
+              onAdd={async () => {
+                const path = await api.pickBibliography()
+                if (path !== null) await withSources(text => api.addBibliography(path, text))
+              }}
+              onRemove={async path => void (await withSources(() => api.removeBibliography(path)))}
+              onSearch={query => withSources(text => api.searchSources(query, text))}
+              onCheck={async () => void (await withSources(text => api.checkReferences(text)))}
+              onCite={key => editor.current?.insert(`[@${key}]`)}
+            />
           ) : (
             <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} onComment={async (id, note) => {
               try {
@@ -428,6 +461,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
         <span>{plural(log.stats.turns, 'AI input')} logged{open_ > 0 ? ` · ${open_} to classify` : ''}{log.guard.length > 0 ? ` · ${plural(log.guard.length, 'refused write')}` : ''}</span>
       </footer>
       {settingsDialog}
+      {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
       {dialog === 'disclosure' && <DisclosureDialog api={api} language={doc.language === 'de' ? 'de' : 'en'} open={open_} onClose={() => setDialog(null)} />}
     </div>
   )

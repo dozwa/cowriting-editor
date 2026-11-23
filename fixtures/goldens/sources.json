@@ -1,0 +1,525 @@
+{
+  "files": [
+    "refs.bib",
+    "refs.json",
+    "refs.nbib",
+    "refs.ris"
+  ],
+  "formats": {
+    "refs.bib": "BibTeX",
+    "refs.json": "CSL JSON",
+    "refs.nbib": "MEDLINE",
+    "refs.ris": "RIS"
+  },
+  "entries": {
+    "refs.bib": [
+      {
+        "key": "smith2020",
+        "derived": false,
+        "type": "article",
+        "title": "Walking breaks and {attention} in office workers",
+        "authors": [
+          "Smith",
+          "van der Berg",
+          "Organization"
+        ],
+        "year": "2020",
+        "doi": "10.1000/Walk.2020",
+        "text": "\n  author = {Smith, Jane and van der Berg, Pieter and {World Health Organization}},\n  title = {Walking breaks and {attention} in office workers},\n  journal = jwork,\n  year = {2020},\n  doi = {https://doi.org/10.1000/Walk.2020.},\n  shorttitle = {Walking breaks},\n",
+        "file": "refs.bib"
+      },
+      {
+        "key": "lee2021",
+        "derived": false,
+        "type": "inproceedings",
+        "title": "Sitting time, measured: a field study",
+        "authors": [
+          "Lee",
+          "Öztürk"
+        ],
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "text": " title=\"Sitting time, measured: a field study\", author=\"Min-Jung Lee and Ali Öztürk\",\n  booktitle = {Proceedings of Something}, date = {2021-05-17}, doi = \"doi: 10.1000/sit.2021\" ",
+        "file": "refs.bib"
+      },
+      {
+        "key": "müller_2019",
+        "derived": false,
+        "type": "book",
+        "title": "Gr\\\"o\\ss e und Ma\\ss{} der $n$-Stichprobe",
+        "authors": [
+          "M\\\"uller"
+        ],
+        "year": "2019",
+        "doi": "",
+        "text": "\n  author = {M{\\\"u}ller, Anna},\n  title = {Gr\\\"o\\ss e und Ma\\ss{} der $n$-Stichprobe},\n  year = 2019\n",
+        "file": "refs.bib"
+      },
+      {
+        "key": "nodoi",
+        "derived": false,
+        "type": "misc",
+        "title": "An entry with nothing else",
+        "authors": [],
+        "year": "",
+        "doi": "",
+        "text": " title = {An entry with nothing else}, note = {unclosed\n",
+        "file": "refs.bib"
+      }
+    ],
+    "refs.json": [
+      {
+        "key": "smith2020",
+        "derived": false,
+        "type": "article-journal",
+        "title": "Walking breaks and attention in office workers",
+        "authors": [
+          "Smith",
+          "World Health Organization",
+          "Berg"
+        ],
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "text": "smith2020 article-journal Walking breaks and attention in office workers Smith Jane World Health Organization Berg Nobody 2020 3 1 10.1000/walk.2020 Journal of Work 12 True",
+        "file": "refs.json"
+      },
+      {
+        "key": "42",
+        "derived": false,
+        "type": "",
+        "title": "A numbered record",
+        "authors": [],
+        "year": "2018",
+        "doi": "",
+        "text": "42 A numbered record 2018-12-01 ",
+        "file": "refs.json"
+      },
+      {
+        "key": "",
+        "derived": false,
+        "type": "",
+        "title": "Only a title",
+        "authors": [],
+        "year": "circ",
+        "doi": "10.1000/only",
+        "text": "Only a title circa 1999 DOI:10.1000/only",
+        "file": "refs.json"
+      },
+      {
+        "key": "",
+        "derived": false,
+        "type": "",
+        "title": "",
+        "authors": [],
+        "year": "",
+        "doi": "10.1000/bare",
+        "text": "http://dx.doi.org/10.1000/bare; ",
+        "file": "refs.json"
+      }
+    ],
+    "refs.nbib": [
+      {
+        "key": "pmid:12345678",
+        "derived": true,
+        "type": "journal article",
+        "title": "Walking breaks and attention in office workers: a randomized trial.",
+        "authors": [
+          "Smith",
+          "Lee"
+        ],
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "text": "PMID 12345678\nOWN NLM\nDP 2020 Mar 1\nTI Walking breaks and attention in office workers: a randomized trial.\nFAU Smith, Jane\nAU Smith J\nFAU Lee, Min-Jung Annette\nAU Lee MJ\nPT Journal Article\nPT Randomized Controlled Trial\nLID S0000-0000(20)00001-1 [pii]\nAID 10.1000/walk.2020 [doi]",
+        "file": "refs.nbib"
+      },
+      {
+        "key": "a2021",
+        "derived": true,
+        "type": "",
+        "title": "A record without a PMID.",
+        "authors": [
+          "A"
+        ],
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "text": "DP 2021\nTI A record without a PMID.\nAU Öztürk A\nLID 10.1000/sit.2021 [doi]",
+        "file": "refs.nbib"
+      },
+      {
+        "key": "a2021b",
+        "derived": true,
+        "type": "",
+        "title": "Another one by the same author and year.",
+        "authors": [
+          "A"
+        ],
+        "year": "2021",
+        "doi": "",
+        "text": "DP 2021\nTI Another one by the same author and year.\nAU Öztürk A",
+        "file": "refs.nbib"
+      }
+    ],
+    "refs.ris": [
+      {
+        "key": "smith2020",
+        "derived": false,
+        "type": "jour",
+        "title": "Walking breaks and attention",
+        "authors": [
+          "Smith",
+          "Lee"
+        ],
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "text": "TY JOUR\nAU Smith, Jane\nAU Lee, Min-Jung\nTI Walking breaks and attention in office workers\nPY 2020/03/01\nDO 10.1000/walk.2020\nID smith2020\nER ",
+        "file": "refs.ris"
+      },
+      {
+        "key": "ztrk2021",
+        "derived": true,
+        "type": "chap",
+        "title": "Sitting time, measured",
+        "authors": [
+          "Öztürk"
+        ],
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "text": "TY CHAP\nA1 Öztürk, Ali\nT1 Sitting time, measured\nY1 2021\nUR https://example.org/paper\nUR https://doi.org/10.1000/sit.2021\nER ",
+        "file": "refs.ris"
+      },
+      {
+        "key": "ztrk2021b",
+        "derived": true,
+        "type": "jour",
+        "title": "A second one of the same year",
+        "authors": [
+          "Öztürk"
+        ],
+        "year": "2021",
+        "doi": "10.1000/not.a.doi",
+        "text": "TY JOUR\nAU Öztürk, Ali\nBT A second one of the same year\nDA 2021/01/02\nN1 see 10.1000/not.a.doi here\nER ",
+        "file": "refs.ris"
+      },
+      {
+        "key": "ztrk2021c",
+        "derived": true,
+        "type": "rprt",
+        "title": "A third one",
+        "authors": [
+          "Öztürk"
+        ],
+        "year": "2021",
+        "doi": "",
+        "text": "TY RPRT\nAU Öztürk, Ali\nTI A third one\nPY 2021\nER ",
+        "file": "refs.ris"
+      },
+      {
+        "key": "anon",
+        "derived": true,
+        "type": "gen",
+        "title": "No author, no year, no end",
+        "authors": [],
+        "year": "",
+        "doi": "",
+        "text": "TY GEN\nTI No author, no year, no end",
+        "file": "refs.ris"
+      }
+    ]
+  },
+  "dois": [
+    "10.1000/x",
+    "10.1000/Walk.2020",
+    "10.1000/a",
+    "10.1000/b",
+    "10.1000/c",
+    "",
+    "https://example.org/10.1000/d"
+  ],
+  "norms": [
+    "walking breaks and attention in office workers",
+    "gr o e und ma der n stichprobe",
+    "größe naïve_words 42",
+    "italic title with more"
+  ],
+  "families": [
+    "Smith",
+    "Lee",
+    "Organization",
+    "",
+    "van der Berg",
+    "Plato"
+  ],
+  "ratios": [
+    1.0,
+    1.0,
+    0.8256880733944955,
+    0.37037037037037035,
+    1.0,
+    0.0,
+    0.9002123142250531,
+    0.004545454545454545
+  ],
+  "similar": [
+    true,
+    true,
+    false,
+    false,
+    true,
+    false,
+    true,
+    false
+  ],
+  "searches": [
+    [
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention in office workers",
+        "authors": "Smith, van der Berg, Organization",
+        "year": "2020",
+        "doi": "10.1000/Walk.2020",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention in office workers",
+        "authors": "Smith, World Health Organization, Berg",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.json"
+      },
+      {
+        "citekey": null,
+        "title": "Walking breaks and attention in office workers: a randomized trial.",
+        "authors": "Smith, Lee",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention",
+        "authors": "Smith, Lee",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.ris"
+      }
+    ],
+    [
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention in office workers",
+        "authors": "Smith, van der Berg, Organization",
+        "year": "2020",
+        "doi": "10.1000/Walk.2020",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention in office workers",
+        "authors": "Smith, World Health Organization, Berg",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.json"
+      },
+      {
+        "citekey": null,
+        "title": "Walking breaks and attention in office workers: a randomized trial.",
+        "authors": "Smith, Lee",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention",
+        "authors": "Smith, Lee",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.ris"
+      }
+    ],
+    [
+      {
+        "citekey": "lee2021",
+        "title": "Sitting time, measured: a field study",
+        "authors": "Lee, Öztürk",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": null,
+        "title": "A record without a PMID.",
+        "authors": "A",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": null,
+        "title": "Another one by the same author and year.",
+        "authors": "A",
+        "year": "2021",
+        "doi": "",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": null,
+        "title": "Sitting time, measured",
+        "authors": "Öztürk",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.ris"
+      },
+      {
+        "citekey": null,
+        "title": "A second one of the same year",
+        "authors": "Öztürk",
+        "year": "2021",
+        "doi": "10.1000/not.a.doi",
+        "file": "refs.ris"
+      },
+      {
+        "citekey": null,
+        "title": "A third one",
+        "authors": "Öztürk",
+        "year": "2021",
+        "doi": "",
+        "file": "refs.ris"
+      }
+    ],
+    [
+      {
+        "citekey": "lee2021",
+        "title": "Sitting time, measured: a field study",
+        "authors": "Lee, Öztürk",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.bib"
+      }
+    ],
+    [],
+    [
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention in office workers",
+        "authors": "Smith, van der Berg, Organization",
+        "year": "2020",
+        "doi": "10.1000/Walk.2020",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": "lee2021",
+        "title": "Sitting time, measured: a field study",
+        "authors": "Lee, Öztürk",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": "müller_2019",
+        "title": "Gr\\\"o\\ss e und Ma\\ss der $n$-Stichprobe",
+        "authors": "M\\\"uller",
+        "year": "2019",
+        "doi": "",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": "nodoi",
+        "title": "An entry with nothing else",
+        "authors": "",
+        "year": "",
+        "doi": "",
+        "file": "refs.bib"
+      },
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention in office workers",
+        "authors": "Smith, World Health Organization, Berg",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.json"
+      },
+      {
+        "citekey": "42",
+        "title": "A numbered record",
+        "authors": "",
+        "year": "2018",
+        "doi": "",
+        "file": "refs.json"
+      },
+      {
+        "citekey": "",
+        "title": "Only a title",
+        "authors": "",
+        "year": "circ",
+        "doi": "10.1000/only",
+        "file": "refs.json"
+      },
+      {
+        "citekey": "",
+        "title": "",
+        "authors": "",
+        "year": "",
+        "doi": "10.1000/bare",
+        "file": "refs.json"
+      },
+      {
+        "citekey": null,
+        "title": "Walking breaks and attention in office workers: a randomized trial.",
+        "authors": "Smith, Lee",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": null,
+        "title": "A record without a PMID.",
+        "authors": "A",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": null,
+        "title": "Another one by the same author and year.",
+        "authors": "A",
+        "year": "2021",
+        "doi": "",
+        "file": "refs.nbib"
+      },
+      {
+        "citekey": "smith2020",
+        "title": "Walking breaks and attention",
+        "authors": "Smith, Lee",
+        "year": "2020",
+        "doi": "10.1000/walk.2020",
+        "file": "refs.ris"
+      },
+      {
+        "citekey": null,
+        "title": "Sitting time, measured",
+        "authors": "Öztürk",
+        "year": "2021",
+        "doi": "10.1000/sit.2021",
+        "file": "refs.ris"
+      },
+      {
+        "citekey": null,
+        "title": "A second one of the same year",
+        "authors": "Öztürk",
+        "year": "2021",
+        "doi": "10.1000/not.a.doi",
+        "file": "refs.ris"
+      },
+      {
+        "citekey": null,
+        "title": "A third one",
+        "authors": "Öztürk",
+        "year": "2021",
+        "doi": "",
+        "file": "refs.ris"
+      }
+    ]
+  ]
+}

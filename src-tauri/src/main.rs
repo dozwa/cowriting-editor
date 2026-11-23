@@ -6,7 +6,8 @@
 //! are only ever touched here.
 
 use cowriting_app::{
-    list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, ExportOptions, Exported, LiveView, LogView, Opened, PartyView, ScopeView, Session,
+    export_tools, list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, DocumentExport, ExportOptions, ExportTools, Exported, FileFormat, LiveView,
+    LogView, Opened, PartyView, ScopeView, Session, SourceHits, SourcesView, VerifyFile,
 };
 use cowriting_core::host::DiskHost;
 use cowriting_core::review::{CheckSummary, LiveOutcome};
@@ -237,6 +238,46 @@ async fn check_points(app: tauri::AppHandle, editor: State<'_, Editor>, document
 }
 
 #[tauri::command]
+fn sources(editor: State<Editor>, document_text: String) -> Result<SourcesView, String> {
+    Ok(editor.session()?.sources_view(&document_text))
+}
+
+#[tauri::command]
+fn add_bibliography(editor: State<Editor>, path: String, document_text: String) -> Result<(), String> {
+    editor.session()?.add_bibliography(&path, &document_text)
+}
+
+#[tauri::command]
+fn remove_bibliography(editor: State<Editor>, path: String) -> Result<(), String> {
+    editor.session()?.remove_bibliography(&path)
+}
+
+#[tauri::command]
+async fn search_sources(editor: State<'_, Editor>, query: String, document_text: String) -> Result<SourceHits, String> {
+    let session = editor.session()?;
+    Ok(session.search_sources(&query, &document_text).await)
+}
+
+#[tauri::command]
+async fn check_references(editor: State<'_, Editor>, document_text: String) -> Result<VerifyFile, String> {
+    let session = editor.session()?;
+    session.check_references_online(&document_text).await
+}
+
+/// What there is to export with, and where the export would go.
+#[tauri::command]
+async fn export_setup(editor: State<'_, Editor>) -> Result<(ExportTools, String, String), String> {
+    let session = editor.session()?;
+    Ok((export_tools().await, session.export_target(FileFormat::Pdf), session.export_target(FileFormat::Docx)))
+}
+
+#[tauri::command]
+async fn export_document(editor: State<'_, Editor>, format: FileFormat, target: String, document_text: String) -> Result<DocumentExport, String> {
+    let session = editor.session()?;
+    session.export_document_online(format, &target, &document_text).await
+}
+
+#[tauri::command]
 fn log_view(editor: State<Editor>, document_text: String) -> Result<LogView, String> {
     editor.session()?.log_view(&document_text)
 }
@@ -303,7 +344,14 @@ fn main() {
             live_review,
             scope,
             set_scope,
-            check_points
+            check_points,
+            sources,
+            add_bibliography,
+            remove_bibliography,
+            search_sources,
+            check_references,
+            export_setup,
+            export_document
         ])
         .run(tauri::generate_context!())
         .expect("the editor's window could not be opened");

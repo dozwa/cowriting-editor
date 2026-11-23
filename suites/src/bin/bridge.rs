@@ -97,6 +97,29 @@ impl Bridge {
             }
             "scope" => Ok(json!(self.session()?.scope_view(&text("documentText")))),
             "set_scope" => self.session()?.set_scope(&text("text"), &text("documentText")).map(|_| Value::Null),
+            "sources" => Ok(json!(self.session()?.sources_view(&text("documentText")))),
+            // no dialog here: the file beside the document, if there is one
+            "pick_bibliography" => {
+                let beside = std::path::Path::new(&self.document).with_file_name("refs.bib");
+                Ok(if beside.exists() { json!(beside.to_string_lossy()) } else { Value::Null })
+            }
+            "add_bibliography" => self.session()?.add_bibliography(&text("path"), &text("documentText")).map(|_| Value::Null),
+            "remove_bibliography" => self.session()?.remove_bibliography(&text("path")).map(|_| Value::Null),
+            "search_sources" => Ok(json!(runtime.block_on(self.session()?.search_sources(&text("query"), &text("documentText"))))),
+            "check_references" => runtime.block_on(self.session()?.check_references_online(&text("documentText"))).map(|found| json!(found)),
+            "export_setup" => {
+                let session = self.session()?;
+                Ok(json!([
+                    runtime.block_on(cowriting_app::export_tools()),
+                    session.export_target(cowriting_app::FileFormat::Pdf),
+                    session.export_target(cowriting_app::FileFormat::Docx)
+                ]))
+            }
+            "pick_export" => Ok(args["suggested"].clone()),
+            "export_document" => {
+                let format = serde_json::from_value(args["format"].clone()).map_err(|e| e.to_string())?;
+                runtime.block_on(self.session()?.export_document_online(format, &text("target"), &text("documentText"))).map(|made| json!(made))
+            }
             "export_disclosure" => {
                 let options: ExportOptions = serde_json::from_value(args["options"].clone()).map_err(|e| e.to_string())?;
                 self.session()?.export(&options).map(|exported| json!(exported))

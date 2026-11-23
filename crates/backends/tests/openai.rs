@@ -119,7 +119,7 @@ fn the_request_carries_the_contract_the_tools_and_tool_results_in_the_api_s_orde
     assert_eq!(body["messages"][2]["tool_calls"][0]["function"], json!({ "name": "search_document", "arguments": "{\"query\":\"subjects\"}" }));
     assert_eq!(body["messages"][3], json!({ "role": "tool", "tool_call_id": "call_a", "content": "3| We recruited 48 subjects" }));
     let names: Vec<&str> = body["tools"].as_array().unwrap().iter().map(|t| t["function"]["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["read_document", "search_document", "list_notes", "read_note", "write_note"]);
+    assert_eq!(names, ["read_document", "search_document", "list_notes", "read_note", "write_note", "search_bibliography"]);
     assert!(body.get("temperature").is_none() && body.get("max_tokens").is_none());
 
     // without tools the field is left out: some servers reject an empty list

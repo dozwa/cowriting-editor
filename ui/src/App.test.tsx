@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
-import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use } from './api'
+import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, SourcesView } from './api'
 import { App } from './App'
 import type { Editor, EditorHandlers } from './editor'
 import { linkLines } from './text'
@@ -21,16 +21,18 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { 
   })
   parent.append(field)
   const jumps: number[] = []
-  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), jumpToLine: line => void jumps.push(line), focus: () => {}, destroy: () => field.remove(), jumps }
+  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), focus: () => {}, destroy: () => field.remove(), jumps }
   return lastEditor
 }
 let lastEditor: Editor & { jumps: number[] }
 
-function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome } = {}) {
+function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   let plan = ''
+  let bibFiles: BibFile[] = []
+  let refsChecked: SourcesView['checked'] = null
   let isChecked = false
   // the stand-in's plan: one point per line that starts with '- '
   const progress = (text: string): ScopeProgress | null => {
@@ -97,6 +99,32 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       turns.push({ id: `t${turns.length + 1}`, ts: '2026-11-23T10:06:00.000Z', category: 'feedback', asked: 'Live review (reviewer-2) of thesis.md l.4–4', answer: 'reviewer-2 l.4: Why should a reader believe this?', excerpt: 'reviewer-2 l.4: Why should a reader believe this?', model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: [], use: '', note: '', isOpen: true, isAiText: false, replyTo: null, persona: 'reviewer-2', who: 'Reviewer #2' })
       watch.hints.unshift({ turn: `t${turns.length}`, persona: 'reviewer-2', who: 'Reviewer #2', line: 4, text: 'Why should a reader believe this?', ts: '2026-11-23T10:06:00.000Z' })
       return { kind: 'reviewed', hints: 1, ts: '2026-11-23T10:06:00.000Z' }
+    },
+    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngine: 'xelatex', hasZotero: false }, '/work/thesis.pdf', '/work/thesis.docx'],
+    pickExport: async (_format, suggested) => suggested,
+    exportDocument: async (format, target, documentText) => {
+      calls.exports.push([format, target, documentText])
+      return { path: target, cited: 2, fromZotero: 0, missing: ['ghost1999'], warnings: [] }
+    },
+    sources: async () => ({ files: bibFiles, entries: bibFiles.reduce((n, f) => n + f.entries, 0), cited: 2, missing: bibFiles.length > 0 ? ['ghost1999'] : [], checked: refsChecked }),
+    pickBibliography: async () => '/work/refs.bib',
+    addBibliography: async path => {
+      bibFiles.push({ path, name: 'refs.bib', format: 'BibTeX', entries: 3, isFromDocument: false })
+    },
+    removeBibliography: async path => {
+      bibFiles = bibFiles.filter(f => f.path !== path)
+    },
+    searchSources: async query => {
+      calls.searched.push(query)
+      return { from: 'bibliography', hits: [{ citekey: 'smith2020', title: 'Walking breaks and attention', authors: 'Smith, Lee', year: '2020', doi: '10.1000/walk.2020', file: 'refs.bib' }] }
+    },
+    checkReferences: async () => {
+      refsChecked = { ts: '2026-11-23T10:00:00.000Z', rows: [
+        { key: 'smith2020', derived: false, file: 'refs.bib', title: 'Walking breaks and attention', year: '2020', doi: '10.1000/walk.2020', status: 'ok' },
+        { key: 'lee2021', derived: false, file: 'refs.bib', title: 'Sitting time, measured', year: '2021', doi: '10.1000/sit.2021', status: 'mismatch', found: { doi: '10.1000/sit.2021', title: 'Standing desks in schools', year: '2021' } },
+        { key: 'nodoi', derived: false, file: 'refs.bib', title: 'An entry with nothing else', year: '', doi: '', status: 'no_doi', suggestion: '10.1000/entry' },
+      ] }
+      return refsChecked
     },
     scope: async documentText => ({ text: plan, template: '# Scope\n\n## Points\n', progress: progress(documentText) }),
     setScope: async text => {
@@ -521,4 +549,70 @@ test('the author makes a plan, sees how far the text is, and has the points chec
   // the progress follows the text as the author writes
   await user.type(screen.getByLabelText('Document'), 'Six more words in the text.')
   await waitFor(() => expect(screen.getByText(/12 of 100/)).toBeTruthy())
+})
+
+test('the author adds a bibliography, finds a reference and has the references checked', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Sources' }))
+
+  // nothing yet: how to get a bibliography, and nothing to check
+  expect(await screen.findByText(/No bibliography yet/)).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'Check 0 references' }) as HTMLButtonElement).disabled).toBe(true)
+  await user.click(screen.getByRole('button', { name: 'Add a bibliography file' }))
+  expect(await screen.findByText('BibTeX, 3 references')).toBeTruthy()
+  // a key the document cites and the file does not hold is named
+  expect(screen.getByText('@ghost1999')).toBeTruthy()
+
+  await user.type(screen.getByLabelText('Search your references'), 'walking{Enter}')
+  expect(await screen.findByText(/Zotero is not running/)).toBeTruthy()
+  expect(calls.searched).toEqual(['walking'])
+  expect(screen.getByText('@smith2020')).toBeTruthy()
+  // the key goes into the text where the cursor is, by the author's click
+  await user.click(screen.getByRole('button', { name: 'Cite' }))
+  expect((screen.getByLabelText('Document') as HTMLTextAreaElement).value).toContain('[@smith2020]')
+
+  // the check: what needs a look comes first, and a suggested DOI is not called verified
+  await user.click(screen.getByRole('button', { name: 'Check 3 references' }))
+  expect((await screen.findByRole('status')).textContent).toMatch(/1 fine, 1 to look at, 1 without a DOI/)
+  const verdicts = Array.from(document.querySelectorAll('.refs .verdict')).map(v => v.textContent)
+  expect(verdicts).toEqual(['the DOI belongs to something else', 'no DOI', 'DOI and title agree'])
+  expect(screen.getByText(/Crossref has: Standing desks in schools/)).toBeTruthy()
+  expect(screen.getByText(/Check it yourself before you use it/)).toBeTruthy()
+
+  await user.click(screen.getByRole('button', { name: 'Take off the list' }))
+  expect(await screen.findByText(/No bibliography yet/)).toBeTruthy()
+})
+
+test('the author exports the document as it is in the editor, and is told which keys were not found', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.type(screen.getByLabelText('Document'), ' Not saved yet.')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  expect(await screen.findByText(/Zotero with Better BibTeX is not running/)).toBeTruthy()
+  await user.selectOptions(screen.getByLabelText('Format'), 'docx')
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  const status = await screen.findByRole('status')
+  expect(status.textContent).toContain('/work/thesis.docx')
+  expect(status.textContent).toContain('Not found anywhere, and left as they are in the text: @ghost1999.')
+  expect(calls.exports.length).toBe(1)
+  const [format, target, exportedText] = calls.exports[0]!
+  expect([format, target]).toEqual(['docx', '/work/thesis.docx'])
+  expect(exportedText).toContain('Not saved yet.')
+  expect(calls.saved).toEqual([])
+})
+
+test('without pandoc the export says what to install and does not try', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ hasPandoc: false })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  expect(await screen.findByText(/pandoc is not installed on this computer/)).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'Export' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(calls.exports).toEqual([])
 })

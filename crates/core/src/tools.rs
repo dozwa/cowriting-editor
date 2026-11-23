@@ -67,6 +67,11 @@ pub fn tool_defs() -> Vec<ToolDef> {
                 "additionalProperties": false
             }),
         },
+        ToolDef {
+            name: "search_bibliography".into(),
+            description: "The author's own references (their bibliography files) that contain every word of the query: citekey, authors, year, title, DOI. Use it before naming a source: a reference that is not in here and that you did not verify is UNVERIFIED. An empty query lists the first entries.".into(),
+            input_schema: json!({ "type": "object", "properties": { "query": { "type": "string", "description": "Words from the title, an author's name, a year" } }, "required": ["query"], "additionalProperties": false }),
+        },
     ]
 }
 
@@ -114,6 +119,21 @@ pub fn execute(context: &ToolContext, name: &str, input: &Value) -> ToolResult {
                 Ok(text) => ToolResult::ok(text),
                 Err(_) => ToolResult::failed("There is no note of that name."),
             }
+        }
+        "search_bibliography" => {
+            let bibliography = crate::sources::load_bibliography(context.host, context.sidecar, context.document_text);
+            if bibliography.files.is_empty() {
+                return ToolResult::ok(
+                    "The document has no bibliography file: its front matter names none (bibliography: refs.bib) and the author added none in the editor's Sources tab.",
+                );
+            }
+            let hits = crate::sources::search(&bibliography.entries, &text_of("query"), 15);
+            let files = bibliography.files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>().join(", ");
+            ToolResult::ok(if hits.is_empty() {
+                format!("No entry in {files} contains that.")
+            } else {
+                format!("# {} from {files}\n{}", crate::text::plural(hits.len(), "hit"), crate::sources::hits_as_text(&hits))
+            })
         }
         "write_note" => {
             let (note, text) = (text_of("name"), text_of("text"));

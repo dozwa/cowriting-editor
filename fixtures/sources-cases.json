@@ -1,0 +1,17 @@
+{
+  "about": "Inputs for the plugin's bibliography and reference-check functions; scripts/sources-goldens.py writes what the plugin makes of them to goldens/sources.json.",
+  "dois": ["10.1000/x", " https://doi.org/10.1000/Walk.2020. ", "HTTP://DX.DOI.ORG/10.1000/a;", "doi: 10.1000/b,", "DOI:10.1000/c", "", "https://example.org/10.1000/d"],
+  "titles": ["Walking breaks and {attention} in office workers", "Gr\\\"o\\ss e und Ma\\ss{} der $n$-Stichprobe", "  Größe — naïve_words: 42%  ", "\\textit{Italic} title\\\\ with \\& more"],
+  "families": ["Smith, Jane", "Min-Jung Lee", "{World Health Organization}", "  ", "van der Berg, Pieter", "Plato"],
+  "pairs": [
+    ["Walking breaks and attention in office workers", "Walking breaks and attention in office workers"],
+    ["Walking breaks and attention in office workers", "Walking Breaks and Attention in Office-Workers."],
+    ["Walking breaks and attention in office workers", "Walking breaks and attention among office workers: a field study"],
+    ["Walking breaks and attention in office workers", "Sitting time, measured: a field study"],
+    ["", ""],
+    ["abc", ""],
+    ["The effect of short walking breaks on self-rated concentration in sedentary office workers across two sites over a period of twelve weeks with hourly reminders and a waiting-list control group, a pragmatic randomized trial in two cities", "The effects of short walking breaks on self-rated concentration in sedentary office workers across two sites over a period of twelve weeks with hourly reminders and a waiting list control group: a pragmatic randomised trial in two cities"],
+    ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab", "baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+  ],
+  "searches": ["walking", "SMITH 2020", "öztürk", "field study", "nothing like this", ""]
+}
