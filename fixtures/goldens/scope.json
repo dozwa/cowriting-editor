@@ -1,0 +1,619 @@
+{
+  "plans": {
+    "full": {
+      "goal": "Show that short walking breaks change self-rated concentration.\nFor a psychology journal.",
+      "sections": [
+        {
+          "name": "Introduction",
+          "target": 600,
+          "stage": "draft"
+        },
+        {
+          "name": "Methods",
+          "target": 800,
+          "stage": "revised"
+        },
+        {
+          "name": "Results",
+          "target": 1000
+        },
+        {
+          "name": "Discussion",
+          "stage": "outline"
+        },
+        {
+          "name": "Walking breaks at work",
+          "stage": "final"
+        }
+      ],
+      "points": [
+        {
+          "text": "Sitting for long is common",
+          "section": "Introduction",
+          "isTicked": true
+        },
+        {
+          "text": "48 participants in two offices",
+          "section": "Methods",
+          "isTicked": false
+        },
+        {
+          "text": "Breaks change the ratings",
+          "section": "Results",
+          "isTicked": false
+        },
+        {
+          "text": "A point with brackets (not a section)",
+          "isTicked": false
+        },
+        {
+          "text": "Limits of self-report",
+          "isTicked": false
+        }
+      ],
+      "words": 3000,
+      "figures": 2,
+      "tables": 1,
+      "references": 25,
+      "deadline": "2026-12-24"
+    },
+    "german": {
+      "goal": "Zeigen, dass Gehpausen helfen.",
+      "sections": [
+        {
+          "name": "Einleitung",
+          "target": 300,
+          "stage": "draft"
+        },
+        {
+          "name": "Methoden",
+          "stage": "final"
+        },
+        {
+          "name": "Ergebnisse",
+          "target": 1200,
+          "stage": "revised"
+        }
+      ],
+      "points": [
+        {
+          "text": "Sitzen ist verbreitet",
+          "isTicked": true
+        },
+        {
+          "text": "Pausen ändern die Einschätzung",
+          "section": "Ergebnisse",
+          "isTicked": false
+        }
+      ],
+      "figures": 1,
+      "references": 10,
+      "deadline": "2027-01-15",
+      "words": 625
+    },
+    "sections only": {
+      "goal": "",
+      "sections": [
+        {
+          "name": "Methods",
+          "target": 400
+        },
+        {
+          "name": "Results",
+          "target": 600
+        },
+        {
+          "name": "Discussion"
+        }
+      ],
+      "points": [],
+      "words": 1000
+    },
+    "pages": {
+      "goal": "",
+      "sections": [],
+      "points": [],
+      "words": 1200
+    },
+    "empty": {
+      "goal": "",
+      "sections": [],
+      "points": []
+    }
+  },
+  "isEmpty": {
+    "full": false,
+    "german": false,
+    "sections only": false,
+    "pages": false,
+    "empty": true
+  },
+  "progress": [
+    {
+      "goal": "Show that short walking breaks change self-rated concentration.\nFor a psychology journal.",
+      "words": {
+        "done": 63,
+        "target": 3000
+      },
+      "figures": {
+        "done": 0,
+        "target": 2
+      },
+      "tables": {
+        "done": 1,
+        "target": 1
+      },
+      "references": {
+        "done": 2,
+        "target": 25
+      },
+      "deadline": "2026-12-24",
+      "daysLeft": 31,
+      "wordsPerDay": 95,
+      "points": [
+        {
+          "text": "Sitting for long is common",
+          "section": "Introduction",
+          "isTicked": true
+        },
+        {
+          "text": "48 participants in two offices",
+          "section": "Methods",
+          "isTicked": false
+        },
+        {
+          "text": "Breaks change the ratings",
+          "section": "Results",
+          "isTicked": false
+        },
+        {
+          "text": "A point with brackets (not a section)",
+          "isTicked": false
+        },
+        {
+          "text": "Limits of self-report",
+          "isTicked": false
+        }
+      ],
+      "sections": [
+        {
+          "name": "Introduction",
+          "target": 600,
+          "stage": "draft",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Methods",
+          "target": 800,
+          "stage": "revised",
+          "words": 41,
+          "markers": 1,
+          "isFound": true
+        },
+        {
+          "name": "Results",
+          "target": 1000,
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Discussion",
+          "stage": "outline",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Walking breaks at work",
+          "stage": "final",
+          "words": 22,
+          "markers": 0,
+          "isFound": true
+        }
+      ],
+      "markers": 1,
+      "content": 0.21355555555555558,
+      "finish": 0.5713266761768901,
+      "overall": 0.32088689174195595
+    },
+    {
+      "goal": "Show that short walking breaks change self-rated concentration.\nFor a psychology journal.",
+      "words": {
+        "done": 63,
+        "target": 3000
+      },
+      "figures": {
+        "done": 0,
+        "target": 2
+      },
+      "tables": {
+        "done": 1,
+        "target": 1
+      },
+      "references": {
+        "done": 2,
+        "target": 25
+      },
+      "deadline": "2026-12-24",
+      "daysLeft": 31,
+      "wordsPerDay": 95,
+      "points": [
+        {
+          "text": "Sitting for long is common",
+          "section": "Introduction",
+          "isTicked": true
+        },
+        {
+          "text": "48 participants in two offices",
+          "section": "Methods",
+          "isTicked": false,
+          "status": "covered",
+          "where": "walking.md:13",
+          "note": "stated with both offices"
+        },
+        {
+          "text": "Breaks change the ratings",
+          "section": "Results",
+          "isTicked": false,
+          "status": "partial",
+          "note": "claimed, no numbers yet"
+        },
+        {
+          "text": "A point with brackets (not a section)",
+          "isTicked": false
+        },
+        {
+          "text": "Limits of self-report",
+          "isTicked": false,
+          "status": "missing"
+        }
+      ],
+      "checkedAt": "2026-11-22T09:00:00.000Z",
+      "sections": [
+        {
+          "name": "Introduction",
+          "target": 600,
+          "stage": "draft",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Methods",
+          "target": 800,
+          "stage": "revised",
+          "words": 41,
+          "markers": 1,
+          "isFound": true
+        },
+        {
+          "name": "Results",
+          "target": 1000,
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Discussion",
+          "stage": "outline",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Walking breaks at work",
+          "stage": "final",
+          "words": 22,
+          "markers": 0,
+          "isFound": true
+        }
+      ],
+      "markers": 1,
+      "content": 0.34688888888888886,
+      "finish": 0.5713266761768901,
+      "overall": 0.4142202250752892
+    },
+    {
+      "goal": "Zeigen, dass Gehpausen helfen.",
+      "words": {
+        "done": 26,
+        "target": 625
+      },
+      "figures": {
+        "done": 1,
+        "target": 1
+      },
+      "tables": {
+        "done": 0
+      },
+      "references": {
+        "done": 2,
+        "target": 10
+      },
+      "deadline": "2027-01-15",
+      "daysLeft": 53,
+      "wordsPerDay": 12,
+      "points": [
+        {
+          "text": "Sitzen ist verbreitet",
+          "isTicked": true
+        },
+        {
+          "text": "Pausen ändern die Einschätzung",
+          "section": "Ergebnisse",
+          "isTicked": false
+        }
+      ],
+      "sections": [
+        {
+          "name": "Einleitung",
+          "target": 300,
+          "stage": "draft",
+          "words": 6,
+          "markers": 1,
+          "isFound": true
+        },
+        {
+          "name": "Methoden",
+          "stage": "final",
+          "words": 16,
+          "markers": 2,
+          "isFound": true
+        },
+        {
+          "name": "Ergebnisse",
+          "target": 1200,
+          "stage": "revised",
+          "words": 4,
+          "markers": 0,
+          "isFound": true
+        }
+      ],
+      "markers": 3,
+      "content": 0.41040000000000004,
+      "finish": 0.6701532311792139,
+      "overall": 0.48832596935376416
+    },
+    {
+      "goal": "",
+      "words": {
+        "done": 0,
+        "target": 1000
+      },
+      "figures": {
+        "done": 0
+      },
+      "tables": {
+        "done": 0
+      },
+      "references": {
+        "done": 0
+      },
+      "points": [],
+      "sections": [
+        {
+          "name": "Methods",
+          "target": 400,
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Results",
+          "target": 600,
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Discussion",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        }
+      ],
+      "markers": 0,
+      "content": 0,
+      "finish": null,
+      "overall": 0
+    },
+    {
+      "goal": "",
+      "words": {
+        "done": 10,
+        "target": 1200
+      },
+      "figures": {
+        "done": 0
+      },
+      "tables": {
+        "done": 0
+      },
+      "references": {
+        "done": 0
+      },
+      "points": [],
+      "sections": [],
+      "markers": 0,
+      "content": 0.008333333333333333,
+      "finish": null,
+      "overall": 0.008333333333333333
+    },
+    {
+      "goal": "Show that short walking breaks change self-rated concentration.\nFor a psychology journal.",
+      "words": {
+        "done": 1,
+        "target": 3000
+      },
+      "figures": {
+        "done": 0,
+        "target": 2
+      },
+      "tables": {
+        "done": 0,
+        "target": 1
+      },
+      "references": {
+        "done": 0,
+        "target": 25
+      },
+      "deadline": "2026-12-24",
+      "daysLeft": -6,
+      "points": [
+        {
+          "text": "Sitting for long is common",
+          "section": "Introduction",
+          "isTicked": true
+        },
+        {
+          "text": "48 participants in two offices",
+          "section": "Methods",
+          "isTicked": false
+        },
+        {
+          "text": "Breaks change the ratings",
+          "section": "Results",
+          "isTicked": false
+        },
+        {
+          "text": "A point with brackets (not a section)",
+          "isTicked": false
+        },
+        {
+          "text": "Limits of self-report",
+          "isTicked": false
+        }
+      ],
+      "sections": [
+        {
+          "name": "Introduction",
+          "target": 600,
+          "stage": "draft",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Methods",
+          "target": 800,
+          "stage": "revised",
+          "words": 1,
+          "markers": 0,
+          "isFound": true
+        },
+        {
+          "name": "Results",
+          "target": 1000,
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Discussion",
+          "stage": "outline",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        },
+        {
+          "name": "Walking breaks at work",
+          "stage": "final",
+          "words": 0,
+          "markers": 0,
+          "isFound": false
+        }
+      ],
+      "markers": 0,
+      "content": 0.08896296296296297,
+      "finish": 0.5998573466476462,
+      "overall": 0.24223127806836792
+    }
+  ],
+  "check": [
+    [
+      {
+        "n": 1,
+        "status": "covered",
+        "where": "walking.md:13",
+        "note": "stated"
+      },
+      {
+        "n": 2,
+        "status": "partial"
+      },
+      {
+        "n": 3,
+        "status": "missing"
+      }
+    ],
+    [
+      {
+        "n": 2,
+        "status": "missing",
+        "note": "0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 äöü 😀"
+      }
+    ],
+    [],
+    [],
+    [],
+    []
+  ],
+  "numbered": [
+    "### walking.md\n1: # Title\n2: \n3: One line.\n4: \n\n",
+    "### a.md\n1: First line of a.\n2: Second l\n[… cut]"
+  ],
+  "checkSystem": {
+    "en": "You check which of an author's planned points their manuscript already makes. You never write, rephrase or suggest text: the author is the sole author (DFG good scientific practice). You only assess. For each numbered point answer: status \"covered\" (made and supported), \"partial\" (mentioned but not developed or not supported) or \"missing\"; where = \"file:line\" of the best evidence (omit if missing); note = at most 15 words on what is there or what is lacking, never wording for it. Write the notes in English. Answer with a JSON array only: [{\"n\": 1, \"status\": \"partial\", \"where\": \"manuscript/main.tex:42\", \"note\": \"…\"}].",
+    "de": "You check which of an author's planned points their manuscript already makes. You never write, rephrase or suggest text: the author is the sole author (DFG good scientific practice). You only assess. For each numbered point answer: status \"covered\" (made and supported), \"partial\" (mentioned but not developed or not supported) or \"missing\"; where = \"file:line\" of the best evidence (omit if missing); note = at most 15 words on what is there or what is lacking, never wording for it. Write the notes in German. Answer with a JSON array only: [{\"n\": 1, \"status\": \"partial\", \"where\": \"manuscript/main.tex:42\", \"note\": \"…\"}]."
+  },
+  "wordsPerPage": 300,
+  "pauseMs": 20000,
+  "watchDefault": [
+    "grammar-guy",
+    "terminologist",
+    "style-coach",
+    "architect"
+  ],
+  "hints": [
+    [
+      {
+        "persona": "grammar-guy",
+        "line": 3,
+        "hint": "'recieve' is misspelled: receive"
+      },
+      {
+        "persona": "architect",
+        "line": 7,
+        "hint": "This paragraph makes two points."
+      },
+      {
+        "persona": "architect",
+        "line": 0,
+        "hint": "No line given."
+      }
+    ],
+    [],
+    [],
+    [],
+    [],
+    [
+      {
+        "persona": "architect",
+        "line": 4,
+        "hint": "0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 äöü 😀😀 "
+      }
+    ]
+  ],
+  "excerpt": [
+    "### walking.md\n3| We ask whether short\n4| walking breaks help.\n\n9| Größe 😀 counts.\n\n",
+    "### a.md\n1| A first paragraph that fits in.\n\n[… more changes not shown]\n",
+    ""
+  ],
+  "system": [
+    "You are the live review party of CoWriting, watching a researcher write. The researcher is the sole author (DFG good scientific practice).\nYou see only the paragraphs they just wrote or changed, with line numbers. Give at most 3 short hints in total, only where it matters. An empty list is a good answer.\nEach hint: at most 25 words, about one line, from exactly one of these personas:\n- grammar-guy: Grammar, spelling, punctuation (EN/DE)\n- terminologist: Field terminology, usual vs. unusual wording\n- style-coach: Writing style, compared with papers you admire\n- architect: Structure, argument flow, red thread\nNever write or rewrite sentences for the manuscript: name the problem and the principle, or ask a question.\nExceptions: grammar-guy may give the corrected form of a wrong word or phrase; terminologist may name the usual term of the field, without a sentence around it.\nNever invent facts or references.\nWrite the hints in English.\nAnswer with JSON only: [{\"persona\": \"<id>\", \"line\": <number>, \"hint\": \"<text>\"}]",
+    "You are the live review party of CoWriting, watching a researcher write. The researcher is the sole author (DFG good scientific practice).\nYou see only the paragraphs they just wrote or changed, with line numbers. Give at most 3 short hints in total, only where it matters. An empty list is a good answer.\nEach hint: at most 25 words, about one line, from exactly one of these personas:\n- grammar-guy: Grammar, spelling, punctuation (EN/DE)\n- architect: Structure, argument flow, red thread. The author asks it to look for: One point per paragraph.\nAbout the project, from the author: A pilot study in two offices.\nNever write or rewrite sentences for the manuscript: name the problem and the principle, or ask a question.\nExceptions: grammar-guy may give the corrected form of a wrong word or phrase; terminologist may name the usual term of the field, without a sentence around it.\nNever invent facts or references.\nWrite the hints in German.\nThe author's style profile, from model papers they like:\nShort sentences.\nActive voice.\nAnswer with JSON only: [{\"persona\": \"<id>\", \"line\": <number>, \"hint\": \"<text>\"}]"
+  ]
+}

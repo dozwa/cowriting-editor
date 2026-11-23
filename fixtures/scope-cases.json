@@ -1,0 +1,59 @@
+{
+  "about": "Inputs for the plugin's scope and live-review functions; scripts/scope-goldens.mjs writes what the plugin makes of them to goldens/scope.json.",
+  "today": "2026-11-23",
+  "plans": {
+    "full": "# Scope\n\n<!-- a comment\n## Points\n- not a point\n-->\n\n## Goal\nShow that short walking breaks change self-rated concentration.\nFor a psychology journal.\n\n## Targets\n- Words: 3,000\n- Figures: 2\n- Tables: 1\n- References: 25\n- Deadline: 2026-12-24 (journal)\n- Mood: good\n\n## Sections\n- Introduction: 600, draft\n- Methods: 800 words, revised\n- Results: 1'000\n- Discussion: outline\n- : 100\n* Walking breaks at work: final\n\n## Points\n- [x] Sitting for long is common (Introduction)\n- [ ] 48 participants in two offices (in Methods)\n- Breaks change the ratings (→ Results)\n- A point with brackets (not a section)\n- [X] \n+ Limits of self-report\n",
+    "german": "## Ziel\nZeigen, dass Gehpausen helfen.\n\n## Umfang\n- Seiten: 2,5\n- Wörter pro Seite: 250\n- Abbildungen: 1\n- Quellen: 10\n- Abgabe: am 2027-01-15\n\n## Gliederung\n- Einleitung: 300 Wörter, Entwurf\n- Methoden: fertig\n- Ergebnisse: überarbeitet, 1.200\n\n## Kernaussagen\n- [✓] Sitzen ist verbreitet\n- Pausen ändern die Einschätzung (Ergebnisse)\n",
+    "sections only": "## Outline\n- Methods: 400\n- Results: 600\n- Discussion\n",
+    "pages": "## Targets\n- pages: 4\n- words: \n- figures: none\n",
+    "empty": "# Scope\n\n<!-- ## Goal\nnothing yet -->\n\nSome notes that are no plan.\n\n## Something else\n- words: 500\n"
+  },
+  "progress": [
+    { "name": "full plan, walking paper, nothing checked", "plan": "full", "document": "walking.after.md", "checked": {} },
+    {
+      "name": "full plan with a check",
+      "plan": "full",
+      "document": "walking.after.md",
+      "checkedAt": "2026-11-22T09:00:00.000Z",
+      "checked": {
+        "48 participants in two offices": { "status": "covered", "where": "walking.md:13", "note": "stated with both offices" },
+        "Breaks change the ratings": { "status": "partial", "note": "claimed, no numbers yet" },
+        "Limits of self-report": { "status": "missing" },
+        "A point that is no longer planned": { "status": "covered" }
+      }
+    },
+    { "name": "german plan", "plan": "german", "text": "# Einleitung\n\nSitzen ist verbreitet [@meyer2020; @lee2021] und TODO belegt.\n\n## Methoden\n\nWir haben 48 Personen befragt ?? und [citation needed].\n\n![Abbildung](a.png)\n\n### Unterpunkt\n\nNoch mehr Text hier, siehe @meyer2020.\n\n# Ergebnisse #\n\n| a | b |\n|---|:-:|\n| 1 | 2 |\n", "checked": {} },
+    { "name": "sections only, no text", "plan": "sections only", "text": "", "checked": {} },
+    { "name": "pages, text without headings", "plan": "pages", "text": "Just a paragraph of nine words without any heading here.\n", "checked": {} },
+    { "name": "deadline passed", "plan": "full", "text": "# Methods\n\nShort.\n", "today": "2026-12-30", "checked": {} }
+  ],
+  "check": [
+    { "count": 3, "text": "Here you go:\n[{\"n\": 1, \"status\": \"covered\", \"where\": \"walking.md:13\", \"note\": \"stated\"}, {\"n\": \"2\", \"status\": \"partial\", \"where\": \"\", \"note\": \"\"}, {\"n\": 3, \"status\": \"missing\", \"where\": 5}]\nDone." },
+    { "count": 2, "text": "[{\"n\": 3, \"status\": \"covered\"}, {\"n\": 0, \"status\": \"covered\"}, {\"n\": 1.5, \"status\": \"covered\"}, {\"n\": 1, \"status\": \"done\"}, {\"n\": 2, \"status\": \"missing\", \"note\": \"0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 äöü 😀 0123456789 tail\"}, 7, \"x\"]" },
+    { "count": 2, "text": "no json here" },
+    { "count": 2, "text": "[{\"n\": 1, \"status\": \"covered\"}, null]" },
+    { "count": 2, "text": "{\"n\": 1, \"status\": \"covered\"} [broken" },
+    { "count": 2, "text": "[1, 2] and {\"a\": [3]}" }
+  ],
+  "numbered": [
+    { "maxChars": 80000, "files": [{ "file": "walking.md", "text": "# Title\n\nOne line.\n" }] },
+    { "maxChars": 40, "files": [{ "file": "a.md", "text": "First line of a.\nSecond line." }, { "file": "b.md", "text": "Größe 😀 and more text that is cut somewhere." }] }
+  ],
+  "hints": [
+    { "personas": ["grammar-guy", "architect"], "text": "```json\n[{\"persona\": \"grammar-guy\", \"line\": 3, \"hint\": \"  'recieve'   is misspelled:\\n receive \"}, {\"persona\": \"cowrite:architect\", \"line\": \"7\", \"hint\": \"This paragraph makes two points.\"}, {\"persona\": \"style-coach\", \"line\": 1, \"hint\": \"not watching\"}, {\"persona\": \"architect\", \"line\": 2, \"hint\": \"   \"}, {\"persona\": \"cw:architect\", \"hint\": \"No line given.\"}, {\"persona\": \"architect\", \"line\": 9, \"hint\": \"A fourth hint.\"}]\n```" },
+    { "personas": ["architect"], "text": "[]" },
+    { "personas": ["architect"], "text": "Nothing to add." },
+    { "personas": ["architect"], "text": "[{\"persona\": \"architect\", \"line\": 1, \"hint\": \"x\"" },
+    { "personas": ["architect"], "text": "{\"hints\": [1]} ] [" },
+    { "personas": ["architect"], "text": "[null, 5, {\"persona\": 3, \"hint\": \"x\"}, {\"persona\": \"architect\", \"line\": 4, \"hint\": \"0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 0123456789 äöü 😀😀 0123456789 tail\"}]" }
+  ],
+  "excerpt": [
+    { "maxChars": 4000, "parts": [{ "file": "walking.md", "changed": [{ "start": 3, "end": 4, "text": "We ask whether short\nwalking breaks help." }, { "start": 9, "end": 9, "text": "Größe 😀 counts." }] }] },
+    { "maxChars": 60, "parts": [{ "file": "a.md", "changed": [{ "start": 1, "end": 1, "text": "A first paragraph that fits in." }, { "start": 5, "end": 5, "text": "A second one that does not fit any more." }] }, { "file": "b.md", "changed": [{ "start": 2, "end": 2, "text": "Never shown." }] }] },
+    { "maxChars": 4000, "parts": [] }
+  ],
+  "system": [
+    { "personas": ["grammar-guy", "terminologist", "style-coach", "architect"], "language": "en", "profile": "", "briefs": "" },
+    { "personas": ["grammar-guy", "architect"], "language": "de", "profile": "Short sentences.\nActive voice.", "briefs": "## everyone\nA pilot study\nin two offices.\n\n## architect — The Architect\nOne point\n  per paragraph.\n\n## librarian\nNot watching.\n" }
+  ]
+}

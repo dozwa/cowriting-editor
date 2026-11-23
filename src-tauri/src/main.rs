@@ -5,8 +5,11 @@
 //! web view has no file or network access of its own, so the document, the log and the API key
 //! are only ever touched here.
 
-use cowriting_app::{list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, ExportOptions, Exported, LogView, Opened, PartyView, Session};
+use cowriting_app::{
+    list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, ExportOptions, Exported, LiveView, LogView, Opened, PartyView, ScopeView, Session,
+};
 use cowriting_core::host::DiskHost;
+use cowriting_core::review::{CheckSummary, LiveOutcome};
 use cowriting_core::turn::{Ask, TurnEvent};
 use cowriting_core::types::ThreadMessage;
 use serde::{Deserialize, Serialize};
@@ -198,6 +201,42 @@ async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, 
 }
 
 #[tauri::command]
+fn live(editor: State<Editor>) -> Result<LiveView, String> {
+    Ok(editor.session()?.live_view())
+}
+
+#[tauri::command]
+fn set_live(editor: State<Editor>, is_on: bool, personas: Vec<String>, document_text: String) -> Result<(), String> {
+    editor.session()?.set_live(is_on, &personas, &document_text)
+}
+
+#[tauri::command]
+async fn live_review(app: tauri::AppHandle, editor: State<'_, Editor>, document_text: String) -> Result<LiveOutcome, String> {
+    let session = editor.session()?;
+    let settings = read_settings(&app);
+    let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
+    session.live_review(backend.as_ref(), &settings.model, &document_text).await
+}
+
+#[tauri::command]
+fn scope(editor: State<Editor>, document_text: String) -> Result<ScopeView, String> {
+    Ok(editor.session()?.scope_view(&document_text))
+}
+
+#[tauri::command]
+fn set_scope(editor: State<Editor>, text: String, document_text: String) -> Result<(), String> {
+    editor.session()?.set_scope(&text, &document_text)
+}
+
+#[tauri::command]
+async fn check_points(app: tauri::AppHandle, editor: State<'_, Editor>, document_text: String) -> Result<CheckSummary, String> {
+    let session = editor.session()?;
+    let settings = read_settings(&app);
+    let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
+    session.check_points(backend.as_ref(), &settings.model, &document_text).await
+}
+
+#[tauri::command]
 fn log_view(editor: State<Editor>, document_text: String) -> Result<LogView, String> {
     editor.session()?.log_view(&document_text)
 }
@@ -258,7 +297,13 @@ fn main() {
             set_member,
             add_expert,
             report_paste,
-            comment_ai_text
+            comment_ai_text,
+            live,
+            set_live,
+            live_review,
+            scope,
+            set_scope,
+            check_points
         ])
         .run(tauri::generate_context!())
         .expect("the editor's window could not be opened");

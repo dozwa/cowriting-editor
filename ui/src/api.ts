@@ -47,6 +47,45 @@ export type PartyView = { experts: Expert[]; everyone: string; sharedPalette: Re
 
 export type GuardRow = { ts: string; tool: string; input: string; files: string[]; refused: boolean; turn: string | null }
 
+/** A hint an expert left on a line the author just wrote. */
+export type LiveHint = { turn: string; persona: string; who: string; line: number; text: string; ts: string }
+
+export type LiveView = { isOn: boolean; personas: string[]; hints: LiveHint[]; pauseMs: number }
+
+/** What a call for a live review came to. */
+export type LiveOutcome =
+  | { kind: 'off' }
+  | { kind: 'unchanged' }
+  | { kind: 'wait'; ms: number }
+  | { kind: 'paused' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'reviewed'; hints: number; ts: string }
+
+export type Count = { done: number; target?: number }
+export type PointStatus = 'covered' | 'partial' | 'missing'
+
+export type ScopeProgress = {
+  goal: string
+  words: Count
+  figures: Count
+  tables: Count
+  references: Count
+  deadline?: string
+  daysLeft?: number
+  wordsPerDay?: number
+  points: { text: string; section?: string; isTicked: boolean; status?: PointStatus; where?: string; note?: string }[]
+  checkedAt?: string
+  sections: { name: string; target?: number; stage?: 'outline' | 'draft' | 'revised' | 'final'; words: number; markers: number; isFound: boolean }[]
+  markers: number
+  /** 0–1 */
+  content: number
+  finish: number | null
+  overall: number
+}
+
+export type ScopeView = { text: string; template: string; progress: ScopeProgress | null }
+export type CheckSummary = { covered: number; partial: number; missing: number }
+
 /** A passage of the document that matches a logged answer. */
 export type AiTextRow = {
   id: string
@@ -115,6 +154,15 @@ export const api = {
   /** Text that was just pasted or dropped: compared with the logged answers; returns what was found, now logged. */
   reportPaste: (pasted: string, line: number, documentText: string) => invoke<AiTextRow[]>('report_paste', { pasted, line, documentText }),
   commentAiText: (id: string, note: string) => invoke<void>('comment_ai_text', { id, note }),
+  liveView: () => invoke<LiveView>('live'),
+  /** Turns live review on or off and says who watches; only what changes from then on is reviewed. */
+  setLive: (isOn: boolean, personas: string[], documentText: string) => invoke<void>('set_live', { isOn, personas, documentText }),
+  /** Called when the author has paused: sends the changed paragraphs, if it is time. */
+  liveReview: (documentText: string) => invoke<LiveOutcome>('live_review', { documentText }),
+  scope: (documentText: string) => invoke<ScopeView>('scope', { documentText }),
+  setScope: (text: string, documentText: string) => invoke<void>('set_scope', { text, documentText }),
+  /** Sends the plan's points and the document to the model; logged. */
+  checkPoints: (documentText: string) => invoke<CheckSummary>('check_points', { documentText }),
   ask: (input: { text: string; replyTo: string | null; persona: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
     const channel = new Channel<AskEvent>()
     channel.onmessage = onEvent

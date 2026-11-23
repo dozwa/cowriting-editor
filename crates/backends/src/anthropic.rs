@@ -84,14 +84,18 @@ fn message_json(message: &Message) -> Value {
 /// left to the model's default. Tool inputs are buffered by the API (no eager streaming): a
 /// note's text is not shown while it is written, so there is nothing to gain from fragments.
 pub fn request_body(request: &ModelRequest) -> Value {
-    json!({
+    let mut body = json!({
         "model": request.model,
         "max_tokens": MAX_TOKENS,
         "stream": true,
         "system": request.system,
-        "tools": request.tools.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input_schema })).collect::<Vec<_>>(),
         "messages": request.messages.iter().map(message_json).collect::<Vec<_>>(),
-    })
+    });
+    // a call without tools (live review, the point check) names none
+    if !request.tools.is_empty() {
+        body["tools"] = request.tools.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input_schema })).collect();
+    }
+    body
 }
 
 /// Puts a streamed message together from its server-sent events.

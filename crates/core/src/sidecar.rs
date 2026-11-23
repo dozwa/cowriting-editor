@@ -105,6 +105,21 @@ impl Sidecar {
         format!("{}/party.json", self.dir())
     }
 
+    /// The author's plan: goal, targets, sections, points.
+    pub fn scope_md(&self) -> String {
+        format!("{}/scope.md", self.dir())
+    }
+
+    /// What the last point check found.
+    pub fn check_json(&self) -> String {
+        format!("{}/check.json", self.dir())
+    }
+
+    /// Whether live review is on, and who watches.
+    pub fn live_json(&self) -> String {
+        format!("{}/live.json", self.dir())
+    }
+
     pub fn doc_json(&self) -> String {
         format!("{}/doc.json", self.dir())
     }

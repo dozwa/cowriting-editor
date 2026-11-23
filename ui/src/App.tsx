@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AiTextRow, Api, AskEvent, LogView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
+import { LivePanel, ScopePanel } from './plan'
 import { DisclosureDialog, SettingsDialog } from './dialogs'
 import { createEditor, type Editor } from './editor'
 import { AskPanel, LogPanel } from './panels'
-import { MODEL_NOTICE, plural } from './text'
+import { MODEL_NOTICE, plural, when } from './text'
 
 type Props = {
   api: Api
@@ -46,7 +47,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [doc, setDoc] = useState<Opened | null>(null)
   const [isDirty, setDirty] = useState(false)
   const [settings, setSettings] = useState<SettingsView | null>(null)
-  const [tab, setTab] = useState<'ask' | 'experts' | 'log'>('ask')
+  const [tab, setTab] = useState<'ask' | 'experts' | 'live' | 'scope' | 'log'>('ask')
   const [log, setLog] = useState<LogView>(EMPTY_LOG)
   const [thread, setThread] = useState<ThreadMessage[]>([])
   const [live, setLive] = useState<Live | null>(null)
@@ -54,6 +55,13 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [dialog, setDialog] = useState<'settings' | 'disclosure' | null>(null)
   const [isWithoutTools, setWithoutTools] = useState(false)
   const [party, setParty] = useState<PartyView | null>(null)
+  const [watching, setWatching] = useState<LiveView | null>(null)
+  const [watchStatus, setWatchStatus] = useState('')
+  /** Hints that arrived while the Live tab was not open. */
+  const [newHints, setNewHints] = useState(0)
+  const [scope, setScope] = useState<ScopeView | null>(null)
+  const [isChecking, setChecking] = useState(false)
+  const [checkNote, setCheckNote] = useState('')
   /** What the editor just logged about AI text in the document, said once. */
   const [found, setFound] = useState('')
 
@@ -61,7 +69,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
 
   const refreshLog = useCallback(async () => {
     try {
-      setLog(await api.logView(editor.current?.getText() ?? ''))
+      const text = editor.current?.getText() ?? ''
+      setLog(await api.logView(text))
+      setScope(await api.scope(text))
     } catch (e) {
       fail(e)
     }
@@ -94,6 +104,81 @@ export function App({ api, makeEditor = createEditor }: Props) {
     },
     [api, refreshLog],
   )
+  // live review: once the author has paused, the changed paragraphs are sent; Rust keeps the pace
+  const pausing = useRef<number | undefined>(undefined)
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const review = useCallback(async () => {
+    if (editor.current === null) return
+    try {
+      setWatchStatus('reviewing…')
+      const outcome = await api.liveReview(editor.current.getText())
+      if (outcome.kind === 'wait') {
+        setWatchStatus('waiting: at most one review a minute')
+        window.clearTimeout(pausing.current)
+        pausing.current = window.setTimeout(() => void reviewRef.current(), outcome.ms)
+        return
+      }
+      if (outcome.kind === 'reviewed') {
+        setWatchStatus(outcome.hints > 0 ? `${plural(outcome.hints, 'hint')} at ${when(outcome.ts)}` : `looked at ${when(outcome.ts)}: nothing to add, keep writing`)
+        setWatching(await api.liveView())
+        if (tabRef.current !== 'live') setNewHints(n => n + outcome.hints)
+        await refreshRef.current()
+      } else if (outcome.kind === 'paused') setWatchStatus('paused: 20 reviews in the last hour')
+      else if (outcome.kind === 'failed') setWatchStatus('the last live review failed; it will try again after your next change')
+      else setWatchStatus('')
+    } catch (e) {
+      setWatchStatus('')
+      fail(e)
+    }
+  }, [api])
+  const reviewRef = useRef(review)
+  reviewRef.current = review
+  const watchingRef = useRef(watching)
+  watchingRef.current = watching
+
+  const changeWatching = async (isOn: boolean, personas: string[]) => {
+    if (editor.current === null) return
+    try {
+      await api.setLive(isOn, personas, editor.current.getText())
+      setWatching(await api.liveView())
+      setWatchStatus('')
+      if (!isOn) window.clearTimeout(pausing.current)
+      setError('')
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  const saveScope = async (text: string): Promise<boolean> => {
+    if (editor.current === null) return false
+    try {
+      await api.setScope(text, editor.current.getText())
+      setScope(await api.scope(editor.current.getText()))
+      setError('')
+      return true
+    } catch (e) {
+      fail(e)
+      return false
+    }
+  }
+
+  const checkPoints = async () => {
+    if (editor.current === null) return
+    setChecking(true)
+    setCheckNote('')
+    try {
+      const found = await api.checkPoints(editor.current.getText())
+      setCheckNote(`${found.covered} covered, ${found.partial} partly, ${found.missing} missing`)
+      await refreshLog()
+      setError('')
+    } catch (e) {
+      fail(e)
+    } finally {
+      setChecking(false)
+    }
+  }
+
   const pastedRef = useRef(pasted)
   pastedRef.current = pasted
 
@@ -114,6 +199,10 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setDirty(false)
       setLog(await api.logView(opened.text))
       setParty(await api.party())
+      setWatching(await api.liveView())
+      setScope(await api.scope(opened.text))
+      setWatchStatus('')
+      setNewHints(0)
       editor.current?.focus()
     },
     [api],
@@ -126,6 +215,11 @@ export function App({ api, makeEditor = createEditor }: Props) {
         setDirty(true)
         window.clearTimeout(counting.current)
         counting.current = window.setTimeout(() => void refreshRef.current(), 600)
+        if (watchingRef.current?.isOn === true) {
+          setWatchStatus('you are writing…')
+          window.clearTimeout(pausing.current)
+          pausing.current = window.setTimeout(() => void reviewRef.current(), watchingRef.current.pauseMs)
+        }
       },
       onSave: () => void saveRef.current(),
       onPaste: (text, line) => void pastedRef.current(text, line),
@@ -290,6 +384,10 @@ export function App({ api, makeEditor = createEditor }: Props) {
           <nav className="tabs" role="tablist">
             <button role="tab" aria-selected={tab === 'ask'} onClick={() => setTab('ask')}>Ask</button>
             <button role="tab" aria-selected={tab === 'experts'} onClick={() => setTab('experts')}>Experts</button>
+            <button role="tab" aria-selected={tab === 'live'} onClick={() => (setTab('live'), setNewHints(0))}>
+              Live{newHints > 0 && <span className="badge" title={`${plural(newHints, 'new hint')}`}>{newHints}</span>}
+            </button>
+            <button role="tab" aria-selected={tab === 'scope'} onClick={() => setTab('scope')}>Scope</button>
             <button role="tab" aria-selected={tab === 'log'} onClick={() => setTab('log')}>
               Log{open_ > 0 && <span className="badge" title={`${plural(open_, 'answer')} to classify`}>{open_}</span>}
             </button>
@@ -305,6 +403,10 @@ export function App({ api, makeEditor = createEditor }: Props) {
               onMember={(id, isMember) => void changeParty(() => api.setMember(id, isMember))}
               onAdd={(name, role, looksAt) => changeParty(() => api.addExpert(name, role, looksAt))}
             />
+          ) : tab === 'live' && watching !== null && party !== null ? (
+            <LivePanel view={watching} party={party} status={watchStatus} isReady={settings?.isReady ?? true} onChange={(isOn, personas) => void changeWatching(isOn, personas)} onJump={line => editor.current?.jumpToLine(line)} onOpen={openTurn} />
+          ) : tab === 'scope' && scope !== null ? (
+            <ScopePanel view={scope} canCheck={settings?.isReady ?? true} isChecking={isChecking} note={checkNote} onSave={saveScope} onCheck={() => void checkPoints()} onJump={line => editor.current?.jumpToLine(line)} />
           ) : (
             <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} onComment={async (id, note) => {
               try {

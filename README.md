@@ -11,7 +11,20 @@ and writes the same log format.
 AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM Studio), or any
 provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
 can be briefed and asked, and you can add experts of your own. Not built yet: Claude Code as a
-backend, live review, scope, and sources. There are no signed installers yet.
+backend, sources, and export to Word (.docx) for the final formatting. There are no signed
+installers yet.
+
+## Live review and scope
+
+**Live review** is off until you turn it on in the Live tab. While it is on, the paragraphs you
+change are sent to the AI once you pause for 20 seconds, at most once a minute and 20 times an
+hour, and the experts you chose leave short hints with line numbers. Each review is logged like
+any other AI input. What was in the document before you turned it on is not sent.
+
+**Scope** is your plan in plain text (`scope.md` beside the log): a goal, targets, sections and
+the points the text must make. The Scope tab shows how far the text is. "Check the points" sends
+the points and the document to the AI and asks which points the text makes; that is logged too.
+The AI cannot change the plan.
 
 ## AI text in your document
 

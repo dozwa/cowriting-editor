@@ -167,3 +167,25 @@ dialog .choice label input { width: auto; }
 .ai-text .row input { flex: 1; min-width: 0; }
 .log h3 + .muted { padding: 0 14px 8px; font-size: 12px; }
 .ai-text button.link { text-align: left; display: inline; }
+
+.live, .scope { overflow: auto; padding: 8px 0; font-size: 13px; }
+.live section, .scope section { padding: 8px 14px; display: grid; gap: 6px; }
+.live h3, .scope h3 { font-size: 13px; }
+.switch { font-weight: 600; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.switch input, .watchers input { width: auto; }
+.state { color: var(--accent); }
+.watchers, .hints, .meters, .sections, .points { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hints li { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.hints .top { display: flex; gap: 8px; align-items: baseline; }
+.hints p { margin: 2px 0; font-size: 14px; }
+.overall strong { font-size: 20px; }
+.meters li { display: grid; grid-template-columns: 6rem 1fr auto; gap: 8px; align-items: center; }
+.meters progress { width: 100%; accent-color: var(--accent); }
+.sections li { display: flex; justify-content: space-between; gap: 8px; }
+.points li { display: grid; gap: 2px; padding: 6px 0; border-top: 1px solid var(--line); }
+.points .point-status { font-size: 12px; color: var(--muted); }
+.points .point-status.covered { color: #2a6f4e; }
+.points .point-status.partial { color: var(--flag); }
+.points .point-status.missing { color: var(--warn); }
+.scope.editing { display: grid; gap: 8px; padding: 12px 14px; }
+.scope.editing textarea { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }

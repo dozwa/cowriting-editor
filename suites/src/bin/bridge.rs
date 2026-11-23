@@ -80,6 +80,23 @@ impl Bridge {
             "set_brief" => self.session()?.set_brief(&text("key"), &text("body")).map(|_| Value::Null),
             "set_member" => self.session()?.set_member(&text("id"), args["isMember"].as_bool().unwrap_or(false)).map(|_| Value::Null),
             "add_expert" => self.session()?.add_expert(&text("name"), &text("role"), &text("looksAt")).map(|id| json!(id)),
+            "live" => Ok(json!(self.session()?.live_view())),
+            "set_live" => {
+                let personas: Vec<String> = serde_json::from_value(args["personas"].clone()).map_err(|e| e.to_string())?;
+                self.session()?.set_live(args["isOn"].as_bool().unwrap_or(false), &personas, &text("documentText")).map(|_| Value::Null)
+            }
+            "live_review" | "check_points" => {
+                let session = self.session()?;
+                let settings = self.settings.lock().unwrap().clone();
+                let backend = make_backend(&settings, self.key.lock().unwrap().as_deref())?;
+                if name == "live_review" {
+                    runtime.block_on(session.live_review(backend.as_ref(), &settings.model, &text("documentText"))).map(|outcome| json!(outcome))
+                } else {
+                    runtime.block_on(session.check_points(backend.as_ref(), &settings.model, &text("documentText"))).map(|summary| json!(summary))
+                }
+            }
+            "scope" => Ok(json!(self.session()?.scope_view(&text("documentText")))),
+            "set_scope" => self.session()?.set_scope(&text("text"), &text("documentText")).map(|_| Value::Null),
             "export_disclosure" => {
                 let options: ExportOptions = serde_json::from_value(args["options"].clone()).map_err(|e| e.to_string())?;
                 self.session()?.export(&options).map(|exported| json!(exported))

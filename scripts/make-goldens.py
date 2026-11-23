@@ -51,6 +51,16 @@ def plugin_output(plugin: Path) -> dict[str, str]:
                         name = f"ai-prompts{'-answers' if answers else ''}.{lang}.{fmt}"
                         out[f"{log.stem}/{name}"] = (root / "disclosure" / f"ai-prompts.{lang}.{fmt}").read_text(encoding="utf-8")
     out["core.json"] = run("node", str(REPO / "scripts" / "core-goldens.mjs"), str(plugin), str(FIXTURES))
+    # the hooks module is TSX written for Claude Code: compiled to plain JavaScript, then run with a stand-in host
+    with tempfile.TemporaryDirectory() as tmp:
+        tsc = REPO / "ui" / "node_modules" / ".bin" / "tsc"
+        if not tsc.exists():
+            sys.exit("TypeScript is missing: run `npm ci` in ui/ first.")
+        options = ["--jsx", "react", "--jsxFactory", "h", "--jsxFragmentFactory", "h", "--module", "esnext", "--target", "es2022", "--moduleResolution", "bundler", "--noCheck", "--skipLibCheck"]
+        subprocess.run([str(tsc), str(plugin / "plugin" / "hooks" / "register.tsx"), "--outDir", tmp, *options], capture_output=True, text=True, check=False)
+        if not (Path(tmp) / "register.js").exists():
+            sys.exit("The plugin's hooks module did not compile.")
+        out["scope.json"] = run("node", str(REPO / "scripts" / "scope-goldens.mjs"), tmp, str(FIXTURES))
     out["PLUGIN_COMMIT"] = run("git", "rev-parse", "HEAD", cwd=plugin)
     return out
 

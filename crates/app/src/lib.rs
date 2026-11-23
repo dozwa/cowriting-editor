@@ -12,15 +12,19 @@ use cowriting_core::host::Host;
 use cowriting_core::log::{flatten, readable};
 use cowriting_core::paste_tracking::{check, is_logged, sources, still_in_text, Found};
 use cowriting_core::personas::{id_from_name, is_custom_id, persona_file, shared_palette, Persona};
+use cowriting_core::review::{check_points, live_review, read_check, read_plan, CheckSummary, LiveHint, LiveOutcome, LiveSettings, LiveState};
+use cowriting_core::scope::{scope_progress, ScopeProgress};
 use cowriting_core::stats::compute_stats;
 use cowriting_core::thread::thread_of;
 use cowriting_core::turn::{annotate, run_turn, Ask, TurnEvent, TurnOutcome, Workspace};
 use cowriting_core::types::{AiTextEntry, AnnotationEntry};
 use cowriting_core::types::{LogEntry, Stats, ThreadMessage};
+use cowriting_core::watch::PAUSE_MS;
 use cowriting_core::words::{changed_paragraphs, paragraphs};
 use cowriting_core::words::{count_words, Format};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -245,7 +249,57 @@ pub struct Session {
     pub workspace: Workspace,
     /// The document as it was last saved or opened: what a save is compared with.
     saved: Mutex<String>,
+    /// What live review remembers while the document is open.
+    live: Mutex<LiveState>,
+    is_reviewing: AtomicBool,
 }
+
+/// Live review as the Live tab shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveView {
+    pub is_on: bool,
+    /// The experts who watch, by id.
+    pub personas: Vec<String>,
+    /// Newest first.
+    pub hints: Vec<LiveHint>,
+    /// How long the author must have paused before a review is asked for.
+    pub pause_ms: u64,
+}
+
+/// The author's plan and how far the text has come.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeView {
+    /// scope.md as the author wrote it; empty when there is none.
+    pub text: String,
+    /// What a new plan starts from.
+    pub template: String,
+    /// None while the plan says nothing yet.
+    pub progress: Option<ScopeProgress>,
+}
+
+/// What a new scope.md starts from.
+pub const SCOPE_TEMPLATE: &str = "# Scope
+
+## Goal
+<!-- One or two sentences: what should the reader know or believe at the end? -->
+
+## Targets
+- Words: 
+- Figures: 
+- Tables: 
+- References: 
+- Deadline: 
+
+## Sections
+<!-- One line per section: name, target in words, stage (outline, draft, revised, final).
+     For example:  - Methods: 800, draft -->
+
+## Points
+<!-- What the text must say. Tick a point yourself with [x], or let the check look for it. -->
+- [ ] 
+";
 
 fn ai_text_row(found: &AiTextEntry, entries: &[LogEntry], document_text: &str) -> AiTextRow {
     let asked = entries.iter().find_map(|e| match e {
@@ -282,7 +336,10 @@ impl Session {
         let text = host.read(path).map_err(|e| format!("{path} could not be opened: {e}"))?;
         let workspace = Workspace::open(host, path, EDITOR_VERSION);
         let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone() };
-        Ok((Session { workspace, saved: Mutex::new(opened.text.clone()) }, opened))
+        // live review left on: what is in the document now is the baseline, as when it is turned on
+        let baseline = LiveSettings::load(&workspace).is_on.then(|| opened.text.clone());
+        let live = Mutex::new(LiveState { baseline, ..Default::default() });
+        Ok((Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false) }, opened))
     }
 
     /// The only code that writes the document: the author's own save.
@@ -338,6 +395,60 @@ impl Session {
             rows.push(ai_text_row(&entry, &entries, document_text));
         }
         Ok(rows)
+    }
+
+    pub fn live_view(&self) -> LiveView {
+        let settings = LiveSettings::load(&self.workspace);
+        LiveView { is_on: settings.is_on, personas: settings.personas, hints: self.live.lock().unwrap().hints.clone(), pause_ms: PAUSE_MS }
+    }
+
+    /// Turns live review on or off and says who watches. What is in the document now is not reviewed: only what changes from here on.
+    pub fn set_live(&self, is_on: bool, personas: &[String], document_text: &str) -> Result<(), String> {
+        let party = self.workspace.party();
+        if let Some(unknown) = personas.iter().find(|id| party.by_id(id).is_none()) {
+            return Err(format!("This document's party has no expert “{unknown}”."));
+        }
+        self.workspace.sidecar.ensure(self.workspace.host.as_ref(), document_text).map_err(error)?;
+        LiveSettings { is_on, personas: personas.to_vec() }.save(&self.workspace).map_err(|e| format!("The setting could not be saved: {e}"))?;
+        self.live.lock().unwrap().baseline = is_on.then(|| document_text.to_string());
+        Ok(())
+    }
+
+    /// Called when the author has paused: reviews what changed since the last review, if it is time.
+    pub async fn live_review(&self, backend: &dyn Backend, model: &str, document_text: &str) -> Result<LiveOutcome, String> {
+        // one review at a time; a second call while one runs waits for the next pause
+        if self.is_reviewing.swap(true, Ordering::SeqCst) {
+            return Ok(LiveOutcome::Wait { ms: PAUSE_MS });
+        }
+        let settings = LiveSettings::load(&self.workspace);
+        let mut state = self.live.lock().unwrap().clone();
+        let outcome = live_review(&self.workspace, backend, model, &settings, &mut state, document_text).await;
+        *self.live.lock().unwrap() = state;
+        self.is_reviewing.store(false, Ordering::SeqCst);
+        outcome.map_err(error)
+    }
+
+    pub fn scope_view(&self, document_text: &str) -> ScopeView {
+        let text = self.workspace.host.read(&self.workspace.sidecar.scope_md()).unwrap_or_default();
+        let check = read_check(&self.workspace);
+        let today = self.workspace.host.now();
+        let progress = read_plan(&self.workspace).map(|plan| {
+            let (points, at) = check.map(|c| (c.points, Some(c.ts))).unwrap_or_default();
+            scope_progress(&plan, document_text, &points, at.as_deref(), today.get(..10).unwrap_or(&today))
+        });
+        ScopeView { text, template: SCOPE_TEMPLATE.to_string(), progress }
+    }
+
+    /// Saves the author's plan.
+    pub fn set_scope(&self, text: &str, document_text: &str) -> Result<(), String> {
+        let host = self.workspace.host.as_ref();
+        self.workspace.sidecar.ensure(host, document_text).map_err(error)?;
+        host.write(&self.workspace.sidecar.scope_md(), text).map_err(|e| format!("The plan could not be saved: {e}"))
+    }
+
+    /// Asks the model which of the planned points the document makes. Logged.
+    pub async fn check_points(&self, backend: &dyn Backend, model: &str, document_text: &str) -> Result<CheckSummary, String> {
+        check_points(&self.workspace, backend, model, document_text).await.map_err(error)
     }
 
     /// The author's comment on a logged passage of AI text. The entry itself is never changed or removed.

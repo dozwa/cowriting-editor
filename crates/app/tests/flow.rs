@@ -288,3 +288,69 @@ async fn ai_text_that_enters_the_document_is_logged_once_and_declared() {
     let tex = session.export(&ExportOptions { language: "en".into(), format: "tex".into(), with_prompts: false, with_answers: false }).unwrap().register;
     assert!(tex.contains("\\subsection*{Language corrections taken over from AI answers}") && tex.contains("still in the text"));
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_author_plans_checks_the_points_and_lets_experts_watch() {
+    let folder = Folder::new("scope");
+    std::fs::write(folder.path("thesis.md"), TEXT).unwrap();
+    let script = json!({ "replies": [
+        { "text": "[{\"n\": 1, \"status\": \"covered\", \"where\": \"thesis.md:3\", \"note\": \"both offices named\"}, {\"n\": 2, \"status\": \"missing\"}]" },
+        { "text": "[{\"persona\": \"architect\", \"line\": 5, \"hint\": \"What does this paragraph add to the one before?\"}]" }
+    ]});
+    std::fs::write(folder.path("script.json"), script.to_string()).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let backend = make_backend(&settings, None).unwrap();
+
+    // no plan yet: a template to start from, no progress, nothing written
+    let view = session.scope_view(TEXT);
+    assert!(view.text.is_empty() && view.progress.is_none() && view.template.contains("## Points"));
+    assert!(session.check_points(backend.as_ref(), "scripted", TEXT).await.is_err());
+    assert_eq!(folder.files(), ["script.json", "thesis.md"]);
+    // the template alone is no plan
+    session.set_scope(&view.template, TEXT).unwrap();
+    assert!(session.scope_view(TEXT).progress.is_none());
+
+    let plan = "## Goal\nShow that breaks help.\n\n## Targets\n- Words: 70\n\n## Sections\n- Walking breaks: 70, draft\n\n## Points\n- 48 people in two offices\n- Breaks help\n- [x] Sitting is common\n";
+    session.set_scope(plan, TEXT).unwrap();
+    assert_eq!(std::fs::read_to_string(folder.path(".cowriting/thesis.md/scope.md")).unwrap(), plan);
+    let before = session.scope_view(TEXT).progress.unwrap();
+    assert_eq!((before.words.done, before.words.target, before.sections[0].is_found, before.checked_at.as_deref()), (7, Some(70.0), true, None));
+
+    let summary = session.check_points(backend.as_ref(), "scripted", TEXT).await.unwrap();
+    assert_eq!((summary.covered, summary.partial, summary.missing), (1, 0, 2));
+    let after = session.scope_view(TEXT).progress.unwrap();
+    assert!(after.content > before.content && after.checked_at.is_some());
+    assert_eq!(after.points[0].r#where.as_deref(), Some("thesis.md:3"));
+    assert!(after.points[2].is_ticked && after.points[2].status.is_none());
+
+    // live review: off until the author turns it on; then only what changes from there on
+    let live = session.live_view();
+    assert_eq!((live.is_on, live.personas.as_slice(), live.pause_ms), (false, ["grammar-guy", "terminologist", "style-coach", "architect"].map(String::from).as_slice(), 20_000));
+    assert!(session.set_live(true, &["ghostwriter".to_string()], TEXT).is_err());
+    session.set_live(true, &["architect".to_string()], TEXT).unwrap();
+    let written = format!("{TEXT}\nThey walked for five minutes in every hour of work.\n");
+    let outcome = session.live_review(backend.as_ref(), "scripted", &written).await.unwrap();
+    assert!(matches!(outcome, cowriting_core::review::LiveOutcome::Reviewed { hints: 1, .. }), "{outcome:?}");
+    let live = session.live_view();
+    assert_eq!((live.is_on, live.personas.as_slice(), live.hints.len()), (true, ["architect".to_string()].as_slice(), 1));
+    assert_eq!((live.hints[0].who.as_str(), live.hints[0].line), ("The Architect", 5));
+
+    // both calls are in the log as turns the author did not type, and in the disclosure's count
+    let view = session.log_view(&written).unwrap();
+    assert_eq!(view.turns.len(), 2);
+    assert!(view.turns[0].asked.starts_with("Live review (architect) of thesis.md") && view.turns[1].asked.starts_with("Scope check"));
+    assert_eq!(view.turns[0].who, "The Architect");
+    // left on, it is on when the document is opened again, and the first change after that is reviewed
+    std::fs::write(folder.path("script.json"), json!({ "replies": [{ "text": "[]" }] }).to_string()).unwrap();
+    let backend = make_backend(&settings, None).unwrap();
+    let (reopened, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    assert!(reopened.live_view().is_on && reopened.live_view().hints.is_empty());
+    let outcome = reopened.live_review(backend.as_ref(), "scripted", &written).await.unwrap();
+    assert!(matches!(outcome, cowriting_core::review::LiveOutcome::Reviewed { hints: 0, .. }), "{outcome:?}");
+    // turning it off is remembered with the document
+    reopened.set_live(false, &["architect".to_string()], &written).unwrap();
+    let (reopened, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    assert!(!reopened.live_view().is_on && reopened.live_view().personas == ["architect"]);
+    assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), TEXT);
+}

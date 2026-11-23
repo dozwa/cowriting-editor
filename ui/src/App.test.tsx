@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
-import type { AiTextRow, Api, AskEvent, Expert, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use } from './api'
+import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use } from './api'
 import { App } from './App'
 import type { Editor, EditorHandlers } from './editor'
 import { linkLines } from './text'
@@ -26,9 +26,19 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { 
 }
 let lastEditor: Editor & { jumps: number[] }
 
-function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean } = {}) {
+function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [] }
+  const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
+  let plan = ''
+  let isChecked = false
+  // the stand-in's plan: one point per line that starts with '- '
+  const progress = (text: string): ScopeProgress | null => {
+    const points = plan.split('\n').filter(line => line.startsWith('- ')).map(line => line.slice(2))
+    if (points.length === 0) return null
+    const words = text.split(/\s+/).filter(Boolean).length
+    return { goal: 'Show it.', words: { done: words, target: 100 }, figures: { done: 0 }, tables: { done: 0 }, references: { done: 0 }, daysLeft: 12, wordsPerDay: 8, points: points.map((text, i) => (isChecked ? { text, isTicked: false, status: i === 0 ? 'covered' : 'missing', where: i === 0 ? 'thesis.md:3' : undefined, note: i === 0 ? 'named' : undefined } : { text, isTicked: false })), checkedAt: isChecked ? '2026-11-23T10:10:00.000Z' : undefined, sections: [{ name: 'Methods', target: 50, stage: 'draft', words: 7, markers: 1, isFound: true }], markers: 1, content: 0.2, finish: 0.35, overall: isChecked ? 0.4 : 0.2 }
+  }
   const aiText: AiTextRow[] = []
   // the stand-in's detection: text the answer said, word for word
   const detect = (text: string, source: 'paste' | 'typed', line: number, documentText: string): AiTextRow[] => {
@@ -75,6 +85,28 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     reportPaste: async (pasted, line, documentText) => {
       calls.pasted.push([pasted, line])
       return detect(pasted, 'paste', line, documentText)
+    },
+    liveView: async () => ({ ...watch, hints: [...watch.hints], pauseMs: 30 }),
+    setLive: async (isOn, personas, documentText) => {
+      calls.live.push([isOn, personas, documentText])
+      Object.assign(watch, { isOn, personas })
+    },
+    liveReview: async (documentText): Promise<LiveOutcome> => {
+      calls.reviewed.push(documentText)
+      if (options.review !== undefined) return options.review
+      turns.push({ id: `t${turns.length + 1}`, ts: '2026-11-23T10:06:00.000Z', category: 'feedback', asked: 'Live review (reviewer-2) of thesis.md l.4–4', answer: 'reviewer-2 l.4: Why should a reader believe this?', excerpt: 'reviewer-2 l.4: Why should a reader believe this?', model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: [], use: '', note: '', isOpen: true, isAiText: false, replyTo: null, persona: 'reviewer-2', who: 'Reviewer #2' })
+      watch.hints.unshift({ turn: `t${turns.length}`, persona: 'reviewer-2', who: 'Reviewer #2', line: 4, text: 'Why should a reader believe this?', ts: '2026-11-23T10:06:00.000Z' })
+      return { kind: 'reviewed', hints: 1, ts: '2026-11-23T10:06:00.000Z' }
+    },
+    scope: async documentText => ({ text: plan, template: '# Scope\n\n## Points\n', progress: progress(documentText) }),
+    setScope: async text => {
+      calls.scope.push(text)
+      plan = text
+    },
+    checkPoints: async documentText => {
+      calls.checked.push(documentText)
+      isChecked = true
+      return { covered: 1, partial: 0, missing: 1 }
     },
     commentAiText: async (id, note) => {
       calls.comments.push([id, note])
@@ -389,4 +421,104 @@ test('AI text pasted into the document is logged, said once, and can be commente
   await waitFor(() => expect(screen.getByText(/No longer in your text/)).toBeTruthy())
   expect(screen.queryByRole('status')).toBeNull()
   expect(screen.getByDisplayValue('A placeholder.')).toBeTruthy() // the comment is kept
+})
+
+test('with live review on, a pause in writing sends the text for hints; off, nothing is sent', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const field = (await screen.findByLabelText('Document')) as HTMLTextAreaElement
+
+  // off: the author writes and pauses, and nothing is sent
+  await user.type(field, 'First.')
+  await new Promise(resolve => setTimeout(resolve, 80))
+  expect(calls.reviewed).toEqual([])
+
+  await user.click(screen.getByRole('tab', { name: /^Live/ }))
+  expect(screen.getByText(/the paragraphs you change are sent to the AI once you pause/)).toBeTruthy()
+  expect(screen.getByText('Turn live review on to get hints while you write.')).toBeTruthy()
+  // who watches is the author's choice, from the party
+  expect(screen.queryByLabelText(/The Clinician/)).toBeNull()
+  await user.click(screen.getByLabelText('Live review'))
+  await waitFor(() => expect(calls.live).toEqual([[true, ['reviewer-2'], '# Thesis\n\nWe recruited 48 subjects.\nFirst.']]))
+
+  // on: nothing while the author is writing, one review once they pause
+  await user.click(screen.getByRole('tab', { name: 'Ask' }))
+  await user.type(field, ' Breaks help everyone.')
+  expect(calls.reviewed).toEqual([])
+  await waitFor(() => expect(calls.reviewed).toEqual(['# Thesis\n\nWe recruited 48 subjects.\nFirst. Breaks help everyone.']))
+  expect(calls.saved).toEqual([]) // a review does not save the document
+
+  // the hint is announced on the tab, shown with who gave it, and leads to its line and its logged turn
+  const tab = await screen.findByRole('tab', { name: /^Live\s*1/ })
+  await user.click(tab)
+  expect(screen.getByRole('tab', { name: /^Live/ }).textContent).toBe('Live')
+  expect(screen.getByText('Why should a reader believe this?')).toBeTruthy()
+  expect(screen.getByRole('status').textContent).toMatch(/^1 hint at /)
+  await user.click(screen.getByRole('button', { name: 'line 4' }))
+  expect(lastEditor.jumps).toEqual([4])
+  await user.click(screen.getByRole('button', { name: 'Classify or reply' }))
+  expect(await screen.findByLabelText('Reply')).toBeTruthy()
+  expect(screen.getByRole('tab', { name: /^Log/ }).textContent).toContain('1')
+
+  // turned off again: writing on sends nothing more
+  await user.click(screen.getByRole('tab', { name: /^Live/ }))
+  await user.click(screen.getByLabelText('Live review'))
+  await waitFor(() => expect(calls.live.at(-1)![0]).toBe(false))
+  await user.type(field, ' More.')
+  await new Promise(resolve => setTimeout(resolve, 80))
+  expect(calls.reviewed.length).toBe(1)
+})
+
+test('a review that comes too soon is asked for again later, and a failed one is said plainly', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ review: { kind: 'wait', ms: 40 } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: /^Live/ }))
+  await user.click(screen.getByLabelText('Live review'))
+  await user.type(screen.getByLabelText('Document'), 'More words here.')
+  await waitFor(() => expect(calls.reviewed.length).toBe(1))
+  expect((await screen.findByRole('status')).textContent).toBe('waiting: at most one review a minute')
+  await waitFor(() => expect(calls.reviewed.length).toBeGreaterThan(1))
+})
+
+test('the author makes a plan, sees how far the text is, and has the points checked', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Scope' }))
+
+  // no plan: an invitation, and the template to start from
+  await user.click(await screen.findByRole('button', { name: 'Make a plan' }))
+  const field = screen.getByLabelText('Your plan') as HTMLTextAreaElement
+  expect(field.value).toBe('# Scope\n\n## Points\n')
+  await user.type(field, '- 48 people in two offices\n- Breaks help')
+  await user.click(screen.getByRole('button', { name: 'Save the plan' }))
+  await waitFor(() => expect(calls.scope).toEqual(['# Scope\n\n## Points\n- 48 people in two offices\n- Breaks help']))
+
+  // progress against the plan, before any check
+  expect(await screen.findByText('20 %')).toBeTruthy()
+  expect(screen.getByText(/12 days left/)).toBeTruthy()
+  expect((screen.getByLabelText('Words') as HTMLProgressElement).max).toBe(100)
+  expect(screen.getByText(/7 of 50 words · draft · 1 marker/)).toBeTruthy()
+  expect(screen.getAllByText('· not checked').length).toBe(2)
+  expect(calls.checked).toEqual([])
+
+  // the check is the author's click; it says what it sends, and its result shows per point
+  expect(screen.getByText(/sends your plan's points and the document to the AI/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Check the points' }))
+  expect((await screen.findByRole('status')).textContent).toBe('1 covered, 0 partly, 1 missing')
+  expect(calls.checked).toEqual(['# Thesis\n\nWe recruited 48 subjects.\n'])
+  expect(screen.getByText('✓ covered')).toBeTruthy()
+  expect(screen.getByText('○ missing')).toBeTruthy()
+  expect(screen.getByText('40 %')).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'line 3' }))
+  expect(lastEditor.jumps).toEqual([3])
+
+  // the progress follows the text as the author writes
+  await user.type(screen.getByLabelText('Document'), 'Six more words in the text.')
+  await waitFor(() => expect(screen.getByText(/12 of 100/)).toBeTruthy())
 })
