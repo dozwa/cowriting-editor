@@ -13,7 +13,8 @@ export type RefHit = { citekey: string | null; title: string; authors: string; y
 export type SourceHits = { from: 'zotero' | 'bibliography'; hits: RefHit[] }
 
 export type FileFormat = 'pdf' | 'docx'
-export type ExportTools = { hasPandoc: boolean; pdfEngine: string | null; hasZotero: boolean }
+export type ExportTools = { hasPandoc: boolean; pdfEngines: string[]; isOwn: boolean; hasZotero: boolean }
+export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter' }
 export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[] }
 
 export type Use = 'adopted' | 'adapted' | 'rejected' | 'info'
@@ -178,7 +179,7 @@ export const api = {
   exportSetup: () => invoke<[ExportTools, string, string]>('export_setup'),
   /** Asks the author where the export goes; null when they cancel. */
   pickExport: (format: FileFormat, suggested: string) => save({ filters: [{ name: format === 'pdf' ? 'PDF' : 'Word', extensions: [format] }], defaultPath: suggested }),
-  exportDocument: (format: FileFormat, target: string, documentText: string) => invoke<DocumentExport>('export_document', { format, target, documentText }),
+  exportDocument: (format: FileFormat, target: string, documentText: string, pdf: PdfChoice) => invoke<DocumentExport>('export_document', { format, target, documentText, pdf }),
   sources: (documentText: string) => invoke<SourcesView>('sources', { documentText }),
   /** Asks the author for a bibliography file; null when they cancel. */
   pickBibliography: async (): Promise<string | null> => {

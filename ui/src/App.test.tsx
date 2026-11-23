@@ -2,8 +2,8 @@
 // one does. What is checked is what the author sees and what the window asks the app to do.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
-import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, SourcesView } from './api'
+import { expect, test, vi } from 'vitest'
+import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, PdfChoice, SourcesView } from './api'
 import { App } from './App'
 import type { Editor, EditorHandlers } from './editor'
 import { linkLines } from './text'
@@ -26,9 +26,9 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { 
 }
 let lastEditor: Editor & { jumps: number[] }
 
-function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean } = {}) {
+function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[] } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   let plan = ''
   let bibFiles: BibFile[] = []
@@ -100,10 +100,11 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       watch.hints.unshift({ turn: `t${turns.length}`, persona: 'reviewer-2', who: 'Reviewer #2', line: 4, text: 'Why should a reader believe this?', ts: '2026-11-23T10:06:00.000Z' })
       return { kind: 'reviewed', hints: 1, ts: '2026-11-23T10:06:00.000Z' }
     },
-    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngine: 'xelatex', hasZotero: false }, '/work/thesis.pdf', '/work/thesis.docx'],
+    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false }, '/work/thesis.pdf', '/work/thesis.docx'],
     pickExport: async (_format, suggested) => suggested,
-    exportDocument: async (format, target, documentText) => {
+    exportDocument: async (format, target, documentText, pdf) => {
       calls.exports.push([format, target, documentText])
+      calls.pdf.push(pdf)
       return { path: target, cited: 2, fromZotero: 0, missing: ['ghost1999'], warnings: [] }
     },
     sources: async () => ({ files: bibFiles, entries: bibFiles.reduce((n, f) => n + f.entries, 0), cited: 2, missing: bibFiles.length > 0 ? ['ghost1999'] : [], checked: refsChecked }),
@@ -612,7 +613,60 @@ test('without pandoc the export says what to install and does not try', async ()
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
-  expect(await screen.findByText(/pandoc is not installed on this computer/)).toBeTruthy()
+  expect(await screen.findByText(/pandoc was not found/)).toBeTruthy()
   expect((screen.getByRole('button', { name: 'Export' }) as HTMLButtonElement).disabled).toBe(true)
   expect(calls.exports).toEqual([])
+})
+
+/** An empty storage for this window, as a fresh install has it. */
+function windowStorage() {
+  const kept = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) })
+}
+
+test('a PDF is set with Typst on the chosen paper, and an installed LaTeX can be chosen and is remembered', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  const { api, calls } = standIn({ pdfEngines: ['typst', 'xelatex'] })
+  const { unmount } = render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+
+  // the standard: Typst
+  expect(((await screen.findByLabelText('Typeset with')) as HTMLSelectElement).value).toBe('typst')
+  await user.selectOptions(screen.getByLabelText('Paper'), 'letter')
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await screen.findByRole('status')
+  expect(calls.pdf).toEqual([{ engine: 'typst', paper: 'letter' }])
+
+  // the author's own LaTeX
+  await user.selectOptions(screen.getByLabelText('Typeset with'), 'xelatex')
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await waitFor(() => expect(calls.pdf[1]).toEqual({ engine: 'xelatex', paper: 'letter' }))
+  // a Word file has neither choice
+  await user.selectOptions(screen.getByLabelText('Format'), 'docx')
+  expect(screen.queryByLabelText('Paper')).toBeNull()
+  unmount()
+
+  // next time the choice is still there
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  expect(((await screen.findByLabelText('Typeset with')) as HTMLSelectElement).value).toBe('xelatex')
+  expect((screen.getByLabelText('Paper') as HTMLSelectElement).value).toBe('letter')
+  vi.unstubAllGlobals()
+})
+
+test('with Typst alone there is nothing to choose but the paper', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  // a system set to German: A4
+  vi.stubGlobal('navigator', { ...navigator, language: 'de-DE' })
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  expect(((await screen.findByLabelText('Paper')) as HTMLSelectElement).value).toBe('a4')
+  expect(screen.queryByLabelText('Typeset with')).toBeNull()
+  vi.unstubAllGlobals()
 })

@@ -118,7 +118,8 @@ impl Bridge {
             "pick_export" => Ok(args["suggested"].clone()),
             "export_document" => {
                 let format = serde_json::from_value(args["format"].clone()).map_err(|e| e.to_string())?;
-                runtime.block_on(self.session()?.export_document_online(format, &text("target"), &text("documentText"))).map(|made| json!(made))
+                let pdf = serde_json::from_value(args["pdf"].clone()).unwrap_or_default();
+                runtime.block_on(self.session()?.export_document_online(format, &text("target"), &text("documentText"), &pdf)).map(|made| json!(made))
             }
             "export_disclosure" => {
                 let options: ExportOptions = serde_json::from_value(args["options"].clone()).map_err(|e| e.to_string())?;

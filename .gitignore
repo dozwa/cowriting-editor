@@ -3,3 +3,6 @@ node_modules/
 dist/
 .DS_Store
 src-tauri/gen/
+src-tauri/tools/pandoc*
+src-tauri/tools/typst*
+src-tauri/tools/.*.sha256

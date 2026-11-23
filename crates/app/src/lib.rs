@@ -25,7 +25,7 @@ use cowriting_core::types::{LogEntry, Stats, ThreadMessage};
 use cowriting_core::watch::PAUSE_MS;
 use cowriting_core::words::{changed_paragraphs, paragraphs};
 use cowriting_core::words::{count_words, Format};
-pub use export::{DocumentExport, ExportTools, FileFormat};
+pub use export::{DocumentExport, ExportTools, FileFormat, Paper, PdfChoice};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -541,11 +541,16 @@ impl Session {
 
     /// Makes a PDF or Word file of the document with pandoc. `zotero` is what the author's Zotero holds for the
     /// cited keys, as CSL JSON; without it only the document's bibliography files are used.
-    pub fn export_document(&self, format: FileFormat, target: &str, document_text: &str, zotero: Option<&str>) -> Result<DocumentExport, String> {
+    pub fn export_document(&self, format: FileFormat, target: &str, document_text: &str, zotero: Option<&str>, pdf: &PdfChoice) -> Result<DocumentExport, String> {
         let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
         export::check_target(format, target, &sidecar.document)?;
         let tools = export::local_tools();
-        if format == FileFormat::Pdf && tools.pdf_engine.is_none() && tools.has_pandoc {
+        let engine = pdf.engine.as_ref().or(tools.pdf_engines.first());
+        if let Some(chosen) = engine.filter(|chosen| !tools.pdf_engines.contains(chosen)) {
+            return Err(format!("{chosen} is not installed on this computer."));
+        }
+        let engine = engine.and_then(|name| export::find_program(name).map(|path| (name.as_str(), path.to_string_lossy().into_owned())));
+        if format == FileFormat::Pdf && engine.is_none() && tools.has_pandoc {
             return Err(
                 "A PDF needs a program that typesets it, and none is installed: a LaTeX distribution (TeX Live, MacTeX, MiKTeX) or Typst. Word export works without.".into()
             );
@@ -556,16 +561,16 @@ impl Session {
             host.write(&kept, csl).map_err(|e| format!("The references could not be saved: {e}"))?;
         }
         let used = export::references(&export::bibliography_of(&self.workspace, document_text), document_text, zotero.map(|csl| (kept.as_str(), csl)));
-        let args = export::pandoc_args(format, target, &sidecar.folder, &used.files, tools.pdf_engine.as_deref());
+        let args = export::pandoc_args(format, target, &sidecar.folder, &used.files, engine.as_ref().map(|(name, path)| (*name, path.as_str())), pdf.paper);
         let warnings = export::run_pandoc(document_text, &sidecar.folder, &args)?;
         Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
     }
 
     /// The export with the references looked up in the author's Zotero, when it is running.
-    pub async fn export_document_online(&self, format: FileFormat, target: &str, document_text: &str) -> Result<DocumentExport, String> {
+    pub async fn export_document_online(&self, format: FileFormat, target: &str, document_text: &str, pdf: &PdfChoice) -> Result<DocumentExport, String> {
         let cited: Vec<String> = cited_keys(document_text).into_iter().collect();
         let zotero = cowriting_backends::lookup::better_bibtex_export(&cited).await;
-        self.export_document(format, target, document_text, zotero.as_ref().map(|(csl, _)| csl.as_str()))
+        self.export_document(format, target, document_text, zotero.as_ref().map(|(csl, _)| csl.as_str()), pdf)
     }
 
     /// Where an export goes when the author does not choose: beside the document, under its name.

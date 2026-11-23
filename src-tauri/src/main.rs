@@ -7,7 +7,7 @@
 
 use cowriting_app::{
     export_tools, list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, DocumentExport, ExportOptions, ExportTools, Exported, FileFormat, LiveView,
-    LogView, Opened, PartyView, ScopeView, Session, SourceHits, SourcesView, VerifyFile,
+    LogView, Opened, PartyView, PdfChoice, ScopeView, Session, SourceHits, SourcesView, VerifyFile,
 };
 use cowriting_core::host::DiskHost;
 use cowriting_core::review::{CheckSummary, LiveOutcome};
@@ -272,9 +272,9 @@ async fn export_setup(editor: State<'_, Editor>) -> Result<(ExportTools, String,
 }
 
 #[tauri::command]
-async fn export_document(editor: State<'_, Editor>, format: FileFormat, target: String, document_text: String) -> Result<DocumentExport, String> {
+async fn export_document(editor: State<'_, Editor>, format: FileFormat, target: String, document_text: String, pdf: PdfChoice) -> Result<DocumentExport, String> {
     let session = editor.session()?;
-    session.export_document_online(format, &target, &document_text).await
+    session.export_document_online(format, &target, &document_text, &pdf).await
 }
 
 #[tauri::command]
@@ -321,6 +321,13 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Editor::default())
+        .setup(|app| {
+            // pandoc and Typst ship in the app's resources
+            if let Ok(resources) = tauri::Manager::path(app).resource_dir() {
+                cowriting_app::export::set_tools_dir(resources.join("tools"));
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_settings,
             set_settings,

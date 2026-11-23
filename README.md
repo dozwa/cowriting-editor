@@ -37,9 +37,12 @@ export. The editor reads these files and never changes them.
 (Better BibTeX) when it is running, then from your bibliography files. Keys found nowhere are named
 after the export and stay in the text as they are. Your document is not changed.
 
-The export needs pandoc on your computer, and for a PDF a typesetting program (TeX Live, MacTeX,
-MiKTeX or Typst). **The installers do not bring these along yet**; the dialog says what is missing.
-The reference list is in pandoc's default style (Chicago author-date); choosing a style is not built.
+The installer brings pandoc 3.14 and Typst 0.15.1 along, so both exports work without installing
+anything (this adds about 60 MB to the download and 230 MB on disk). A PDF is typeset by Typst, on
+A4 or US Letter. If a LaTeX is installed on your computer (XeLaTeX, LuaLaTeX, pdfLaTeX, Tectonic),
+the export dialog offers it as well and remembers your choice. Page size, fonts and styles of a
+Word file are set in Word. The reference list is in pandoc's default style (Chicago author-date);
+choosing a style is not built. Licences of the two programs: `src-tauri/tools/`.
 
 ## Live review and scope
 
@@ -106,6 +109,7 @@ Needs Rust, Node 22.15 or newer, and on Linux the packages Tauri lists for WebKi
 
 ```
 cd ui && npm install && cd ..
+python3 scripts/fetch-tools.py           # pandoc and Typst for this system, checked against pinned sums
 cargo test                              # core, backends, the flow on a real folder
 (cd ui && npm test)                     # the window, with the app replaced by a stand-in
 ui/node_modules/.bin/tauri dev          # run it

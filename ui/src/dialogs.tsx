@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import type { Api, ExportOptions, Exported, ModelChoice, Settings, SettingsView, DocumentExport, ExportTools, FileFormat } from './api'
+import type { Api, ExportOptions, Exported, ModelChoice, Settings, SettingsView, DocumentExport, ExportTools, FileFormat, PdfChoice } from './api'
 
 function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -190,10 +190,24 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
   )
 }
 
+const ENGINE_NAMES: Record<string, string> = { typst: 'Typst (comes with the editor)', xelatex: 'LaTeX (XeLaTeX)', lualatex: 'LaTeX (LuaLaTeX)', pdflatex: 'LaTeX (pdfLaTeX)', tectonic: 'LaTeX (Tectonic)' }
+
+/** What the author chose last time, kept in this window's storage; a guess from the system's language the first time. */
+function rememberedPdf(): PdfChoice {
+  const fallback: PdfChoice = { engine: null, paper: /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4' }
+  try {
+    const kept = JSON.parse(localStorage.getItem('cowriting.pdf') ?? 'null') as Partial<PdfChoice> | null
+    return { engine: typeof kept?.engine === 'string' ? kept.engine : null, paper: kept?.paper === 'letter' || kept?.paper === 'a4' ? kept.paper : fallback.paper }
+  } catch {
+    return fallback
+  }
+}
+
 /** The document as a PDF or a Word file, made by pandoc, with the references behind its citekeys. */
 export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): string; onClose(): void }) {
   const [setup, setSetup] = useState<{ tools: ExportTools; targets: Record<FileFormat, string> } | null>(null)
   const [format, setFormat] = useState<FileFormat>('pdf')
+  const [pdf, setPdf] = useState<PdfChoice>(rememberedPdf)
   const [made, setMade] = useState<DocumentExport | null>(null)
   const [isWorking, setWorking] = useState(false)
   const [error, setError] = useState('')
@@ -209,7 +223,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       if (target === null) return
       setWorking(true)
       setMade(null)
-      setMade(await api.exportDocument(format, target, getText()))
+      setMade(await api.exportDocument(format, target, getText(), { ...pdf, engine }))
       setError('')
     } catch (e) {
       setError(String(e))
@@ -219,7 +233,20 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   }
 
   const tools = setup?.tools
-  const cannot = tools === undefined ? '' : !tools.hasPandoc ? 'pandoc is not installed on this computer. Install it from pandoc.org, then open this dialog again.' : format === 'pdf' && tools.pdfEngine === null ? 'A PDF needs a program that typesets it (TeX Live, MacTeX, MiKTeX or Typst), and none is installed. Word export works without.' : ''
+  const engines = tools?.pdfEngines ?? []
+  // a remembered engine that is gone falls back to the standard one
+  const engine = pdf.engine !== null && engines.includes(pdf.engine) ? pdf.engine : (engines[0] ?? null)
+  const choose = (change: Partial<PdfChoice>) => {
+    const next = { ...pdf, ...change }
+    setPdf(next)
+    setMade(null)
+    try {
+      localStorage.setItem('cowriting.pdf', JSON.stringify(next))
+    } catch {
+      // not remembered, then
+    }
+  }
+  const cannot = tools === undefined ? '' : !tools.hasPandoc ? 'pandoc was not found: it comes with the editor’s installer, so this copy is incomplete. Installing pandoc from pandoc.org also works.' : format === 'pdf' && engines.length === 0 ? 'A PDF needs a program that typesets it (Typst, or a LaTeX such as TeX Live, MacTeX or MiKTeX), and none was found. Word export works without.' : ''
   return (
     <Dialog title="Export the document" onClose={onClose}>
       <p>Makes a PDF or a Word file of the document as it is in the editor now. Citations like <code>[@smith2020]</code> become references. Your document is not changed.</p>
@@ -230,10 +257,29 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
           <option value="docx">Word (.docx)</option>
         </select>
       </label>
+      {format === 'pdf' && engines.length > 0 && (
+        <div className="row">
+          <label>
+            Paper
+            <select value={pdf.paper} onChange={e => choose({ paper: e.target.value as PdfChoice['paper'] })}>
+              <option value="a4">A4</option>
+              <option value="letter">US Letter</option>
+            </select>
+          </label>
+          {engines.length > 1 && (
+            <label>
+              Typeset with
+              <select value={engine ?? ''} onChange={e => choose({ engine: e.target.value })}>
+                {engines.map(name => <option key={name} value={name}>{ENGINE_NAMES[name] ?? name}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+      {format === 'docx' && <p className="muted">Page size, fonts and styles of a Word file are set in Word.</p>}
       {tools !== undefined && (
         <p className="muted">
           {tools.hasZotero ? 'References come from your Zotero library by citekey (Better BibTeX), then from your bibliography files.' : 'Zotero with Better BibTeX is not running: references come from your bibliography files only.'}
-          {format === 'pdf' && tools.pdfEngine !== null && ` The PDF is typeset by ${tools.pdfEngine}.`}
         </p>
       )}
       {cannot !== '' && <p className="hint">{cannot}</p>}

@@ -25,11 +25,51 @@ impl FileFormat {
 }
 
 /// The programs that turn pandoc's output into a PDF, in the order they are tried.
-const PDF_ENGINES: [&str; 6] = ["xelatex", "lualatex", "pdflatex", "tectonic", "typst", "weasyprint"];
+/// Typst comes with the editor and is the standard; a LaTeX found on the computer can be chosen instead.
+const PDF_ENGINES: [&str; 5] = ["typst", "xelatex", "lualatex", "pdflatex", "tectonic"];
+
+/// Where the editor's own pandoc and Typst are, once the window knows (the installed app's resources).
+static TOOLS_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Tells the export where the programs that came with the editor are.
+pub fn set_tools_dir(dir: PathBuf) {
+    let _ = TOOLS_DIR.set(dir);
+}
+
+/// The folders with the editor's own programs, first choice before anything installed on the computer.
+fn own_dirs() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("COWRITING_TOOLS").map(PathBuf::from).into_iter().chain(TOOLS_DIR.get().cloned()).collect();
+    if cfg!(debug_assertions) {
+        // a development build: what scripts/fetch-tools.py put into the repository's folder
+        dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/tools"));
+    }
+    dirs
+}
+
+/// The paper a PDF is set on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Paper {
+    #[default]
+    A4,
+    Letter,
+}
+
+/// What the author chose for a PDF.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfChoice {
+    /// One of the engines `ExportTools` lists; None for the standard one.
+    #[serde(default)]
+    pub engine: Option<String>,
+    #[serde(default)]
+    pub paper: Paper,
+}
 
 /// Where programs are looked for. An app started from the Dock or the Start menu does not get the shell's PATH.
 fn program_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect()).unwrap_or_default();
+    let mut dirs = own_dirs();
+    dirs.extend(std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect::<Vec<_>>()).unwrap_or_default());
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from);
     if cfg!(windows) {
         dirs.extend(["C:/Program Files/Pandoc", "C:/texlive/2026/bin/windows", "C:/texlive/2025/bin/windows"].iter().map(PathBuf::from));
@@ -51,8 +91,10 @@ pub fn find_program(name: &str) -> Option<PathBuf> {
 #[serde(rename_all = "camelCase")]
 pub struct ExportTools {
     pub has_pandoc: bool,
-    /// The program that will make the PDF; None when none is installed (Word export does not need one).
-    pub pdf_engine: Option<String>,
+    /// The programs that can typeset the PDF, the standard one first; empty when there is none (Word export does not need one).
+    pub pdf_engines: Vec<String>,
+    /// pandoc and Typst are the editor's own copies, not ones installed on the computer.
+    pub is_own: bool,
     /// Zotero is running with Better BibTeX: references come from the library by citekey.
     pub has_zotero: bool,
 }
@@ -60,7 +102,8 @@ pub struct ExportTools {
 pub fn local_tools() -> ExportTools {
     ExportTools {
         has_pandoc: find_program("pandoc").is_some(),
-        pdf_engine: PDF_ENGINES.iter().find(|engine| find_program(engine).is_some()).map(|engine| engine.to_string()),
+        pdf_engines: PDF_ENGINES.iter().filter(|engine| find_program(engine).is_some()).map(|engine| engine.to_string()).collect(),
+        is_own: ["pandoc", "typst"].iter().all(|name| find_program(name).is_some_and(|found| own_dirs().iter().any(|dir| found.starts_with(dir)))),
         has_zotero: false,
     }
 }
@@ -108,14 +151,21 @@ pub fn references(bibliography: &cowriting_core::sources::Bibliography, document
 }
 
 /// What pandoc is called with. The document comes on standard input, so what is exported is what the editor shows.
-pub fn pandoc_args(format: FileFormat, output: &str, folder: &str, references: &[String], pdf_engine: Option<&str>) -> Vec<String> {
+/// `pdf_engine` is the program's name and where it is.
+pub fn pandoc_args(format: FileFormat, output: &str, folder: &str, references: &[String], pdf_engine: Option<(&str, &str)>, paper: Paper) -> Vec<String> {
     let mut args: Vec<String> = ["--from", "markdown", "--standalone", "--output", output, "--resource-path", folder].iter().map(|arg| arg.to_string()).collect();
     args.push("--citeproc".into());
     for file in references {
         args.extend(["--bibliography".to_string(), file.clone()]);
     }
-    if let (FileFormat::Pdf, Some(engine)) = (format, pdf_engine) {
-        args.extend(["--pdf-engine".to_string(), engine.to_string()]);
+    if let (FileFormat::Pdf, Some((engine, path))) = (format, pdf_engine) {
+        // Typst and LaTeX name the same paper differently
+        let size = match (paper, engine) {
+            (Paper::A4, _) => "a4",
+            (Paper::Letter, "typst") => "us-letter",
+            (Paper::Letter, _) => "letter",
+        };
+        args.extend(["--pdf-engine".to_string(), path.to_string(), "--variable".to_string(), format!("papersize={size}")]);
     }
     args
 }

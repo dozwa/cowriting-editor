@@ -422,7 +422,7 @@ async fn the_authors_references_are_read_searched_and_checked_but_never_written(
 #[test]
 fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     use cowriting_app::export::{check_target, find_program, pandoc_args, references};
-    use cowriting_app::FileFormat;
+    use cowriting_app::{FileFormat, Paper, PdfChoice};
     let folder = Folder::new("export");
     let text = "---\ntitle: Walking breaks\nbibliography: refs.bib\n---\n\n# Walking breaks\n\nBreaks help [@smith2020; @ghost1999], as the library says [@fromzotero2024].\n\n# References\n";
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/literature");
@@ -444,29 +444,29 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     );
     let offline = references(&bibliography, text, None);
     assert_eq!((offline.files.len(), offline.from_zotero, offline.missing), (1, 0, vec!["fromzotero2024".to_string(), "ghost1999".to_string()]));
-    let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some("xelatex"));
-    assert_eq!(
-        args.join(" "),
-        format!(
-            "--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine xelatex",
-            folder.path("refs.bib")
-        )
-    );
-    assert!(!pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], Some("xelatex")).contains(&"--pdf-engine".to_string()));
+    let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some(("typst", "/tools/typst")), Paper::A4);
+    let expected = format!("--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine /tools/typst --variable papersize=a4", folder.path("refs.bib"));
+    assert_eq!(args.join(" "), expected);
+    // Typst and LaTeX name US letter differently; a Word file has no engine and no paper setting
+    let letter = |engine: &str| pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some((engine, engine)), Paper::Letter).last().cloned();
+    assert_eq!((letter("typst").as_deref(), letter("xelatex").as_deref()), (Some("papersize=us-letter"), Some("papersize=letter")));
+    assert!(!pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], Some(("typst", "/tools/typst")), Paper::A4)
+        .iter()
+        .any(|arg| arg == "--pdf-engine" || arg.starts_with("papersize")));
 
     // the target is a file of the chosen kind and never the document
     assert!(check_target(FileFormat::Pdf, &folder.path("thesis.docx"), &folder.path("thesis.md")).is_err());
-    assert!(session.export_document(FileFormat::Docx, &folder.path("thesis.md"), text, None).is_err());
+    assert!(session.export_document(FileFormat::Docx, &folder.path("thesis.md"), text, None, &PdfChoice::default()).is_err());
     assert_eq!(session.export_target(FileFormat::Pdf), folder.path("thesis.pdf"));
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
 
     // the real thing, where pandoc is installed (CI installs it and insists)
     let Some(pandoc) = find_program("pandoc") else {
-        assert!(std::env::var_os("COWRITING_NEED_PANDOC").is_none(), "pandoc is not installed");
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "pandoc is not there: run scripts/fetch-tools.py");
         eprintln!("pandoc is not installed: the export itself was not run");
         return;
     };
-    let made = session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), text, Some(&zotero)).unwrap();
+    let made = session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), text, Some(&zotero), &PdfChoice::default()).unwrap();
     assert_eq!((made.cited, made.from_zotero, made.missing.clone()), (3, 1, vec!["ghost1999".to_string()]));
     assert!(made.warnings.iter().any(|warning| warning.contains("ghost1999")), "{:?}", made.warnings);
     let back = std::process::Command::new(pandoc).args([folder.path("thesis.docx").as_str(), "--to", "plain", "--wrap", "none"]).output().unwrap();
@@ -476,7 +476,7 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     assert!(plain.contains("Okafor, Ada. 2024") && plain.contains("Smith, Jane, Min-Jung Lee, and Pieter Berg. 2020"), "{plain}");
     // a bibliography pandoc cannot read: the author is told which file and where, and no file is made
     std::fs::write(folder.path("refs.bib"), format!("{bib}@misc{{broken, title = {{unclosed\n")).unwrap();
-    let refused = session.export_document(FileFormat::Docx, &folder.path("second.docx"), text, None).unwrap_err();
+    let refused = session.export_document(FileFormat::Docx, &folder.path("second.docx"), text, None, &PdfChoice::default()).unwrap_err();
     assert!(refused.contains("refs.bib") && refused.contains("line"), "{refused}");
     assert!(!Path::new(&folder.path("second.docx")).exists());
     std::fs::write(folder.path("refs.bib"), bib).unwrap();
@@ -494,4 +494,19 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
         ]
     );
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
+
+    // a PDF with the editor's own Typst, on the paper the author chose; an engine that is not there is refused
+    let tools = cowriting_app::export::local_tools();
+    assert!(session.export_document(FileFormat::Pdf, &folder.path("thesis.pdf"), text, None, &PdfChoice { engine: Some("no-such-tex".into()), paper: Paper::A4 }).is_err());
+    if tools.pdf_engines.first().map(String::as_str) != Some("typst") {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "Typst is not there: run scripts/fetch-tools.py");
+        eprintln!("Typst is not there: the PDF export was not run");
+        return;
+    }
+    for (paper, name, width) in [(Paper::A4, "a4.pdf", "595.27"), (Paper::Letter, "letter.pdf", "612 792")] {
+        session.export_document(FileFormat::Pdf, &folder.path(name), text, Some(&zotero), &PdfChoice { engine: None, paper }).unwrap();
+        let pdf = std::fs::read(folder.path(name)).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"), "{name} is a PDF");
+        assert!(String::from_utf8_lossy(&pdf).replace("MediaBox [", "MediaBox[").contains(&format!("/MediaBox[0 0 {width}")), "{name} is {width} points wide");
+    }
 }
