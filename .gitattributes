@@ -1,0 +1,6 @@
+# fixtures and goldens are compared byte for byte: no line-ending conversion on any system
+* text=auto eol=lf
+fixtures/** -text
+*.png binary
+*.icns binary
+*.ico binary
