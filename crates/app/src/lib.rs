@@ -146,7 +146,7 @@ pub struct Exported {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BackendSettings {
-    /// 'anthropic' or 'openai-compatible'; 'fake:<script file>' plays a script instead of asking a model.
+    /// 'anthropic', 'openai-compatible' or 'claude-code'; 'fake:<script file>' plays a script instead of asking a model.
     pub backend: String,
     pub model: String,
     /// Where the API is: a gateway, or a local model server. Empty for Anthropic or OpenAI itself.
@@ -182,6 +182,10 @@ pub fn make_backend(settings: &BackendSettings, api_key: Option<&str>) -> Result
             }
             Ok(Box::new(OpenAiBackend::new(base_url, key)))
         }
+        // the author's own Claude Code, with its own sign-in: no key of ours
+        "claude-code" => cowriting_backends::claude_code::find_claude()
+            .map(|program| Box::new(cowriting_backends::claude_code::ClaudeCodeBackend::new(program)) as Box<dyn Backend>)
+            .ok_or_else(|| cowriting_backends::claude_code::NOT_INSTALLED.to_string()),
         other => Err(format!("This version cannot use the backend “{other}” yet.")),
     }
 }
@@ -189,6 +193,11 @@ pub fn make_backend(settings: &BackendSettings, api_key: Option<&str>) -> Result
 /// The models the provider in these settings offers: (id, display name).
 pub async fn list_models(settings: &BackendSettings, api_key: Option<&str>) -> Result<Vec<(String, String)>, String> {
     let key = api_key.map(str::trim).filter(|k| !k.is_empty());
+    if settings.backend == "claude-code" {
+        // found, not asked: whether it is signed in shows with the first question
+        cowriting_backends::claude_code::find_claude().ok_or(cowriting_backends::claude_code::NOT_INSTALLED)?;
+        return Ok(cowriting_backends::claude_code::MODELS.iter().map(|(id, name)| (id.to_string(), name.to_string())).collect());
+    }
     let models = match settings.backend.as_str() {
         "anthropic" => AnthropicBackend::new(key.ok_or(NO_KEY)?, Some(&settings.base_url)).models().await,
         "openai-compatible" => OpenAiBackend::new(&settings.base_url, key).models().await,

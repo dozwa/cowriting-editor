@@ -138,7 +138,14 @@ fn without_a_key_the_editor_says_so_instead_of_asking() {
     assert!(make_backend(&other(""), None).is_err());
     assert!(make_backend(&other("http://localhost:11434/v1"), None).is_ok());
     assert_eq!(make_backend(&other("http://localhost:11434/v1"), None).unwrap().provider(), "a local model server (localhost:11434)");
-    assert!(make_backend(&BackendSettings { backend: "claude-code".into(), ..Default::default() }, Some("k")).is_err());
+    // Claude Code needs no key of ours, only to be installed
+    let claude_code = BackendSettings { backend: "claude-code".into(), model: "sonnet".into(), base_url: String::new() };
+    std::env::set_var("COWRITING_CLAUDE", "/nowhere/claude");
+    assert!(make_backend(&claude_code, None).err().unwrap().starts_with("Claude Code was not found on this computer."));
+    std::env::set_var("COWRITING_CLAUDE", concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+    assert_eq!(make_backend(&claude_code, None).unwrap().provider(), "Anthropic (through Claude Code)");
+    std::env::remove_var("COWRITING_CLAUDE");
+    assert!(make_backend(&BackendSettings { backend: "something-else".into(), ..Default::default() }, Some("k")).is_err());
 }
 
 #[test]
@@ -435,17 +442,16 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     session.add_bibliography(&folder.path("pubmed.nbib"), text).unwrap();
     let zotero = json!([{ "id": "fromzotero2024", "type": "article-journal", "title": "Standing meetings", "author": [{ "family": "Okafor", "given": "Ada" }], "issued": { "date-parts": [[2024]] } }]).to_string();
 
+    // the file the front matter names lies beside the document, whatever the system's separator
+    let beside = format!("{}/refs.bib", session.workspace.sidecar.folder);
     // which references go in: Zotero's for the cited keys first, then the files pandoc can read; a key nobody holds is named
     let bibliography = cowriting_app::export::bibliography_of(&session.workspace, text);
     let used = references(&bibliography, text, Some(("/kept/references.json", &zotero)));
-    assert_eq!(
-        (used.files.clone(), used.from_zotero, used.missing.clone()),
-        (vec!["/kept/references.json".to_string(), folder.path("refs.bib")], 1, vec!["ghost1999".to_string()])
-    );
+    assert_eq!((used.files.clone(), used.from_zotero, used.missing.clone()), (vec!["/kept/references.json".to_string(), beside.clone()], 1, vec!["ghost1999".to_string()]));
     let offline = references(&bibliography, text, None);
     assert_eq!((offline.files.len(), offline.from_zotero, offline.missing), (1, 0, vec!["fromzotero2024".to_string(), "ghost1999".to_string()]));
     let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some(("typst", "/tools/typst")), Paper::A4);
-    let expected = format!("--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine /tools/typst --variable papersize=a4", folder.path("refs.bib"));
+    let expected = format!("--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine /tools/typst --variable papersize=a4", beside.clone());
     assert_eq!(args.join(" "), expected);
     // Typst and LaTeX name US letter differently; a Word file has no engine and no paper setting
     let letter = |engine: &str| pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some((engine, engine)), Paper::Letter).last().cloned();

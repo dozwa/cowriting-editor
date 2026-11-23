@@ -15,11 +15,12 @@ function Dialog({ title, onClose, children }: { title: string; onClose(): void; 
   )
 }
 
-type Kind = 'anthropic' | 'local' | 'other'
+type Kind = 'anthropic' | 'local' | 'other' | 'claudeCode'
 
 const KINDS: Record<Kind, { label: string; backend: string; address: string; model: string; sent: string }> = {
   anthropic: { label: 'Claude, with an Anthropic API key', backend: 'anthropic', address: '', model: 'claude-opus-5-5', sent: 'Your questions and your document are sent to Anthropic when you ask.' },
   local: { label: 'A model on this computer (Ollama, LM Studio)', backend: 'openai-compatible', address: 'http://localhost:11434/v1', model: '', sent: 'Nothing leaves this computer.' },
+  claudeCode: { label: 'Claude Code on this computer, with its own sign-in', backend: 'claude-code', address: '', model: 'sonnet', sent: 'Your questions and your document are sent to Anthropic by Claude Code, under the sign-in Claude Code already has. The editor does not see or store that sign-in, and Claude Code gets none of its own tools here, only the editor’s.' },
   other: { label: 'Another provider (OpenAI-compatible API)', backend: 'openai-compatible', address: '', model: '', sent: 'Your questions and your document are sent to the provider at this address when you ask.' },
 }
 
@@ -29,7 +30,7 @@ const STATUS_WORDS = { tested: 'kept to the assist-only rules when tested', fail
 
 export function SettingsDialog({ api, settings, onClose }: { api: Api; settings: SettingsView; onClose(saved: SettingsView | null): void }) {
   const isScripted = settings.backend.startsWith('fake:')
-  const [kind, setKind] = useState<Kind>(settings.backend !== 'openai-compatible' ? 'anthropic' : isLocalAddress(settings.baseUrl) ? 'local' : 'other')
+  const [kind, setKind] = useState<Kind>(settings.backend === 'claude-code' ? 'claudeCode' : settings.backend !== 'openai-compatible' ? 'anthropic' : isLocalAddress(settings.baseUrl) ? 'local' : 'other')
   const [model, setModel] = useState(isScripted ? KINDS.anthropic.model : settings.model)
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
   const [key, setKey] = useState('')
@@ -85,13 +86,15 @@ export function SettingsDialog({ api, settings, onClose }: { api: Api; settings:
           </label>
         ))}
       </div>
-      {kind !== 'local' && (
+      {kind !== 'local' && kind !== 'claudeCode' && (
         <label>
           API key
           <input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} placeholder={hasStoredKey ? 'A key is stored. Type a new one to replace it.' : ''} />
           <small>Kept in your system’s key store, not in a file.</small>
         </label>
       )}
+      {kind === 'claudeCode' && <p className="muted">Needs Claude Code installed and signed in (run “claude” once in a terminal). Whether your plan allows this use is between you and Anthropic.</p>}
+      {kind !== 'claudeCode' && (
       <label>
         {kind === 'anthropic' ? 'Address of the API (optional)' : 'Address of the API'}
         <input value={baseUrl} onChange={e => (setBaseUrl(e.target.value), setChoices(null))} placeholder={kind === 'anthropic' ? 'https://api.anthropic.com' : kind === 'other' ? 'https://api.openai.com/v1' : ''} />
@@ -102,6 +105,7 @@ export function SettingsDialog({ api, settings, onClose }: { api: Api; settings:
         )}
         {kind === 'anthropic' && <small>Only for a gateway that speaks the Claude API, such as one your institution runs.</small>}
       </label>
+      )}
       <label>
         Model
         {choices !== null && choices.length > 0 ? (
@@ -117,7 +121,7 @@ export function SettingsDialog({ api, settings, onClose }: { api: Api; settings:
       </label>
       <div className="row">
         <button onClick={() => void test()} disabled={isTesting}>{isTesting ? 'Testing…' : 'Test the connection'}</button>
-        {choices !== null && <span className="ok" role="status">Connected: {choices.length === 1 ? '1 model' : `${choices.length} models`}</span>}
+        {choices !== null && <span className="ok" role="status">{kind === 'claudeCode' ? 'Claude Code is installed' : `Connected: ${choices.length === 1 ? '1 model' : `${choices.length} models`}`}</span>}
       </div>
       <p className="muted">{chosen.sent}</p>
       {error !== '' && <p className="error" role="alert">{error}</p>}

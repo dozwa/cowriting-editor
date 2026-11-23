@@ -203,80 +203,103 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
     let mut refused = 0;
     let mut cut_off: Option<String> = None;
     let mut answered_by = ask.model.clone();
-    for round in 0.. {
-        let mut streamed = String::new();
-        let reply = backend
-            .complete(&request, &mut |text: &str| {
-                streamed.push_str(text);
-                on_event(TurnEvent::Text(text.to_string()));
-            })
-            .await;
-        let reply = match reply {
-            Ok(reply) => reply,
-            // the backend just learned that its model has no tools: ask again, with the document in the question
-            Err(_) if !without_tools && !backend.uses_tools() && round == 0 => {
-                without_tools = true;
-                request.system = system_without_tools(&contract, &ask.document_text);
-                request.tools.clear();
-                continue;
+    let mut log_failure: Option<io::Error> = None;
+    // the answer's text and the tools both report to the window
+    let events = std::sync::Mutex::new(on_event);
+    let emit = |event: TurnEvent| {
+        let mut on_event = events.lock().unwrap();
+        (*on_event)(event)
+    };
+    {
+        // the one place a tool runs, whoever drives the rounds: the loop below, or a backend that calls the model itself
+        let mut run_tool = |name: &str, input: &serde_json::Value| -> (String, bool) {
+            if !tools_used.iter().any(|used| used == name) {
+                tools_used.push(name.to_string());
             }
-            Err(error) => {
-                // what the author already read stays on the record
-                if !streamed.trim().is_empty() {
-                    answer.push(streamed);
-                }
-                cut_off = Some(error.message);
-                break;
-            }
-        };
-        let said: String = reply.blocks.iter().filter_map(|b| if let Block::Text { text } = b { Some(text.as_str()) } else { None }).collect();
-        if !said.trim().is_empty() {
-            answer.push(said);
-        }
-        let calls: Vec<(&String, &String, &serde_json::Value)> =
-            reply.blocks.iter().filter_map(|b| if let Block::ToolUse { id, name, input } = b { Some((id, name, input)) } else { None }).collect();
-        if let Some(model) = &reply.model {
-            answered_by = model.clone();
-        }
-        // a call cut off by the length limit or a refusal is never run: its input may be half of what was meant
-        match reply.stop {
-            Stop::MaxTokens => cut_off = Some("The answer reached the length limit.".into()),
-            Stop::Refusal => cut_off = Some("The provider declined to answer.".into()),
-            _ => {}
-        }
-        if calls.is_empty() || cut_off.is_some() {
-            break;
-        }
-        if round + 1 >= MAX_ROUNDS {
-            cut_off = Some("The model kept asking for tools instead of answering.".into());
-            break;
-        }
-        let mut results = Vec::new();
-        for (call, name, input) in calls {
-            if !tools_used.contains(name) {
-                tools_used.push(name.clone());
-            }
-            on_event(TurnEvent::Tool { name: name.clone() });
+            emit(TurnEvent::Tool { name: name.to_string() });
             let result = execute(&context, name, input);
             if let Some(attempt) = &result.refused {
                 refused += 1;
-                workspace.log.append(&LogEntry::Guard(GuardEntry {
+                let logged = workspace.log.append(&LogEntry::Guard(GuardEntry {
                     ts: host.now(),
                     session: workspace.session.clone(),
                     paper: workspace.sidecar.name.clone(),
                     reference: Some(id.clone()),
-                    tool: name.clone(),
+                    tool: name.to_string(),
                     input: attempt.clone(),
                     files: Vec::new(),
                     refused: true,
                     ..Default::default()
-                }))?;
-                on_event(TurnEvent::Refused { tool: name.clone(), input: attempt.clone() });
+                }));
+                if let Err(failure) = logged {
+                    log_failure.get_or_insert(failure);
+                }
+                emit(TurnEvent::Refused { tool: name.to_string(), input: attempt.clone() });
             }
-            results.push(Block::ToolResult { id: call.clone(), content: result.content, is_error: result.is_error });
+            (result.content, result.is_error)
+        };
+        for round in 0.. {
+            let mut streamed = String::new();
+            let mut on_text = |text: &str| {
+                streamed.push_str(text);
+                emit(TurnEvent::Text(text.to_string()));
+            };
+            let reply = if backend.runs_tools_itself() && !without_tools {
+                backend.complete_with_tools(&request, &mut on_text, &mut run_tool).await
+            } else {
+                backend.complete(&request, &mut on_text).await
+            };
+            let reply = match reply {
+                Ok(reply) => reply,
+                // the backend just learned that its model has no tools: ask again, with the document in the question
+                Err(_) if !without_tools && !backend.uses_tools() && round == 0 => {
+                    without_tools = true;
+                    request.system = system_without_tools(&contract, &ask.document_text);
+                    request.tools.clear();
+                    continue;
+                }
+                Err(error) => {
+                    // what the author already read stays on the record
+                    if !streamed.trim().is_empty() {
+                        answer.push(streamed);
+                    }
+                    cut_off = Some(error.message);
+                    break;
+                }
+            };
+            let said: String = reply.blocks.iter().filter_map(|b| if let Block::Text { text } = b { Some(text.as_str()) } else { None }).collect();
+            if !said.trim().is_empty() {
+                answer.push(said);
+            }
+            let calls: Vec<(&String, &String, &serde_json::Value)> =
+                reply.blocks.iter().filter_map(|b| if let Block::ToolUse { id, name, input } = b { Some((id, name, input)) } else { None }).collect();
+            if let Some(model) = &reply.model {
+                answered_by = model.clone();
+            }
+            // a call cut off by the length limit or a refusal is never run: its input may be half of what was meant
+            match reply.stop {
+                Stop::MaxTokens => cut_off = Some("The answer reached the length limit.".into()),
+                Stop::Refusal => cut_off = Some("The provider declined to answer.".into()),
+                _ => {}
+            }
+            if calls.is_empty() || cut_off.is_some() {
+                break;
+            }
+            if round + 1 >= MAX_ROUNDS {
+                cut_off = Some("The model kept asking for tools instead of answering.".into());
+                break;
+            }
+            let mut results = Vec::new();
+            for (call, name, input) in calls {
+                let (content, is_error) = run_tool(name, input);
+                results.push(Block::ToolResult { id: call.clone(), content, is_error });
+            }
+            request.messages.push(Message { role: Role::Assistant, content: reply.blocks.clone() });
+            request.messages.push(Message { role: Role::User, content: results });
         }
-        request.messages.push(Message { role: Role::Assistant, content: reply.blocks.clone() });
-        request.messages.push(Message { role: Role::User, content: results });
+    }
+    if let Some(failure) = log_failure {
+        return Err(failure.into());
     }
 
     // a backend that runs its own process could have touched the log: what it changed goes back, on the record

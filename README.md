@@ -11,8 +11,8 @@ and writes the same log format.
 AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM Studio), or any
 provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
 can be briefed and asked, and you can add experts of your own. References can be searched and
-checked, and the document exports to PDF and Word. Not built yet: Claude Code as a backend. There
-are no signed installers yet.
+checked, and the document exports to PDF and Word. The AI can also be your own installed Claude
+Code. There are no signed installers yet.
 
 ## Sources
 
@@ -83,6 +83,27 @@ first author and year, to crossref.org, and nothing of your text. Zotero is aske
 computer only. Nothing is sent otherwise. An API key is kept in the system's
 key store. The disclosure names the provider and the model that answered.
 
+## Claude Code as the AI
+
+If Claude Code is installed and signed in on your computer, the editor can ask it instead of an
+API. For each question the editor starts your own `claude` program and nothing else of yours:
+
+- every tool Claude Code has (reading and writing files, the shell, the web) is switched off;
+  it gets only the editor's tools, which cannot write your document. If Claude Code reports any
+  other tool, the editor stops the call before anything is answered;
+- your Claude Code settings, memory, plugins, skills and other MCP servers are not loaded, and the
+  conversation is not kept by Claude Code;
+- the editor never reads or stores Claude Code's sign-in.
+
+Claude Code adds a short note of its own to each call (the system, a temporary folder). Questions
+and document go to Anthropic under your Claude Code sign-in.
+
+**Before you rely on this:** Anthropic's terms do not clearly say whether another application may
+start your Claude Code under a Pro or Max subscription. Their legal page allows signing in to the
+unmodified Claude Code with your own subscription and forbids applications from handling Claude
+sign-ins or routing requests through subscriptions for their users. This editor does neither with
+your credentials, but the question is not settled; with an Anthropic API key there is no doubt.
+
 ## Which models keep to the rules
 
 No model can write to your text, and every answer is logged: that holds for any model. Whether a
@@ -131,7 +152,7 @@ To try it without a model: `COWRITING_BACKEND=fake:/path/to/script.json COWRITIN
 ## Layout
 
 - `crates/core`: log, guard, stats, disclosure, the turn loop. No window, no network.
-- `crates/backends`: the Claude API, OpenAI-compatible APIs, a scripted stand-in, and the lookups
+- `crates/backends`: the Claude API, OpenAI-compatible APIs, Claude Code, a scripted stand-in, and the lookups
   at Crossref and in Zotero.
 - `crates/app`: one open document, as the window uses it; the export through pandoc.
 - `src-tauri`: the window's commands, settings, key store.

@@ -102,6 +102,10 @@ impl std::fmt::Display for BackendError {
     }
 }
 
+/// How a backend that drives the tool rounds itself has a tool run: name and input in, content and whether it failed out.
+/// The turn supplies it, so the tool is guarded and logged as for every other backend.
+pub type RunTool<'a> = dyn FnMut(&str, &Value) -> (String, bool) + Send + 'a;
+
 #[async_trait]
 pub trait Backend: Send + Sync {
     /// 'anthropic', 'openai-compatible', 'claude-code' or 'fake': what the log records as `backend`.
@@ -112,6 +116,16 @@ pub trait Backend: Send + Sync {
     /// with the question instead of offering tools.
     fn uses_tools(&self) -> bool {
         true
+    }
+    /// True for a backend whose program calls the model several times on its own (Claude Code). The turn then
+    /// calls `complete_with_tools` once instead of going round by round.
+    fn runs_tools_itself(&self) -> bool {
+        false
+    }
+    /// The whole answer, tool rounds included, with every tool call handed to `run_tool`. The reply holds text only.
+    async fn complete_with_tools(&self, request: &ModelRequest, on_text: &mut (dyn for<'s> FnMut(&'s str) + Send), run_tool: &mut RunTool<'_>) -> Result<ModelReply, BackendError> {
+        let _ = run_tool;
+        self.complete(request, on_text).await
     }
     /// One model call. Text is passed to `on_text` as it arrives and is also part of the reply.
     async fn complete(&self, request: &ModelRequest, on_text: &mut (dyn for<'s> FnMut(&'s str) + Send)) -> Result<ModelReply, BackendError>;
