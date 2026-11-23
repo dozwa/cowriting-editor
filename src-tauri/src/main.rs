@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use tauri::ipc::Channel;
 use tauri::{Manager, State};
 
-const KEY_SERVICE: &str = "org.cowriting.editor";
+const KEY_SERVICE: &str = "io.github.dozwa.cowriting-editor";
 
 #[derive(Default)]
 struct Editor {
