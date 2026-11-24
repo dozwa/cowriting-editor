@@ -401,31 +401,17 @@ pub struct ScopeView {
     pub text: String,
     /// What a new plan starts from.
     pub template: String,
+    /// The same for an author who plans in German.
+    pub template_de: String,
     /// None while the plan says nothing yet.
     pub progress: Option<ScopeProgress>,
 }
 
-/// What a new scope.md starts from.
-pub const SCOPE_TEMPLATE: &str = "# Scope
-
-## Goal
-<!-- One or two sentences: what should the reader know or believe at the end? -->
-
-## Targets
-- Words: 
-- Figures: 
-- Tables: 
-- References: 
-- Deadline: 
-
-## Sections
-<!-- One line per section: name, target in words, stage (outline, draft, revised, final).
-     For example:  - Methods: 800, draft -->
-
-## Points
-<!-- What the text must say. Tick a point yourself with [x], or let the check look for it. -->
-- [ ] 
-";
+/// What a new scope.md starts from: the headings and the targets to fill in, nothing to read around.
+/// How to fill it in is said beside it in the window, in the window's language.
+pub const SCOPE_TEMPLATE: &str = "## Goal\n\n\n## Targets\n- Words: \n- Figures: \n- Tables: \n- References: \n- Deadline: \n\n## Sections\n\n\n## Points\n";
+/// The same with the German words the plan is read by.
+pub const SCOPE_TEMPLATE_DE: &str = "## Ziel\n\n\n## Umfang\n- Wörter: \n- Abbildungen: \n- Tabellen: \n- Quellen: \n- Abgabe: \n\n## Abschnitte\n\n\n## Kernaussagen\n";
 
 fn ai_text_row(found: &AiTextEntry, entries: &[LogEntry], document_text: &str) -> AiTextRow {
     let asked = entries.iter().find_map(|e| match e {
@@ -629,7 +615,7 @@ impl Session {
             let (points, at) = check.map(|c| (c.points, Some(c.ts))).unwrap_or_default();
             scope_progress(&plan, document_text, &points, at.as_deref(), today.get(..10).unwrap_or(&today))
         });
-        ScopeView { text, template: SCOPE_TEMPLATE.to_string(), progress }
+        ScopeView { text, template: SCOPE_TEMPLATE.to_string(), template_de: SCOPE_TEMPLATE_DE.to_string(), progress }
     }
 
     /// Saves the author's plan.

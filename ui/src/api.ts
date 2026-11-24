@@ -111,7 +111,7 @@ export type ScopeProgress = {
   overall: number
 }
 
-export type ScopeView = { text: string; template: string; progress: ScopeProgress | null }
+export type ScopeView = { text: string; template: string; templateDe: string; progress: ScopeProgress | null }
 export type CheckSummary = { covered: number; partial: number; missing: number }
 
 /** A passage of the document that matches a logged answer. */

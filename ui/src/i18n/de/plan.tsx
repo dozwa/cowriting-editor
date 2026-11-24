@@ -39,6 +39,12 @@ export const plan: typeof pattern = {
 
   planExplained: 'Ihr Plan als einfacher Text: ein Ziel, Zielwerte, Abschnitte und die Punkte, die der Text machen muss. Er gehört Ihnen; die KI kann ihn nicht ändern.',
   yourPlan: 'Ihr Plan',
+  howTo: [
+    ['Ziel', <>Ein oder zwei Sätze: Was soll die Leserin am Ende wissen?</>],
+    ['Umfang', <>Eine Zahl hinter dem, was Sie im Blick behalten wollen; die Abgabe als Datum wie <code>2027-03-31</code>. Leere Zeilen zählen nicht.</>],
+    ['Abschnitte', <>Je eine Zeile mit der Überschrift des Abschnitts, seinen Wörtern und seinem Stand: <code>- Methoden: 800, Entwurf</code>. Die Stände sind Gliederung, Entwurf, überarbeitet und fertig.</>],
+    ['Kernaussagen', <>Je eine Zeile für das, was der Text sagen muss: <code>- Die Stichprobe ist beschrieben</code>. Setzen Sie <code>[x]</code> vor eine, die Sie selbst abhaken, oder lassen Sie die Prüfung danach suchen.</>],
+  ],
   savePlan: 'Plan speichern',
   cancel: 'Abbrechen',
   noPlanYet: 'Noch kein Plan. Legen Sie fest, was der Text erreichen soll (Wörter, Abschnitte, die Punkte, die er machen muss), und sehen Sie beim Schreiben, wie weit Sie sind.',

@@ -215,7 +215,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       ] }
       return refsChecked
     },
-    scope: async documentText => ({ text: plan, template: '# Scope\n\n## Points\n', progress: progress(documentText) }),
+    scope: async documentText => ({ text: plan, template: '## Goal\n\n## Points\n', templateDe: '## Ziel\n\n## Kernaussagen\n', progress: progress(documentText) }),
     setScope: async text => {
       calls.scope.push(text)
       plan = text
@@ -619,10 +619,12 @@ test('the author makes a plan, sees how far the text is, and has the points chec
   // no plan: an invitation, and the template to start from
   await user.click(await screen.findByRole('button', { name: 'Make a plan' }))
   const field = screen.getByLabelText('Your plan') as HTMLTextAreaElement
-  expect(field.value).toBe('# Scope\n\n## Points\n')
+  expect(field.value).toBe('## Goal\n\n## Points\n')
+  // how each part is written stands beside it, not inside it
+  expect(screen.getByText(/One line for each thing the text must say/)).toBeTruthy()
   await user.type(field, '- 48 people in two offices\n- Breaks help')
   await user.click(screen.getByRole('button', { name: 'Save the plan' }))
-  await waitFor(() => expect(calls.scope).toEqual(['# Scope\n\n## Points\n- 48 people in two offices\n- Breaks help']))
+  await waitFor(() => expect(calls.scope).toEqual(['## Goal\n\n## Points\n- 48 people in two offices\n- Breaks help']))
 
   // progress against the plan, before any check
   expect(await screen.findByText('20 %')).toBeTruthy()

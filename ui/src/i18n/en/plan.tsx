@@ -41,6 +41,13 @@ export const plan = {
   // the plan itself
   planExplained: 'Your plan, in plain text: a goal, targets, sections and the points the text must make. It is yours; the AI cannot change it.',
   yourPlan: 'Your plan',
+  /** What goes under each heading of the plan; the words in code are the ones the editor reads. */
+  howTo: [
+    ['Goal', <>One or two sentences: what should the reader know at the end?</>],
+    ['Targets', <>A number after what you want to keep an eye on; the deadline as a date like <code>2027-03-31</code>. Lines left empty are not counted.</>],
+    ['Sections', <>One line each, with the section’s heading, its words and its stage: <code>- Methods: 800, draft</code>. The stages are outline, draft, revised and final.</>],
+    ['Points', <>One line for each thing the text must say: <code>- The sample is described</code>. Put <code>[x]</code> before one you have ticked yourself, or let the check look for it.</>],
+  ] as [string, ReactNode][],
   savePlan: 'Save the plan',
   cancel: 'Cancel',
   noPlanYet: 'No plan yet. Say what the text should reach (words, sections, the points it must make) and see how far you are while you write.',

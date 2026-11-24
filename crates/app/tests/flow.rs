@@ -317,6 +317,19 @@ async fn the_author_plans_checks_the_points_and_lets_experts_watch() {
     // the template alone is no plan
     session.set_scope(&view.template, TEXT).unwrap();
     assert!(session.scope_view(TEXT).progress.is_none());
+    // the German one neither, and filled in it is read like the English one
+    session.set_scope(&view.template_de, TEXT).unwrap();
+    assert!(session.scope_view(TEXT).progress.is_none());
+    assert!(!view.template.contains("<!--") && !view.template_de.contains("<!--"), "nothing to read around in what the author starts from");
+    let filled = view
+        .template_de
+        .replace("- Wörter: ", "- Wörter: 70")
+        .replace("## Abschnitte\n", "## Abschnitte\n- Walking breaks: 70, Entwurf\n")
+        .replace("## Kernaussagen\n", "## Kernaussagen\n- Breaks help\n")
+        .replace("## Ziel\n", "## Ziel\nZeigen, dass Pausen helfen.\n");
+    session.set_scope(&filled, TEXT).unwrap();
+    let german = session.scope_view(TEXT).progress.unwrap();
+    assert_eq!((german.words.target, german.sections.len(), german.points.len()), (Some(70.0), 1, 1));
 
     let plan = "## Goal\nShow that breaks help.\n\n## Targets\n- Words: 70\n\n## Sections\n- Walking breaks: 70, draft\n\n## Points\n- 48 people in two offices\n- Breaks help\n- [x] Sitting is common\n";
     session.set_scope(plan, TEXT).unwrap();

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { LiveView, PartyView, ScopeProgress, ScopeView } from './api'
 import { Sprite } from './experts'
-import { m } from './i18n'
+import { language, m } from './i18n'
 import { when } from './text'
 
 type LiveProps = {
@@ -179,7 +179,7 @@ export function ScopePanel({ view, canCheck, isChecking, note, onSave, onCheck, 
   const [text, setText] = useState(view.text)
   const hasPoints = (view.progress?.points.length ?? 0) > 0
   const edit = () => {
-    setText(view.text === '' ? view.template : view.text)
+    setText(view.text !== '' ? view.text : language === 'de' ? view.templateDe : view.template)
     setEditing(true)
   }
 
@@ -193,7 +193,15 @@ export function ScopePanel({ view, canCheck, isChecking, note, onSave, onCheck, 
         }}
       >
         <p className="muted">{m.plan.planExplained}</p>
-        <textarea aria-label={m.plan.yourPlan} rows={22} value={text} onChange={e => setText(e.target.value)} spellCheck={false} />
+        <dl className="how">
+          {m.plan.howTo.map(([part, how]) => (
+            <div key={part}>
+              <dt>{part}</dt>
+              <dd>{how}</dd>
+            </div>
+          ))}
+        </dl>
+        <textarea aria-label={m.plan.yourPlan} rows={18} value={text} onChange={e => setText(e.target.value)} spellCheck={false} />
         <div className="row">
           <button className="primary" type="submit">{m.plan.savePlan}</button>
           <button type="button" onClick={() => setEditing(false)}>{m.plan.cancel}</button>
