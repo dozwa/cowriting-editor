@@ -102,7 +102,11 @@ async fn open_ask_classify_export_and_everything_is_on_disk() {
     assert!(view.guard[0].refused);
     assert_eq!(view.words, 15);
 
+    // a first choice the author then thinks better of: the log keeps both, the later one counts
+    session.annotate(&outcome.id, "rejected", "").unwrap();
+    assert_eq!(session.log_view(&edited).unwrap().turns[0].use_, "rejected");
     session.annotate(&outcome.id, "adapted", "changed it to participants").unwrap();
+    assert_eq!(std::fs::read_to_string(folder.path(log_file)).unwrap().matches("\"type\":\"annotation\"").count(), 2);
     let view = session.log_view(&edited).unwrap();
     assert_eq!((view.stats.unannotated, view.turns[0].use_.as_str(), view.turns[0].note.as_str()), (0, "adapted", "changed it to participants"));
     assert!(std::fs::read_to_string(folder.path(log_file)).unwrap().starts_with(&log), "the log only grew");

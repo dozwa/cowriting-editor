@@ -31,17 +31,22 @@ function Answer({ text, onJump }: { text: string; onJump(line: number): void }) 
 
 /** The four choices under an AI input, or the choice the author made. */
 function Classify({ turn, onAnnotate }: { turn: TurnRow; onAnnotate(id: string, use: Use, note: string): void }) {
-  const [note, setNote] = useState('')
-  if (turn.use !== '') {
+  const [note, setNote] = useState(turn.note)
+  // a choice can be made again: the log keeps both, and the later one counts
+  const [isChanging, setChanging] = useState(false)
+  if (turn.use !== '' && !isChanging) {
     return (
       <p className="classified">
-        {USE_LABELS[turn.use].button} <span className="muted">· {USE_LABELS[turn.use].meaning}{turn.note !== '' ? ` · ${m.panels.quoted(turn.note)}` : ''}</span>
+        {USE_LABELS[turn.use].button} <span className="muted">· {USE_LABELS[turn.use].meaning}{turn.note !== '' ? ` · ${m.panels.quoted(turn.note)}` : ''}</span>{' '}
+        <button className="link" aria-label={m.panels.changeChoiceOf(USE_LABELS[turn.use].button)} onClick={() => setChanging(true)}>{m.panels.changeChoice}</button>
       </p>
     )
   }
   return (
     <div className="classify">
-      <p className="muted">{m.panels.whatDidYouDo}</p>
+      <p className="muted">
+        {m.panels.whatDidYouDo} {isChanging && <button className="link" onClick={() => setChanging(false)}>{m.panels.keepChoice}</button>}
+      </p>
       <div className="row">
         {(Object.keys(USE_LABELS) as Use[]).map(use => (
           <button key={use} title={USE_LABELS[use].meaning} onClick={() => onAnnotate(turn.id, use, note)}>

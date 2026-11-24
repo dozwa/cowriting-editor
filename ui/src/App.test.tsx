@@ -1616,3 +1616,24 @@ test('an answer that is coming in can be stopped, and what was read stays', asyn
   expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
   expect(await screen.findByRole('button', { name: '✓ used' })).toBeTruthy()
 })
+
+test('a classification can be changed afterwards', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await user.click(await screen.findByRole('button', { name: '✗ not used' }))
+  await screen.findByText(/decided against it/)
+
+  // thought better of it: the choices come back, with the way out of leaving it
+  await user.click(screen.getByRole('button', { name: 'Change “✗ not used”' }))
+  await user.click(screen.getByRole('button', { name: 'Leave it as it is' }))
+  expect(screen.queryByRole('button', { name: '✓ used' })).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Change “✗ not used”' }))
+  await user.type(screen.getByLabelText('Comment on this input'), 'took it after all')
+  await user.click(screen.getByRole('button', { name: '✓ used' }))
+  await waitFor(() => expect(calls.annotated).toEqual([['t1', 'rejected', ''], ['t1', 'adopted', 'took it after all']]))
+  await screen.findByText(/as suggested/)
+})
