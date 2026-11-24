@@ -36,7 +36,13 @@ jobs:
       - name: pandoc and Typst for the installer
         run: python3 scripts/fetch-tools.py
       - name: Build, signed where the secrets are set
-        run: ui/node_modules/.bin/tauri build
+        shell: bash
+        # a secret that is not set arrives as an empty value, and the bundler would try to sign with it
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then unset "$name"; fi
+          done
+          ui/node_modules/.bin/tauri build
         env:
           # macOS: Developer ID certificate and notarisation (empty when not set: unsigned build)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}

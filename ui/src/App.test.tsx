@@ -310,7 +310,7 @@ test('the author asks, reads the answer, classifies it, and the log shows the ch
 
   // a line the answer names leads there in the editor
   await user.click(screen.getByRole('button', { name: 'line 3' }))
-  expect(lastEditor.jumps).toEqual([3])
+  await waitFor(() => expect(lastEditor.jumps).toEqual([3]))
 
   // one input waits, and the tab says so
   expect(within(screen.getByRole('tab', { name: /Log/ })).getByText('1')).toBeTruthy()

@@ -8,8 +8,9 @@ Set the version in `Cargo.toml` (`[workspace.package]`) and `src-tauri/tauri.con
 
 ## What is not done yet
 
-- **The release workflow has never run.** It was written from Tauri's documentation; the first tag
-  is its test.
+- **The release workflow ran once, for v0.1.0.** Windows and Linux built; the macOS job failed on
+  the empty signing secrets, which is repaired but not run again. The macOS image of v0.1.0 was
+  built and signed by hand.
 - **Signing is prepared, not tried.** Without the secrets below the installers are unsigned:
   macOS says the app is from an unidentified developer (right-click → Open gets past it), Windows
   shows a SmartScreen warning.
