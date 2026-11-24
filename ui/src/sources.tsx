@@ -48,6 +48,7 @@ export function SourcesPanel({ view, onAdd, onRemove, onStyle, onNoStyle, onStyl
             ))}
           </ul>
         )}
+        {view.files.length === 0 && view.cited > 0 && <p className="hint" role="note">{t.citesWithoutFile(view.cited)}</p>}
         <button onClick={() => void onAdd()}>{t.addFile}</button>
         {view.files.length > 0 && (
           <p className="muted">
@@ -111,8 +112,9 @@ export function SourcesPanel({ view, onAdd, onRemove, onStyle, onNoStyle, onStyl
             setChecking(false)
           }}
         >
-          {isChecking ? t.checking : t.checkButton(view.entries)}
+          {isChecking ? t.checking : view.entries === 0 ? t.checkNothing : t.checkButton(view.entries)}
         </button>
+        {view.entries === 0 && <p className="muted">{t.checkNeedsFile}</p>}
         {view.checked !== null && (
           <>
             <p role="status">{t.checked(when(view.checked.ts), count('ok'), count('mismatch') + count('not_found'), count('no_doi'), count('error'))}</p>

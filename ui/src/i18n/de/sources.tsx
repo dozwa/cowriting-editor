@@ -8,6 +8,7 @@ export const sources: typeof pattern = {
   takeOffList: 'Von der Liste nehmen',
   addFile: 'Literaturdatei hinzufügen',
   cites: n => `Das Dokument zitiert ${n} ${n === 1 ? 'Literaturangabe' : 'Literaturangaben'}.`,
+  citesWithoutFile: n => `Ihr Text zitiert ${n} ${n === 1 ? 'Literaturangabe' : 'Literaturangaben'}, und es gibt keine Literaturdatei. Beim Export werden sie in Zotero nachgeschlagen, wenn es läuft; was dort nicht gefunden wird, bleibt im Text, wie Sie es getippt haben.`,
   notInBibliography: keys => <>Nicht in Ihrem Literaturverzeichnis: {keys}</>,
   styleHeading: 'Zitierstil',
   noStyle: example => <>Keiner gewählt: Quellenangaben und Literaturverzeichnis werden im Standardstil von pandoc exportiert (Chicago, Autor und Jahr). Für APA, Vancouver oder den Stil Ihrer Zeitschrift eine Stildatei (.csl) auswählen oder im Kopfbereich des Dokuments eine nennen ({example}).</>,
@@ -26,6 +27,8 @@ export const sources: typeof pattern = {
   checkHeading: 'Literaturangaben prüfen',
   checkNote: 'Schlägt jede DOI bei Crossref nach und vergleicht Titel und Jahr. Dafür wird von jeder Literaturangabe die DOI oder Titel, Erstautor und Jahr an crossref.org gesendet; nichts von Ihrem Text. Keine KI ist beteiligt.',
   checking: 'Prüfung läuft…',
+  checkNothing: 'Literaturangaben prüfen',
+  checkNeedsFile: 'Es gibt nichts zu prüfen, bis oben eine Literaturdatei hinzugefügt ist.',
   checkButton: n => `${n} ${n === 1 ? 'Literaturangabe' : 'Literaturangaben'} prüfen`,
   checked: (when, fine, toLookAt, withoutDoi, notChecked) => `Geprüft ${when}: ${fine} in Ordnung, ${toLookAt} anzusehen, ${withoutDoi} ohne DOI${notChecked > 0 ? `, ${notChecked} nicht geprüft` : ''}.`,
   verdict: {

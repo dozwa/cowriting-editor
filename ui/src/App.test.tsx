@@ -673,7 +673,10 @@ test('the author adds a bibliography, finds a reference and has the references c
 
   // nothing yet: how to get a bibliography, and nothing to check
   expect(await screen.findByText(/No bibliography yet/)).toBeTruthy()
-  expect((screen.getByRole('button', { name: 'Check 0 references' }) as HTMLButtonElement).disabled).toBe(true)
+  // the text cites all the same, and the author is told what happens to those citations
+  expect(screen.getByRole('note').textContent).toMatch(/^Your text cites 2 references, and there is no bibliography file\./)
+  expect((screen.getByRole('button', { name: 'Check the references' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByText('There is nothing to check until a bibliography file is added above.')).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Add a bibliography file' }))
   expect(await screen.findByText('BibTeX, 3 references')).toBeTruthy()
   // a key the document cites and the file does not hold is named

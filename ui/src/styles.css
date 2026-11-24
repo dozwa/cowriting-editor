@@ -500,3 +500,6 @@ dialog .row.written { margin: 10px 0 2px; gap: 8px; align-items: center; }
 dialog { padding-bottom: 0; }
 dialog > :last-child { margin-bottom: 22px; }
 dialog > .actions:last-child, dialog > .row.end:last-child { position: sticky; bottom: 0; z-index: 1; margin: 20px -28px 0; padding: 12px 28px 18px; background: var(--page); border-top: 1px solid var(--rule); }
+
+/* citations with no bibliography file behind them: said where the files are listed */
+.sources .hint { display: block; max-width: none; padding: 8px 10px; border-radius: var(--radius); background: var(--marker-wash); color: var(--marker); font-size: 12.5px; }
