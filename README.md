@@ -41,8 +41,91 @@ The installer brings pandoc 3.14 and Typst 0.15.1 along, so both exports work wi
 anything (this adds about 60 MB to the download and 230 MB on disk). A PDF is typeset by Typst, on
 A4 or US Letter. If a LaTeX is installed on your computer (XeLaTeX, LuaLaTeX, pdfLaTeX, Tectonic),
 the export dialog offers it as well and remembers your choice. Page size, fonts and styles of a
-Word file are set in Word. The reference list is in pandoc's default style (Chicago author-date);
-choosing a style is not built. Licences of the two programs: `src-tauri/tools/`.
+Word file are set in Word.
+
+**Reference style.** Without a choice, citations and the reference list are in pandoc's default
+style (Chicago author-date). In the Sources tab you can choose a style file (`.csl`, as
+zotero.org/styles has them) for this document; like a bibliography file it is read where it lies
+and never changed. A style the document names itself (`csl: apa.csl` in the front matter) comes
+first. Licences of the two programs: `src-tauri/tools/`.
+
+## Writing markdown
+
+Above the text is a row of buttons that write markdown for you: title and headings, bold, italic,
+lists, quotation, link, picture, table, citation and footnote. Each puts the marks around what you
+selected, or writes an example to type over; a button's tooltip shows the markdown it writes. At
+the bottom of the window you can hide the buttons, turn on **line numbers** (the AI's answers name
+lines), and switch to **Source**, which shows the text exactly as it is saved, every mark in
+place. The line between text and side panel can be dragged; a double-click puts it back.
+
+"How markdown works", at the end of the row, shows the marks worth knowing. Its two links open
+commonmark.org/help and pandoc's manual in your browser. With zotero.org/styles (from the Sources
+tab) these are the only web pages the editor ever opens, and their addresses are fixed in the app.
+
+## Settings
+
+"Settings…" (Cmd or Ctrl with the comma) has seven pages. Everything is kept in one file,
+`settings.json` in the editor's configuration folder; the About page shows where that is.
+
+- **The AI**: the provider and model, and the longest answer you allow, in tokens. An answer that
+  was cut short by the limit is marked as such. Claude Code decides its answers' length itself.
+- **Live review**: the pause before a review (5 to 600 seconds), the time between two reviews
+  (15 seconds to an hour) and the most reviews in an hour (1 to 120).
+- **Text and look**: light, dark or as the system; the typeface, size and line length of your text;
+  the typeface of the interface and the size of its buttons and panels (small to larger; your text
+  keeps its own size); spelling marks. You see a change while you choose it.
+- **Files**: the folder "Open" and "New" start in, a folder for exports, saving by itself after a
+  pause in typing, and opening the last document again at start.
+- **Language**: four choices that need not agree. The editor's own language (English or German, or
+  as the computer is set); the language you write in (for the spelling check, and the AI is told);
+  the language the AI answers in (as you ask, or always English, or always German: a German
+  interface, an English text and German feedback go together); the language of the disclosure.
+  The experts that come with the editor have German names in a German window; the log and the
+  disclosure keep their English ones. What the app reports about files and providers is English for now.
+- **Shortcuts**: keys for saving, opening, the views, the tabs of the side panel (Cmd or Ctrl with
+  1 to 6) and the markdown buttons, each of which you can change or remove. Copy, paste and undo cannot be reassigned.
+- **About**: version, where the editor keeps what, what is sent to whom, licences, and feedback:
+  a report you write is opened as a new GitHub issue in your browser, or copied, and you send it.
+  You see every character first; the version, system and model are added only if you leave that
+  ticked, and nothing of your document or log ever is.
+
+`COWRITING_SETTINGS=/some/folder` makes the editor keep its settings there instead (for tests and trials).
+
+## Projects
+
+A project is one markdown file. Its AI log, the AI's notes and the snapshots stay in the hidden
+`.cowriting` folder beside it, so the record of AI use travels with the text. Its settings are
+kept in the editor's own folder (`projects/<file name>-<fingerprint>/` beside `settings.json`):
+the experts and what you told them, the plan, the bibliography files, live review, and
+
+- **Background files** (Experts tab): files of yours the AI should know, such as wording rules, a
+  glossary or the methods. Each is for everyone or for the experts you tick. Only the path is
+  kept; the file is read when the AI is asked, sent along (at most 24,000 characters of a file),
+  and named in the log. Plain text only.
+- **An expert's prompt** (Experts tab, "Prompt"): the whole description of an expert can be
+  reworded for the project, and put back. The assist-only rules are added to it and cannot be edited.
+- **Languages and the pace of live review** for this document alone: tick "Only for …" on those
+  pages of the settings. Everything else in the settings is the same for all projects.
+
+Settings an earlier version kept beside the document are moved over when it is opened. Moving or
+renaming a document inside the editor takes its settings along; a file moved outside the editor
+starts with fresh settings (its log is offered as before).
+
+## AI use outside the editor
+
+The editor sees only what happens in it. In the Log tab, "State AI use elsewhere…" takes what you
+used another AI tool for: the tool and the purpose are needed; model, date, what it worked on,
+what came of it and how you checked it are optional. A statement can be corrected or taken back;
+the log keeps every line (entries of type `external`), and the disclosure lists what holds now in
+a section of its own, marked as your own statement.
+
+## Alpha, bugs and support
+
+The editor is an alpha, and the footer says which. "Report a bug" in the top bar opens a form in
+three parts (what you did, what happened, what you expected) and hands it to your mail program;
+nothing is sent by the editor. Every tenth start it asks for a coffee, feedback or a star on
+GitHub: twenty starts of quiet after a coffee or feedback, and never again for a star once you
+followed that link. "Calm" in the status bar (distraction-free) hides the explanations and hints.
 
 ## Ready-made requests
 
@@ -54,15 +137,15 @@ abbreviations, citation keys). What you typed narrows the request; with nothing 
 asks about the whole document. Each is logged under its purpose, so the disclosure lists language
 corrections apart from feedback. They are the plugin's commands of the same names.
 
-## Live review and scope
+## Live review and plan
 
-**Live review** is off until you turn it on in the Live tab. While it is on, the paragraphs you
+**Live review** is off until you turn it on in the Live review tab. While it is on, the paragraphs you
 change are sent to the AI once you pause for 20 seconds, at most once a minute and 20 times an
-hour, and the experts you chose leave short hints with line numbers. Each review is logged like
+hour (the settings change these numbers), and the experts you chose leave short hints with line numbers. Each review is logged like
 any other AI input. What was in the document before you turned it on is not sent.
 
-**Scope** is your plan in plain text (`scope.md` beside the log): a goal, targets, sections and
-the points the text must make. The Scope tab shows how far the text is. "Check the points" sends
+**Plan** is your plan in plain text (`scope.md` in the project's folder): a goal, targets, sections and
+the points the text must make. The Plan tab shows how far the text is. "Check the points" sends
 the points and the document to the AI and asks which points the text makes; that is logged too.
 The AI cannot change the plan.
 
@@ -82,7 +165,7 @@ For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the
 (`ai-log/YYYY-MM.jsonl`), the document as it was at each question (`snapshots/`), the AI's notes
 (`notes/`, the only place it can write), the disclosure (`disclosure/`), the last reference check
 (`verify.json`) and the references an export took from Zotero (`export/references.json`). What you tell the
-experts is in `party.md`, experts you made in `party/<id>.md`: plain files you can read and edit. Nothing is created
+experts is in `party.md`, experts you made in `party/<id>.md`, both in the project's folder (see Projects): plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.
 
 ## Renaming and moving

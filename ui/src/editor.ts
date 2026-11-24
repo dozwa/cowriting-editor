@@ -5,8 +5,8 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { yamlFrontmatter } from '@codemirror/lang-yaml'
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language'
-import { EditorState, type Range } from '@codemirror/state'
-import { Decoration, type DecorationSet, EditorView, keymap, ViewPlugin, type ViewUpdate } from '@codemirror/view'
+import { Compartment, EditorSelection, EditorState, type Range } from '@codemirror/state'
+import { Decoration, type DecorationSet, EditorView, keymap, lineNumbers, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 
 const styles = HighlightStyle.define([
@@ -28,6 +28,8 @@ const styles = HighlightStyle.define([
 /** Syntax nodes that are only marks; hidden where the cursor is not. */
 const MARKS = new Set(['HeaderMark', 'EmphasisMark', 'CodeMark', 'StrikethroughMark'])
 const hidden = Decoration.replace({})
+/** A line of the YAML block at the top: set apart from the prose. */
+const frontLine = Decoration.line({ class: 'md-front' })
 
 function hiddenMarks(view: EditorView): DecorationSet {
   const { state } = view
@@ -42,6 +44,10 @@ function hiddenMarks(view: EditorView): DecorationSet {
       from: visible.from,
       to: visible.to,
       enter(node) {
+        if (node.name === 'Frontmatter') {
+          for (let n = state.doc.lineAt(node.from).number; n <= state.doc.lineAt(node.to).number; n++) out.push(frontLine.range(state.doc.line(n).from))
+          return
+        }
         if (!MARKS.has(node.name) || active.has(state.doc.lineAt(node.from).number)) return
         // a fenced block keeps its fences: they are lines of their own
         if (node.name === 'CodeMark' && node.node.parent?.name === 'FencedCode') return
@@ -69,6 +75,82 @@ const livePreview = ViewPlugin.fromClass(
   { decorations: plugin => plugin.decorations },
 )
 
+/** What a format button writes into the text. */
+export type Format = 'title' | 'heading' | 'subheading' | 'bold' | 'italic' | 'bullets' | 'numbers' | 'quote' | 'link' | 'image' | 'table' | 'citation' | 'footnote'
+
+/** How the text is shown: with line numbers or without; styled in place, or as the markdown source it is. */
+/** `language` is the one the text is written in ('en', 'de'): the spelling check goes by it. */
+export type View = { lineNumbers: boolean; source: boolean; spellcheck: boolean; language: string }
+
+const INLINE: Partial<Record<Format, [mark: string, placeholder: string]>> = { bold: ['**', 'bold text'], italic: ['*', 'italic text'] }
+const BLOCK: Partial<Record<Format, (n: number) => string>> = { title: () => '# ', heading: () => '## ', subheading: () => '### ', bullets: () => '- ', numbers: n => `${n}. `, quote: () => '> ' }
+/** What a line can start with as a block: heading hashes, a list mark, a quote mark. */
+const BLOCK_MARK = /^(#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/
+const TABLE = '| Column | Column |\n|--------|--------|\n| cell   | cell   |\n| cell   | cell   |'
+
+/** Marks around what is selected, or around a placeholder that is then selected; a second time takes them off. */
+function wrap(view: EditorView, mark: string, placeholder: string) {
+  const { state } = view
+  view.dispatch(
+    state.changeByRange(range => {
+      const n = mark.length
+      const [before, after] = [state.sliceDoc(range.from - n, range.from), state.sliceDoc(range.to, range.to + n)]
+      // one star inside two is bold, not italic
+      const isOther = mark === '*' && state.sliceDoc(range.from - 2, range.from) === '**' && state.sliceDoc(range.from - 3, range.from) !== '***'
+      if (before === mark && after === mark && !isOther) {
+        // the example a first press wrote goes with its marks: nothing is left behind
+        if (state.sliceDoc(range.from, range.to) === placeholder) return { changes: { from: range.from - n, to: range.to + n }, range: EditorSelection.cursor(range.from - n) }
+        return { changes: [{ from: range.from - n, to: range.from }, { from: range.to, to: range.to + n }], range: EditorSelection.range(range.from - n, range.to - n) }
+      }
+      const inner = range.empty ? placeholder : state.sliceDoc(range.from, range.to)
+      return { changes: { from: range.from, to: range.to, insert: mark + inner + mark }, range: EditorSelection.range(range.from + n, range.from + n + inner.length) }
+    }),
+    { userEvent: 'input.format', scrollIntoView: true },
+  )
+}
+
+/** Every selected line starts with this mark, in place of the block mark it had; a second time takes it off. */
+function prefix(view: EditorView, markOf: (n: number) => string) {
+  const { state } = view
+  const { from, to } = state.selection.main
+  const lines = []
+  for (let n = state.doc.lineAt(from).number; n <= state.doc.lineAt(to).number; n++) lines.push(state.doc.line(n))
+  const isOn = lines.every((line, i) => line.text.startsWith(markOf(i + 1)))
+  const changes = lines.map((line, i) => ({ from: line.from, to: line.from + (BLOCK_MARK.exec(line.text)?.[0].length ?? 0), insert: isOn ? '' : markOf(i + 1) }))
+  const mapped = state.changes(changes)
+  // the cursor ends after the last line, where the author goes on writing
+  view.dispatch({ changes: mapped, selection: { anchor: mapped.mapPos(lines[lines.length - 1]!.to, 1) }, userEvent: 'input.format', scrollIntoView: true })
+}
+
+/** Text in place of the selection, with one part of it selected for the author to type over. */
+function put(view: EditorView, text: string, select: string) {
+  const { from, to } = view.state.selection.main
+  const at = from + text.indexOf(select)
+  view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: at, head: at + select.length }, userEvent: 'input.format', scrollIntoView: true })
+}
+
+function format(view: EditorView, kind: Format) {
+  const { state } = view
+  const { from, to, empty } = state.selection.main
+  const chosen = state.sliceDoc(from, to)
+  const [inline, block] = [INLINE[kind], BLOCK[kind]]
+  if (inline !== undefined) wrap(view, inline[0], inline[1])
+  else if (block !== undefined) prefix(view, block)
+  else if (kind === 'link') put(view, `[${empty ? 'link text' : chosen}](https://)`, 'https://')
+  else if (kind === 'image') put(view, `![${empty ? 'description' : chosen}](picture.png)`, 'picture.png')
+  else if (kind === 'footnote') put(view, `^[${empty ? 'note' : chosen}]`, empty ? 'note' : chosen)
+  else if (kind === 'citation') {
+    view.dispatch({ changes: { from, to, insert: '[@]' }, selection: { anchor: from + 2 }, userEvent: 'input.format', scrollIntoView: true })
+  } else if (kind === 'table') {
+    // a table is a block of its own: an empty line before and after
+    const line = state.doc.lineAt(from)
+    const before = line.text.trim() === '' ? (line.number > 1 && state.doc.line(line.number - 1).text.trim() !== '' ? '\n' : '') : '\n\n'
+    const at = line.text.trim() === '' ? from : line.to
+    view.dispatch({ changes: { from: at, to: at, insert: `${before}${TABLE}\n` }, selection: { anchor: at + before.length + 2, head: at + before.length + 8 }, userEvent: 'input.format', scrollIntoView: true })
+  }
+  view.focus()
+}
+
 export type Editor = {
   getText(): string
   setText(text: string): void
@@ -76,18 +158,22 @@ export type Editor = {
   insert(text: string): void
   /** Puts the cursor on a 1-based line and scrolls it into view. */
   jumpToLine(line: number): void
+  /** Writes a markdown element at the cursor or around what is selected. */
+  format(kind: Format): void
+  setView(view: View): void
   focus(): void
   destroy(): void
 }
 
 export type EditorHandlers = {
   onChange(): void
-  onSave(): void
   /** Text was pasted or dropped into the document; `line` is where it starts now, 1-based. */
   onPaste(pasted: string, line: number): void
 }
 
 export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Editor {
+  const [numbering, styling, spelling] = [new Compartment(), new Compartment(), new Compartment()]
+  const attributes = (spellcheck: boolean, language: string) => EditorView.contentAttributes.of({ spellcheck: String(spellcheck), lang: language, 'aria-label': 'Document' })
   const view = new EditorView({
     parent,
     state: EditorState.create({
@@ -95,7 +181,6 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
       extensions: [
         history(),
         keymap.of([
-          { key: 'Mod-s', preventDefault: true, run: () => (handlers.onSave(), true) },
           indentWithTab,
           ...defaultKeymap,
           ...historyKeymap,
@@ -103,9 +188,10 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
         // a YAML block at the top is front matter, not a heading
         yamlFrontmatter({ content: markdown({ base: markdownLanguage }) }),
         syntaxHighlighting(styles),
-        livePreview,
+        numbering.of([]),
+        styling.of(livePreview),
         EditorView.lineWrapping,
-        EditorView.contentAttributes.of({ spellcheck: 'true', 'aria-label': 'Document' }),
+        spelling.of(attributes(true, 'en')),
         EditorView.updateListener.of(update => {
           if (!update.docChanged) return
           handlers.onChange()
@@ -131,6 +217,11 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
       view.dispatch({ selection: { anchor: target.from }, effects: EditorView.scrollIntoView(target.from, { y: 'center' }) })
       view.focus()
     },
+    format: kind => format(view, kind),
+    setView: ({ lineNumbers: isNumbered, source, spellcheck, language }) =>
+      view.dispatch({
+        effects: [numbering.reconfigure(isNumbered ? lineNumbers() : []), styling.reconfigure(source ? EditorView.editorAttributes.of({ class: 'cm-source' }) : livePreview), spelling.reconfigure(attributes(spellcheck, language))],
+      }),
     focus: () => view.focus(),
     destroy: () => view.destroy(),
   }

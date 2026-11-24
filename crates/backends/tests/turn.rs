@@ -375,3 +375,38 @@ async fn an_action_tells_the_model_what_to_do_is_logged_under_its_purpose_and_ho
     }
     assert_eq!(workspace.log.read().unwrap().len(), before);
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_author_s_languages_are_what_the_model_is_told_and_nothing_is_added_when_none_are_set() {
+    use cowriting_core::disclosure::Lang;
+    use cowriting_core::turn::Languages;
+    let (_host, workspace) = workspace();
+    let script = || json!({ "replies": [{ "text": "ok" }] });
+
+    // nothing said: the rules as they always were, the manuscript's language as the editor found it
+    let (backend, outcome, _) = turn(&workspace, script(), ask("Any feedback?")).await;
+    outcome.unwrap();
+    let system = backend.requests()[0].system.clone();
+    assert!(system.contains("(markdown, English)") && system.contains("in the manuscript's language (en)"));
+    assert!(!system.contains("# The language of your answers"));
+
+    // an English text, German answers: both are said, and the answers' language comes last, for an expert too
+    *workspace.languages.write().unwrap() = Languages { manuscript: None, answers: Some(Lang::De) };
+    let (backend, outcome, _) = turn(&workspace, script(), Ask { persona: Some("reviewer-2".into()), ..ask("Please review.") }).await;
+    outcome.unwrap();
+    let system = backend.requests()[0].system.clone();
+    assert!(system.contains("(markdown, English)"));
+    let rule = system.find("# The language of your answers").expect("the rule is there");
+    assert!(system[rule..].contains("write every answer in German") && system[rule..].contains("stay in the manuscript's language"));
+    // the rules that leave the language to the question or the manuscript are replaced, not contradicted
+    assert!(!system.contains("Answer in the language of the manuscript") && !system.contains("Reply in the author's language"));
+    assert!(system.contains("- Reply in German, also when you give feedback on the manuscript") && system.contains("- Answer in German:"));
+    assert!(system.trim_end().ends_with("everything you say about them is in German."), "the choice is the last thing said");
+
+    // the author says the text is German, whatever the editor found
+    *workspace.languages.write().unwrap() = Languages { manuscript: Some(Lang::De), answers: None };
+    let (backend, outcome, _) = turn(&workspace, script(), ask("Feedback?")).await;
+    outcome.unwrap();
+    let system = backend.requests()[0].system.clone();
+    assert!(system.contains("(markdown, German)") && system.contains("in the manuscript's language (de)") && !system.contains("# The language of your answers"));
+}

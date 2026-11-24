@@ -422,6 +422,38 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         "Each of these changes was reviewed; what remained in the text is declared above or under [AI-TEXT].",
         "Jede dieser Änderungen wurde geprüft; was davon im Text blieb, ist oben bzw. unter [AI-TEXT] angegeben.",
     );
+    // what the author states about AI tools outside the editor; the section is there only when they stated something
+    let external_head = pick("AI use outside the editor, as stated by the author", "KI-Nutzung außerhalb des Editors, nach Angabe der Autorin oder des Autors");
+    let external_note = pick(
+        "The editor cannot see the use of other tools. These statements are the author's own.",
+        "Die Nutzung anderer Werkzeuge kann der Editor nicht sehen. Diese Angaben stammen von der Autorin oder dem Autor selbst.",
+    );
+    let external: Vec<String> = crate::types::external_uses(entries)
+        .iter()
+        .map(|stated| {
+            let ended = |text: &str| if text.ends_with(['.', '!', '?']) { text.to_string() } else { format!("{text}.") };
+            let mut line = String::new();
+            if !stated.date.trim().is_empty() {
+                line.push_str(&format!("{}: ", stated.date.trim()));
+            }
+            line.push_str(stated.tool.trim());
+            if !stated.model.trim().is_empty() {
+                line.push_str(&format!(" ({})", stated.model.trim()));
+            }
+            line.push_str(&format!(". {} {}", pick("Used for:", "Verwendet für:"), ended(&py_squash(&stated.purpose, None))));
+            for (label, text) in [
+                (pick("Worked on:", "Gegenstand:"), &stated.material),
+                (pick("Result and its use:", "Ergebnis und Verwendung:"), &stated.result),
+                (pick("Checked by:", "Geprüft durch:"), &stated.checked),
+            ] {
+                if !text.trim().is_empty() {
+                    line.push_str(&format!(" {label} {}", ended(&py_squash(text, None))));
+                }
+            }
+            line
+        })
+        .collect();
+
     let refused_head = pick("Write attempts by the AI that the guard refused", "Vom Schutz abgewiesene Schreibversuche der KI");
     let refused_note = match profile {
         Profile::Plugin => pick(
@@ -474,6 +506,11 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                     out.extend(corrections.iter().map(|line| format!("- {line}")));
                 }
             }
+            if !external.is_empty() {
+                out.extend([String::new(), format!("## {external_head}"), String::new()]);
+                out.extend(external.iter().map(|line| format!("- {line}")));
+                out.extend([String::new(), external_note.clone()]);
+            }
             for (heading, lines, note) in [(&guard_head, &guard_lines, &guard_note), (&log_head, &log_lines, &log_note), (&refused_head, &refused_lines, &refused_note)] {
                 out.extend([String::new(), format!("## {heading}"), String::new()]);
                 out.extend(md_section(lines, note, &none));
@@ -524,6 +561,11 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                     out.extend(corrections.iter().map(|line| format!("  \\item {}", e(line))));
                     out.push("\\end{itemize}".into());
                 }
+            }
+            if !external.is_empty() {
+                out.extend([format!("\\subsection*{{{}}}", e(&external_head)), "\\begin{itemize}".to_string()]);
+                out.extend(external.iter().map(|line| format!("  \\item {}", e(line))));
+                out.extend(["\\end{itemize}".to_string(), e(&external_note)]);
             }
             for (heading, lines, note) in [(&guard_head, &guard_lines, &guard_note), (&log_head, &log_lines, &log_note), (&refused_head, &refused_lines, &refused_note)] {
                 out.push(format!("\\subsection*{{{}}}", e(heading)));

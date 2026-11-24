@@ -9,6 +9,7 @@
 //! for this run only. The Tauri commands in `src-tauri/src/main.rs` are the real thing; this
 //! mirrors their names and shapes.
 
+use cowriting_app::preferences::Preferences;
 use cowriting_app::{list_models, make_backend, model_status, tested_models, BackendSettings, ExportOptions, Session};
 use cowriting_core::host::DiskHost;
 use cowriting_core::turn::{Ask, TurnEvent};
@@ -21,6 +22,7 @@ struct Bridge {
     document: String,
     session: Mutex<Option<Arc<Session>>>,
     settings: Mutex<BackendSettings>,
+    preferences: Mutex<Preferences>,
     key: Mutex<Option<String>>,
     is_first_run: Mutex<bool>,
 }
@@ -45,6 +47,14 @@ impl Bridge {
         view["modelStatus"] = json!(model_status(&tested_models(), &settings.backend, &settings.model));
         view["isFirstRun"] = json!(*self.is_first_run.lock().unwrap());
         view["openAtStart"] = json!(self.document);
+        view["preferences"] = json!(*self.preferences.lock().unwrap());
+        view["version"] = json!(env!("CARGO_PKG_VERSION"));
+        view["system"] = json!(format!("{} {}", std::env::consts::OS, std::env::consts::ARCH));
+        view["contact"] = json!(cowriting_app::feedback::MAIL);
+        view["repository"] = json!(cowriting_app::feedback::REPOSITORY);
+        view["asking"] = json!(cowriting_app::support::Asking::default());
+        view["feedbackByMail"] = json!(cowriting_app::feedback::has_mail());
+        view["settingsFolder"] = json!("(the bridge keeps its settings in memory)");
         view
     }
 
@@ -61,6 +71,15 @@ impl Bridge {
                 *self.is_first_run.lock().unwrap() = false;
                 Ok(Value::Null)
             }
+            "set_preferences" => {
+                let saved = serde_json::from_value::<Preferences>(args["preferences"].clone()).map_err(|e| e.to_string())?.within_limits();
+                if let Ok(session) = self.session() {
+                    session.set_pace(saved.pace());
+                    session.set_languages(saved.languages());
+                }
+                *self.preferences.lock().unwrap() = saved.clone();
+                Ok(json!(saved))
+            }
             "test_connection" => {
                 let settings: BackendSettings = serde_json::from_value(args["settings"].clone()).map_err(|e| e.to_string())?;
                 let key = args["apiKey"].as_str().filter(|k| !k.trim().is_empty()).map(String::from).or_else(|| self.key.lock().unwrap().clone());
@@ -72,11 +91,22 @@ impl Bridge {
             "open_document" | "new_document" => self.open(),
             "save_document" => self.session()?.save(&text("text")).map(|found| json!(found)),
             "report_paste" => self.session()?.report_paste(&text("pasted"), args["line"].as_u64().unwrap_or(0) as usize, &text("documentText")).map(|found| json!(found)),
+            "state_external" => {
+                serde_json::from_value(args["stated"].clone()).map_err(|e| e.to_string()).and_then(|stated| self.session()?.state_external(&stated)).map(|_| Value::Null)
+            }
+            "withdraw_external" => self.session()?.withdraw_external(&text("id")).map(|_| Value::Null),
             "comment_ai_text" => self.session()?.comment_ai_text(&text("id"), &text("note")).map(|_| Value::Null),
             "log_view" => self.session()?.log_view(&text("documentText")).map(|view| json!(view)),
             "thread" => self.session()?.thread(&text("id")).map(|thread| json!(thread)),
             "annotate" => self.session()?.annotate(&text("reference"), &text("use"), &text("note")).map(|_| Value::Null),
             "party" => Ok(json!(self.session()?.party_view())),
+            "project" => Ok(json!(self.session()?.project_view())),
+            "link_file" => {
+                let personas: Vec<String> = serde_json::from_value(args["personas"].clone()).unwrap_or_default();
+                self.session()?.link_file(&text("path"), &personas).map(|_| json!(self.session().unwrap().project_view()))
+            }
+            "unlink_file" => self.session()?.unlink_file(&text("path")).map(|_| json!(self.session().unwrap().project_view())),
+            "set_prompt" => self.session()?.set_prompt(&text("id"), &text("prompt")).map(|_| Value::Null),
             "set_brief" => self.session()?.set_brief(&text("key"), &text("body")).map(|_| Value::Null),
             "set_member" => self.session()?.set_member(&text("id"), args["isMember"].as_bool().unwrap_or(false)).map(|_| Value::Null),
             "add_expert" => self.session()?.add_expert(&text("name"), &text("role"), &text("looksAt")).map(|id| json!(id)),
@@ -110,6 +140,8 @@ impl Bridge {
                 Ok(if beside.exists() { json!(beside.to_string_lossy()) } else { Value::Null })
             }
             "add_bibliography" => self.session()?.add_bibliography(&text("path"), &text("documentText")).map(|_| Value::Null),
+            "set_style" => self.session()?.set_style(&text("path"), &text("documentText")).map(|_| Value::Null),
+            "remove_style" => self.session()?.remove_style().map(|_| Value::Null),
             "remove_bibliography" => self.session()?.remove_bibliography(&text("path")).map(|_| Value::Null),
             "search_sources" => Ok(json!(runtime.block_on(self.session()?.search_sources(&text("query"), &text("documentText"))))),
             "check_references" => runtime.block_on(self.session()?.check_references_online(&text("documentText"))).map(|found| json!(found)),
@@ -221,11 +253,13 @@ fn main() {
         backend: value("--backend").unwrap_or(defaults.backend),
         model: value("--model").unwrap_or(defaults.model),
         base_url: value("--base-url").unwrap_or_default(),
+        max_tokens: 0,
     };
     let bridge = Arc::new(Bridge {
         document,
         session: Mutex::default(),
         settings: Mutex::new(settings),
+        preferences: Mutex::default(),
         key: Mutex::new(std::env::var("COWRITING_API_KEY").ok().filter(|k| !k.trim().is_empty())),
         is_first_run: Mutex::new(args.iter().any(|a| a == "--first-run")),
     });

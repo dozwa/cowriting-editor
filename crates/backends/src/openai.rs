@@ -18,6 +18,8 @@ pub struct OpenAiBackend {
     api_key: Option<String>,
     http: reqwest::Client,
     has_tools: AtomicBool,
+    /// The longest answer the author allows; 0 leaves it to the provider.
+    max_tokens: u32,
 }
 
 /// The host a base URL names, with its port: who the text is sent to.
@@ -36,7 +38,23 @@ impl OpenAiBackend {
     pub fn new(base_url: &str, api_key: Option<&str>) -> OpenAiBackend {
         let base_url = Some(base_url.trim()).filter(|u| !u.is_empty()).unwrap_or(OPENAI_BASE_URL).trim_end_matches('/').to_string();
         let api_key = api_key.map(str::trim).filter(|k| !k.is_empty()).map(String::from);
-        OpenAiBackend { base_url, api_key, http: reqwest::Client::new(), has_tools: AtomicBool::new(true) }
+        OpenAiBackend { base_url, api_key, http: reqwest::Client::new(), has_tools: AtomicBool::new(true), max_tokens: 0 }
+    }
+
+    /// The longest answer the author allows; 0 leaves it to the provider.
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> OpenAiBackend {
+        self.max_tokens = max_tokens;
+        self
+    }
+
+    /// The request as it is sent: with the author's limit on the answer's length, if they set one.
+    /// OpenAI itself calls the limit `max_completion_tokens`; the servers that speak its API know `max_tokens`.
+    pub fn body(&self, request: &ModelRequest) -> Value {
+        let mut body = request_body(request);
+        if self.max_tokens > 0 {
+            body[if self.base_url == OPENAI_BASE_URL { "max_completion_tokens" } else { "max_tokens" }] = json!(self.max_tokens);
+        }
+        body
     }
 
     fn with_key(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -273,8 +291,7 @@ impl Backend for OpenAiBackend {
     }
 
     async fn complete(&self, request: &ModelRequest, on_text: &mut (dyn for<'s> FnMut(&'s str) + Send)) -> Result<ModelReply, BackendError> {
-        let mut response =
-            self.with_key(self.http.post(format!("{}/chat/completions", self.base_url))).json(&request_body(request)).send().await.map_err(|e| self.unreachable(e))?;
+        let mut response = self.with_key(self.http.post(format!("{}/chat/completions", self.base_url))).json(&self.body(request)).send().await.map_err(|e| self.unreachable(e))?;
         let status = response.status().as_u16();
         if status != 200 {
             let body = response.text().await.unwrap_or_default();

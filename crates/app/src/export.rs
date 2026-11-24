@@ -152,11 +152,15 @@ pub fn references(bibliography: &cowriting_core::sources::Bibliography, document
 
 /// What pandoc is called with. The document comes on standard input, so what is exported is what the editor shows.
 /// `pdf_engine` is the program's name and where it is.
-pub fn pandoc_args(format: FileFormat, output: &str, folder: &str, references: &[String], pdf_engine: Option<(&str, &str)>, paper: Paper) -> Vec<String> {
+/// `style` is a CSL file the author chose in the editor; a style the document names itself (`csl:`) pandoc reads on its own.
+pub fn pandoc_args(format: FileFormat, output: &str, folder: &str, references: &[String], pdf_engine: Option<(&str, &str)>, paper: Paper, style: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = ["--from", "markdown", "--standalone", "--output", output, "--resource-path", folder].iter().map(|arg| arg.to_string()).collect();
     args.push("--citeproc".into());
     for file in references {
         args.extend(["--bibliography".to_string(), file.clone()]);
+    }
+    if let Some(style) = style {
+        args.extend(["--csl".to_string(), style.to_string()]);
     }
     if let (FileFormat::Pdf, Some((engine, path))) = (format, pdf_engine) {
         // Typst and LaTeX name the same paper differently

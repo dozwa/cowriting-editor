@@ -79,8 +79,7 @@ Start with one line in character (your voice), then:
 1. **Top 3 issues** (most important first): line, what you noticed, why it matters, a guiding question or hint.
 2. **Further observations** (short bullet list, optional).
 3. **Questions for the author** (1–3).
-A reply from the author gets no report: one line in character, then your answer.
-End with: `→ Classify this in the editor (used / changed / not used / info).`";
+A reply from the author gets no report: one line in character, then your answer.";
 
 static PERSONA_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-z0-9][a-z0-9-]{0,62}$").unwrap());
 static COLOUR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9a-fA-F]{6}$").unwrap());
@@ -173,6 +172,17 @@ pub fn parse_persona_file(id: &str, text: &str) -> Option<Persona> {
     })
 }
 
+/// The standard wording of an expert that comes with the editor; None for an author's own expert.
+pub fn standard_prompt(id: &str) -> Option<&'static str> {
+    CATALOG.personas.iter().find(|p| p.id == id).map(|p| p.prompt.as_str())
+}
+
+/// An expert's file with another body: the frontmatter stays, what the expert is told changes.
+pub fn with_prompt(file: &str, prompt: &str) -> Option<String> {
+    let parts = FRONTMATTER.captures(file.trim_start())?;
+    Some(format!("---\n{}\n---\n{}\n", parts[1].trim_end(), prompt.trim()))
+}
+
 /// A `party/<id>.md` file for a new expert. `looks_at` is the author's description of what the
 /// expert pays attention to; a line break in name or role would break the frontmatter and is removed.
 pub fn persona_file(id: &str, name: &str, role: &str, looks_at: &str) -> String {
@@ -218,6 +228,12 @@ impl Party {
             parse_persona_file(id, &host.read(&format!("{folder}/{file}")).ok()?)
         });
         let mut party = Party::with_custom(custom.collect());
+        // the author's own wording of an expert that comes with the editor replaces the standard one, in this project
+        for persona in party.personas.iter_mut().filter(|p| !p.is_custom) {
+            if let Some(own) = host.read(&format!("{}/{}.md", sidecar.prompts_dir(), persona.id)).ok().map(|text| text.trim().to_string()).filter(|text| !text.is_empty()) {
+                persona.prompt = own;
+            }
+        }
         party.members = host
             .read(&sidecar.party_json())
             .ok()

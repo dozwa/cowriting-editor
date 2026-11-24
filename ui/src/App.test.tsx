@@ -3,13 +3,17 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
-import type { AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView } from './api'
+import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView } from './api'
 import { App } from './App'
-import type { Editor, EditorHandlers } from './editor'
+import type { Editor, EditorHandlers, Format, View } from './editor'
+import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
 
+/** What the stand-in editor was told, for the tests to read. */
+type Seen = { jumps: number[]; formats: Format[]; view: View | null }
+
 /** A text field in place of the real editor, which needs a browser's layout. */
-const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { jumps: number[] } => {
+const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Seen => {
   const field = document.createElement('textarea')
   field.setAttribute('aria-label', 'Document')
   field.addEventListener('input', () => handlers.onChange())
@@ -21,18 +25,21 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & { 
   })
   parent.append(field)
   const jumps: number[] = []
-  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), focus: () => {}, destroy: () => field.remove(), jumps }
+  const formats: Format[] = []
+  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: kind => void formats.push(kind), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), jumps, formats, view: null }
   return lastEditor
 }
-let lastEditor: Editor & { jumps: number[] }
+let lastEditor: Editor & Seen
 
-function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[] } = {}) {
+function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][] } = { saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; project: unknown[][]; support: string[]; pages: string[] } = { feedback: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
+  const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
   let bibFiles: BibFile[] = []
   let refsChecked: SourcesView['checked'] = null
+  let style: SourcesView['style'] = null
   let isChecked = false
   // the stand-in's plan: one point per line that starts with '- '
   const progress = (text: string): ScopeProgress | null => {
@@ -42,6 +49,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     return { goal: 'Show it.', words: { done: words, target: 100 }, figures: { done: 0 }, tables: { done: 0 }, references: { done: 0 }, daysLeft: 12, wordsPerDay: 8, points: points.map((text, i) => (isChecked ? { text, isTicked: false, status: i === 0 ? 'covered' : 'missing', where: i === 0 ? 'thesis.md:3' : undefined, note: i === 0 ? 'named' : undefined } : { text, isTicked: false })), checkedAt: isChecked ? '2026-11-23T10:10:00.000Z' : undefined, sections: [{ name: 'Methods', target: 50, stage: 'draft', words: 7, markers: 1, isFound: true }], markers: 1, content: 0.2, finish: 0.35, overall: isChecked ? 0.4 : 0.2 }
   }
   const aiText: AiTextRow[] = []
+  let external: ExternalUse[] = []
   // the stand-in's detection: text the answer said, word for word
   const detect = (text: string, source: 'paste' | 'typed', line: number, documentText: string): AiTextRow[] => {
     const turn = turns.find(t => t.answer !== '' && text.includes(t.answer))
@@ -50,7 +58,8 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     aiText.unshift(row)
     return [row]
   }
-  const figure = { palette: { H: '#6b4226' }, sprite: ['.HH.', 'HSSH'] }
+  const figure = { palette: { H: '#6b4226' }, sprite: ['.HH.', 'HSSH'], prompt: 'You are an expert. Your perspective: the weak points.', isPromptEdited: false }
+  let project: ProjectView = { files: [], overrides: {}, folder: '/home/me/.config/cowriting-editor/projects/thesis.md-1' }
   const experts: Expert[] = [
     { id: 'reviewer-2', name: 'Reviewer #2', short: 'Reviewer #2', role: 'Weaknesses, limitations, tough questions', category: 'feedback', isCustom: false, isMember: true, brief: '', ...figure },
     { id: 'clinician', name: 'The Clinician', short: 'Clinician', role: 'Clinical relevance', category: 'content', isCustom: false, isMember: false, brief: '', ...figure },
@@ -61,10 +70,45 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     turns: [...turns].reverse(),
     guard: options.refuse && turns.length > 0 ? [{ ts: '2026-11-23T10:00:00Z', tool: 'write_note', input: 'write_note ../../thesis.md', files: [], refused: true, turn: 't1' }] : [],
     aiText: aiText.map(row => ({ ...row, stillInText: text.includes(row.excerpt) })),
+    external: external.map(row => ({ ...row })),
     words: 7,
   })
-  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
+    sendFeedback: async (way, title, text) => void calls.feedback.push([way, title, text]),
+    stateExternal: async stated => {
+      calls.project.push(['state', stated])
+      external = stated.id === '' ? [...external, { ...stated, id: `x${external.length + 1}` }] : external.map(row => (row.id === stated.id ? { ...stated, id: `${stated.id}b` } : row))
+    },
+    withdrawExternal: async id => {
+      calls.project.push(['withdraw', id])
+      external = external.filter(row => row.id !== id)
+    },
+    project: async () => project,
+    pickLinkedFile: async () => '/work/wording.md',
+    linkFile: async (path, personas) => {
+      calls.project.push(['link', path, personas])
+      if (path.endsWith('.pdf')) throw `${path} cannot be read as text.`
+      const file = { path, name: path.split('/').pop()!, personas, isMissing: false, chars: 120, isCut: false }
+      project = { ...project, files: [...project.files.filter(f => f.path !== path), file] }
+      return project
+    },
+    unlinkFile: async path => {
+      calls.project.push(['unlink', path])
+      project = { ...project, files: project.files.filter(f => f.path !== path) }
+      return project
+    },
+    setProject: async overrides => {
+      calls.project.push(['set', overrides])
+      project = { ...project, overrides }
+      return project
+    },
+    setPrompt: async (id, prompt) => {
+      calls.project.push(['prompt', id, prompt])
+      const expert = experts.find(e => e.id === id)!
+      Object.assign(expert, prompt === '' ? { prompt: figure.prompt, isPromptEdited: false } : { prompt, isPromptEdited: true })
+    },
+    supportAnswered: async what => void calls.support.push(what),
     getSettings: async () => settings,
     setSettings: async (next, apiKey) => {
       calls.settings.push([next, apiKey])
@@ -75,8 +119,17 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       if (next.baseUrl === 'http://localhost:1234/v1') throw 'localhost:1234 could not be reached. Is the local model server running?'
       return [{ id: 'gemma3:4b', name: 'gemma3:4b', status: 'untested' }, { id: 'qwen3.5:9b', name: 'qwen3.5:9b', status: 'failed' }]
     },
-    pickDocument: async () => null,
-    pickNewDocument: async () => null,
+    setPreferences: async preferences => {
+      calls.preferences.push(preferences)
+      // as the app does: held to the limits, and returned as kept
+      const kept = { ...preferences, textSize: Math.min(Math.max(preferences.textSize, 13), 28) }
+      settings = { ...settings, preferences: kept }
+      return kept
+    },
+    showSettingsFolder: async () => void calls.picked.push('shown'),
+    pickFolder: async () => '/work/exports',
+    pickDocument: async folder => (calls.picked.push(`open in ${folder}`), null),
+    pickNewDocument: async folder => (calls.picked.push(`new in ${folder}`), null),
     confirmLeave: async () => true,
     openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: options.orphans ?? [] }),
     adoptLog: async name => {
@@ -84,6 +137,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       return { path: '/work/thesis.md', name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: [] }
     },
     pickMove: async () => '/work/drafts/chapter-1.md',
+    openGuide: async which => void calls.pages.push(which),
     moveDocument: async (target, text) => {
       calls.moved.push([target, text])
       return { path: target, name: 'chapter-1.md', text, language: 'en', orphans: [] }
@@ -97,7 +151,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       calls.pasted.push([pasted, line])
       return detect(pasted, 'paste', line, documentText)
     },
-    liveView: async () => ({ ...watch, hints: [...watch.hints], pauseMs: 30 }),
+    liveView: async () => ({ ...watch, hints: [...watch.hints], ...pace() }),
     setLive: async (isOn, personas, documentText) => {
       calls.live.push([isOn, personas, documentText])
       Object.assign(watch, { isOn, personas })
@@ -116,8 +170,16 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       calls.pdf.push(pdf)
       return { path: target, cited: 2, fromZotero: 0, missing: ['ghost1999'], warnings: [] }
     },
-    sources: async () => ({ files: bibFiles, entries: bibFiles.reduce((n, f) => n + f.entries, 0), cited: 2, missing: bibFiles.length > 0 ? ['ghost1999'] : [], checked: refsChecked }),
+    sources: async () => ({ files: bibFiles, entries: bibFiles.reduce((n, f) => n + f.entries, 0), cited: 2, missing: bibFiles.length > 0 ? ['ghost1999'] : [], checked: refsChecked, style }),
     pickBibliography: async () => '/work/refs.bib',
+    pickStyle: async () => options.stylePicked ?? '/work/apa.csl',
+    setStyle: async path => {
+      if (!path.endsWith('.csl')) throw 'A reference style is a .csl file, as zotero.org/styles has them.'
+      style = { path, name: 'apa.csl', title: 'American Psychological Association 7th edition', isFromDocument: false }
+    },
+    removeStyle: async () => {
+      style = null
+    },
     addBibliography: async path => {
       bibFiles.push({ path, name: 'refs.bib', format: 'BibTeX', entries: 3, isFromDocument: false })
     },
@@ -294,7 +356,7 @@ test('on the first start the author sets up a local model, and is told it is unt
   expect((dialog.getByLabelText(/Model/) as HTMLSelectElement).value).toBe('gemma3:4b')
   expect(dialog.getByText(/not tested for the assist-only rules/)).toBeTruthy()
   await user.click(dialog.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'openai-compatible', model: 'gemma3:4b', baseUrl: 'http://localhost:11434/v1' }, null]]))
+  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'openai-compatible', model: 'gemma3:4b', baseUrl: 'http://localhost:11434/v1', maxTokens: 0 }, null]]))
 
   // the window now asks, and says what kind of model answers
   expect(await screen.findByText('untested model')).toBeTruthy()
@@ -318,7 +380,7 @@ test('a tested model carries no notice, and choosing Claude sends the key to the
   expect((dialog.getByRole('radio', { name: /Anthropic API key/ }) as HTMLInputElement).checked).toBe(true)
   await user.type(dialog.getByLabelText(/^API key/), 'sk-ant-secret')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '' }, 'sk-ant-secret']]))
+  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, 'sk-ant-secret']]))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(document.body.textContent).not.toContain('sk-ant-secret')
 })
@@ -489,9 +551,9 @@ test('with live review on, a pause in writing sends the text for hints; off, not
   expect(calls.saved).toEqual([]) // a review does not save the document
 
   // the hint is announced on the tab, shown with who gave it, and leads to its line and its logged turn
-  const tab = await screen.findByRole('tab', { name: /^Live\s*1/ })
+  const tab = await screen.findByRole('tab', { name: /^Live review\s*1/ })
   await user.click(tab)
-  expect(screen.getByRole('tab', { name: /^Live/ }).textContent).toBe('Live')
+  expect(screen.getByRole('tab', { name: /^Live/ }).textContent).toBe('Live review')
   expect(screen.getByText('Why should a reader believe this?')).toBeTruthy()
   expect(screen.getByRole('status').textContent).toMatch(/^1 hint at /)
   await user.click(screen.getByRole('button', { name: 'line 4' }))
@@ -518,7 +580,7 @@ test('a review that comes too soon is asked for again later, and a failed one is
   await user.click(screen.getByLabelText('Live review'))
   await user.type(screen.getByLabelText('Document'), 'More words here.')
   await waitFor(() => expect(calls.reviewed.length).toBe(1))
-  expect((await screen.findByRole('status')).textContent).toBe('waiting: at most one review a minute')
+  expect((await screen.findByRole('status')).textContent).toBe('waiting: at most one review every minute')
   await waitFor(() => expect(calls.reviewed.length).toBeGreaterThan(1))
 })
 
@@ -527,7 +589,7 @@ test('the author makes a plan, sees how far the text is, and has the points chec
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
-  await user.click(screen.getByRole('tab', { name: 'Scope' }))
+  await user.click(screen.getByRole('tab', { name: 'Plan' }))
 
   // no plan: an invitation, and the template to start from
   await user.click(await screen.findByRole('button', { name: 'Make a plan' }))
@@ -671,7 +733,8 @@ test('with Typst alone there is nothing to choose but the paper', async () => {
   windowStorage()
   // a system set to German: A4
   vi.stubGlobal('navigator', { ...navigator, language: 'de-DE' })
-  const { api } = standIn()
+  // the editor's own words stay English here; what follows the system is the paper
+  const { api } = standIn({ settings: { preferences: { ...STANDARD, interfaceLanguage: 'en' } } })
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
@@ -693,7 +756,7 @@ test('Claude Code is chosen without a key or an address, and the dialog says who
   expect(dialog.getByText(/The editor does not see or store that sign-in/)).toBeTruthy()
   expect((dialog.getByLabelText(/^Model/) as HTMLInputElement).value).toBe('sonnet')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'claude-code', model: 'sonnet', baseUrl: '' }, null]]))
+  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'claude-code', model: 'sonnet', baseUrl: '', maxTokens: 0 }, null]]))
 })
 
 test('a renamed document is offered its old log, and takes it only when the author says so', async () => {
@@ -757,4 +820,499 @@ test('the status bar says Claude Code when Claude Code answers', async () => {
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
   expect(await screen.findByText('haiku · Claude Code')).toBeTruthy()
+})
+
+/** A working storage for one test: this test window has none of its own. */
+function withStorage() {
+  const kept = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value), removeItem: (key: string) => void kept.delete(key) })
+}
+
+test('the side panel is as wide as the author made it, also the next time', async () => {
+  withStorage()
+  const user = userEvent.setup()
+  const first = render(<App api={standIn().api} makeEditor={plainEditor} />)
+  const divider = await screen.findByRole('separator', { name: 'Width of the side panel' })
+  divider.focus()
+  await user.keyboard('{ArrowLeft}{ArrowLeft}')
+  const width = Number(divider.getAttribute('aria-valuenow'))
+  expect(width).toBe(448)
+  // never so wide that no room is left for the text
+  await user.keyboard('{ArrowLeft}'.repeat(40))
+  expect(Number(divider.getAttribute('aria-valuenow'))).toBe(window.innerWidth - 320)
+  await user.keyboard('{Home}{ArrowLeft}')
+  first.unmount()
+
+  render(<App api={standIn().api} makeEditor={plainEditor} />)
+  expect((await screen.findByRole('separator', { name: 'Width of the side panel' })).getAttribute('aria-valuenow')).toBe('424')
+  vi.unstubAllGlobals()
+})
+
+test('markdown buttons, line numbers and the source view are the author\'s choice, and stay chosen', async () => {
+  withStorage()
+  const user = userEvent.setup()
+  const first = render(<App api={standIn().api} makeEditor={plainEditor} />)
+  // the buttons are there from the start, for someone new to markdown; the rest is off
+  const bar = await screen.findByRole('toolbar', { name: 'Markdown' })
+  await waitFor(() => expect(lastEditor.view).toEqual({ lineNumbers: false, source: false, spellcheck: true, language: 'en' }))
+  await user.click(within(bar).getByRole('button', { name: 'Bold' }))
+  await user.click(within(bar).getByRole('button', { name: 'Table' }))
+  expect(lastEditor.formats).toEqual(['bold', 'table'])
+  expect(within(bar).getByRole('button', { name: 'Bold' }).title).toContain('**bold**')
+
+  await user.click(screen.getByRole('button', { name: 'Line numbers' }))
+  await user.click(screen.getByRole('button', { name: 'Source' }))
+  await waitFor(() => expect(lastEditor.view).toEqual({ lineNumbers: true, source: true, spellcheck: true, language: 'en' }))
+  await user.click(screen.getByRole('button', { name: 'Markdown buttons' }))
+  expect(screen.queryByRole('toolbar', { name: 'Markdown' })).toBeNull()
+  first.unmount()
+
+  render(<App api={standIn().api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await waitFor(() => expect(lastEditor.view).toEqual({ lineNumbers: true, source: true, spellcheck: true, language: 'en' }))
+  expect(screen.queryByRole('toolbar', { name: 'Markdown' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Source' }).getAttribute('aria-pressed')).toBe('true')
+  vi.unstubAllGlobals()
+})
+
+test('the author can read how markdown works, and go on to the full guide in the browser', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  const opened: string[] = []
+  api.openGuide = async which => void opened.push(which)
+  render(<App api={api} makeEditor={plainEditor} />)
+  await user.click(await screen.findByRole('button', { name: 'How markdown works' }))
+  const help = screen.getByRole('dialog', { name: 'How markdown works' })
+  for (const typed of ['## Heading', '**bold** and *italic*', '[@smith2020]', 'bibliography: refs.bib']) expect(help.textContent).toContain(typed)
+  // the window follows no address itself: it asks the app for one of the two guides
+  expect(help.querySelector('a')).toBeNull()
+  await user.click(within(help).getByRole('button', { name: 'Markdown in 60 seconds' }))
+  expect(opened).toEqual(['markdown'])
+  await user.click(within(help).getByRole('button', { name: 'Close' }))
+  expect(screen.queryByRole('dialog', { name: 'How markdown works' })).toBeNull()
+})
+
+test('the settings change how the editor looks at once, keep it on Save, and put it back on Cancel', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const root = document.documentElement
+  const openSection = async (name: string) => {
+    if (screen.queryByRole('dialog', { name: 'Settings' }) === null) await user.click(screen.getByRole('button', { name: 'Settings…' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+    await user.click(dialog.getByRole('tab', { name }))
+    return dialog
+  }
+
+  // seen while it is chosen, gone when the author cancels
+  let dialog = await openSection('Text and look')
+  await user.click(dialog.getByRole('radio', { name: 'Dark' }))
+  expect(root.dataset.theme).toBe('dark')
+  await user.clear(dialog.getByLabelText(/^Size of your text/))
+  await user.type(dialog.getByLabelText(/^Size of your text/), '400{Enter}')
+  expect(root.style.getPropertyValue('--text-size')).toBe('28px') // held to what can be read
+  await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+  expect(root.dataset.theme).toBeUndefined()
+  expect(root.style.getPropertyValue('--text-size')).toBe('18px')
+  expect(calls.preferences).toEqual([])
+
+  // look, files, live review and language in one go; the AI's settings are not touched
+  dialog = await openSection('Text and look')
+  await user.click(dialog.getByRole('radio', { name: 'Dark' }))
+  await user.selectOptions(dialog.getByLabelText(/^Length of a line/), 'wide')
+  await user.click(dialog.getByRole('checkbox', { name: /spelling mistakes/ }))
+  dialog = await openSection('Files')
+  await user.click(dialog.getByRole('button', { name: 'Choose: Folder for documents' }))
+  expect(await dialog.findByText('/work/exports')).toBeTruthy()
+  await user.selectOptions(dialog.getByLabelText(/^Saving/), '30')
+  dialog = await openSection('Live review')
+  await user.clear(dialog.getByLabelText(/^Pause before a review/))
+  await user.type(dialog.getByLabelText(/^Pause before a review/), '45')
+  await user.clear(dialog.getByLabelText(/^Time between two reviews/))
+  await user.type(dialog.getByLabelText(/^Time between two reviews/), '600{Enter}')
+  expect(dialog.getByRole('status').textContent).toContain('at most 6 reviews are sent in an hour')
+  dialog = await openSection('Language')
+  await user.selectOptions(dialog.getByLabelText(/^Language of the disclosure/), 'de')
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(calls.settings).toEqual([])
+  expect(calls.preferences).toEqual([{ ...STANDARD, theme: 'dark', lineWidth: 'wide', spellcheck: false, documentsFolder: '/work/exports', autosaveSeconds: 30, livePauseSeconds: 45, liveGapSeconds: 600, disclosureLanguage: 'de' }])
+
+  // and the window is as set: dark, wide lines, no spelling marks, "Open" starts in the folder, live review says its pace
+  expect(root.dataset.theme).toBe('dark')
+  expect(root.style.getPropertyValue('--measure')).toBe('920px')
+  await waitFor(() => expect(lastEditor.view?.spellcheck).toBe(false))
+  await user.click(screen.getByRole('button', { name: 'Open…' }))
+  await waitFor(() => expect(calls.picked).toEqual(['open in /work/exports']))
+  await user.click(screen.getByRole('tab', { name: /Live review/ }))
+  expect(await screen.findByText(/once you pause for 45 seconds: at most one review every 10 minutes and 20 an hour/)).toBeTruthy()
+  await user.type(screen.getByLabelText('Document'), ' x')
+  await user.click(screen.getByRole('tab', { name: 'Ask' }))
+  await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await screen.findByText(/why subjects/)
+  await user.click(screen.getByRole('button', { name: 'Disclosure…' }))
+  expect((within(screen.getByRole('dialog')).getByLabelText(/Language/) as HTMLSelectElement).value).toBe('de')
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Close|Cancel/ }))
+
+  // everything but the AI goes back to how the editor came
+  dialog = await openSection('About')
+  expect(dialog.getByText('version 0.1.0')).toBeTruthy()
+  expect(dialog.getByText('/home/me/.config/cowriting-editor')).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Show the folder' }))
+  expect(calls.picked).toContain('shown')
+  await user.click(dialog.getByRole('button', { name: 'Everything but the AI back to standard' }))
+  expect(root.dataset.theme).toBeUndefined()
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.preferences[1]).toEqual(STANDARD))
+  root.removeAttribute('style')
+})
+
+test('an answer\'s length can be limited, but not to less than a model needs to answer at all', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  const save = dialog.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true) // nothing changed yet
+  await user.type(dialog.getByLabelText(/^Longest answer/), '100')
+  expect(dialog.getByText(/At least 500, or empty for no limit/)).toBeTruthy()
+  expect(save.disabled).toBe(true)
+  await user.clear(dialog.getByLabelText(/^Longest answer/))
+  await user.type(dialog.getByLabelText(/^Longest answer/), '2000')
+  await user.click(save)
+  await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 2000 }, null]]))
+  expect(calls.preferences).toEqual([])
+
+  // Claude Code decides the length itself, and the dialog says so instead of offering a field
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const again = within(screen.getByRole('dialog', { name: 'Settings' }))
+  expect((again.getByLabelText(/^Longest answer/) as HTMLInputElement).value).toBe('2000')
+  await user.click(again.getByRole('radio', { name: /Claude Code/ }))
+  expect(again.queryByLabelText(/^Longest answer/)).toBeNull()
+  expect(again.getByText(/How long an answer may be is Claude Code’s own decision/)).toBeTruthy()
+})
+
+test('with saving by itself on, the text is saved once the author pauses', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ settings: { preferences: { ...STANDARD, autosaveSeconds: 0.2 } } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.type(screen.getByLabelText('Document'), 'Mine.')
+  expect(calls.saved).toEqual([]) // not while typing
+  await waitFor(() => expect(calls.saved).toEqual(['# Thesis\n\nWe recruited 48 subjects.\nMine.']))
+  await screen.findByText('saved')
+})
+
+test('shortcuts do what their buttons do, and the author can give them other keys', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const text = screen.getByLabelText('Document')
+  await user.type(text, 'Mine.')
+  await user.keyboard('{Control>}b{/Control}{Control>}s{/Control}')
+  expect(lastEditor.formats).toEqual(['bold'])
+  await waitFor(() => expect(calls.saved.length).toBe(1))
+  expect(within(screen.getByRole('toolbar', { name: 'Markdown' })).getByRole('button', { name: 'Bold' }).title).toContain('(Ctrl+B)')
+  // a markdown shortcut writes into the text only: in the question field it does nothing
+  await user.click(screen.getByLabelText('Ask the AI'))
+  await user.keyboard('{Control>}b{/Control}')
+  expect(lastEditor.formats).toEqual(['bold'])
+
+  // the tabs of the side panel have keys too, from the text as from anywhere else
+  await user.click(text)
+  await user.keyboard('{Control>}6{/Control}')
+  expect(screen.getByRole('tab', { name: /Log/ }).getAttribute('aria-selected')).toBe('true')
+  await user.keyboard('{Control>}2{/Control}')
+  expect(screen.getByRole('tab', { name: 'Experts' }).getAttribute('aria-selected')).toBe('true')
+  expect(lastEditor.formats).toEqual(['bold'])
+
+  await user.keyboard('{Control>},{/Control}')
+  const dialog = within(await screen.findByRole('dialog', { name: 'Settings' }))
+  await user.click(dialog.getByRole('tab', { name: 'Shortcuts' }))
+  expect(within(dialog.getByRole('row', { name: /^Show Plan/ })).getByText('Ctrl+4')).toBeTruthy()
+  const row = () => within(dialog.getByRole('row', { name: /^Bold/ }))
+  expect(row().getByText('Ctrl+B')).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Change the shortcut for Bold' }))
+  expect(row().getByText('Press the keys…')).toBeTruthy()
+  // keys another shortcut has, keys without Ctrl, and keys every program shares are refused with the reason
+  await user.keyboard('{Control>}i{/Control}')
+  expect(dialog.getByRole('alert').textContent).toContain('Ctrl+I is the shortcut for “Italic”')
+  await user.keyboard('x')
+  expect(dialog.getByRole('alert').textContent).toContain('A shortcut needs the Ctrl key')
+  await user.keyboard('{Control>}c{/Control}')
+  expect(dialog.getByRole('alert').textContent).toContain('Ctrl+C stays what it is')
+  await user.keyboard('{Control>}{Shift>}B{/Shift}{/Control}')
+  expect(dialog.queryByRole('alert')).toBeNull()
+  expect(row().getByText('Ctrl+Shift+B')).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Remove the shortcut for Italic' }))
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.preferences.at(-1)?.shortcuts).toEqual({ bold: 'Mod-Shift-b', italic: '' }))
+
+  // the old keys are free, the new ones work, and the button's tooltip names them
+  await user.click(text)
+  await user.keyboard('{Control>}b{/Control}{Control>}i{/Control}')
+  expect(lastEditor.formats).toEqual(['bold'])
+  await user.keyboard('{Control>}{Shift>}B{/Shift}{/Control}')
+  expect(lastEditor.formats).toEqual(['bold', 'bold'])
+  expect(within(screen.getByRole('toolbar', { name: 'Markdown' })).getByRole('button', { name: 'Bold' }).title).toContain('(Ctrl+Shift+B)')
+})
+
+test('the author chooses a reference style file for the export, and takes it off again', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  const opened: string[] = []
+  api.openGuide = async which => void opened.push(which)
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Sources' }))
+  // without a choice the export's style is named, so nobody wonders where "Chicago" came from
+  expect(await screen.findByText(/None chosen: citations and the reference list are exported in pandoc's standard style/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Choose a style file' }))
+  expect(await screen.findByText('American Psychological Association 7th edition')).toBeTruthy()
+  expect(screen.getByText('apa.csl')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Choose another style file' })).toBeTruthy()
+  // where to get styles: the app opens that one page, the window follows no address
+  await user.click(screen.getByRole('button', { name: 'Reference styles to download' }))
+  expect(opened).toEqual(['styles'])
+  await user.click(screen.getByRole('button', { name: 'Take off: back to the standard style' }))
+  expect(await screen.findByText(/None chosen/)).toBeTruthy()
+})
+
+test('a file that is no style is refused in plain words', async () => {
+  const user = userEvent.setup()
+  render(<App api={standIn({ stylePicked: '/work/refs.bib' }).api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Sources' }))
+  await user.click(await screen.findByRole('button', { name: 'Choose a style file' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('A reference style is a .csl file')
+  expect(screen.getByText(/None chosen/)).toBeTruthy()
+})
+
+test('the editor speaks German as soon as it is chosen, and the three languages are saved apart', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  let dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(dialog.getByRole('tab', { name: 'Language' }))
+
+  // tried at once, the dialog included; English text and German answers stay what they are
+  await user.selectOptions(dialog.getByLabelText(/^Language of the editor/), 'de')
+  dialog = within(screen.getByRole('dialog', { name: 'Einstellungen' }))
+  expect(document.documentElement.lang).toBe('de')
+  await user.selectOptions(dialog.getByLabelText(/^Sprache, in der Sie schreiben/), 'en')
+  await user.selectOptions(dialog.getByLabelText(/^Sprache, in der die KI antwortet/), 'de')
+  await user.click(dialog.getByRole('button', { name: 'Speichern' }))
+  expect(calls.preferences.at(-1)).toMatchObject({ interfaceLanguage: 'de', writingLanguage: 'en', aiLanguage: 'de' })
+
+  // the window itself: buttons, tabs, and the ready-made requests
+  const banner = within(screen.getByRole('banner'))
+  banner.getByRole('button', { name: 'Exportieren…' })
+  expect(banner.queryByRole('button', { name: 'Export…' })).toBeNull()
+  screen.getByRole('tab', { name: /Quellen/ })
+
+  // the experts that come with the editor have German names and fields; the app's names are untouched
+  await user.click(screen.getByRole('tab', { name: 'Experten' }))
+  screen.getByText('Die Klinikerin')
+  screen.getByText('Schwächen, Limitationen, unbequeme Fragen')
+  expect(screen.queryByText('The Clinician')).toBeNull()
+
+  // and back, without starting again
+  await user.click(banner.getByRole('button', { name: 'Einstellungen…' }))
+  dialog = within(screen.getByRole('dialog', { name: 'Einstellungen' }))
+  await user.click(dialog.getByRole('tab', { name: 'Sprache' }))
+  await user.selectOptions(dialog.getByLabelText(/^Sprache des Editors/), 'en')
+  await user.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Save' }))
+  within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' })
+})
+
+test('buttons and panels are drawn as large as the author sets them, and the text keeps its own size', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const root = document.documentElement
+  expect(root.style.getPropertyValue('--ui-zoom')).toBe('')
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(dialog.getByRole('tab', { name: 'Text and look' }))
+  await user.selectOptions(dialog.getByLabelText(/Size of buttons and panels/), 'Large')
+  expect(root.style.getPropertyValue('--ui-zoom')).toBe('1.15')
+  expect(root.style.getPropertyValue('--text-size')).toBe('18px')
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.preferences.at(-1)).toMatchObject({ uiSize: 'large', textSize: 18 }))
+  expect(root.style.getPropertyValue('--ui-zoom')).toBe('1.15')
+})
+
+test('a bug is reported from a button everybody sees, in three parts, and goes out as the mail that was shown', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  // the footer says which version this is, and that it is an alpha
+  expect(within(screen.getByRole('contentinfo')).getByText('alpha 0.1.0')).toBeTruthy()
+
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Report a bug' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Report a bug' }))
+  const mail = dialog.getByRole('button', { name: 'Open as mail' }) as HTMLButtonElement
+  expect(mail.disabled).toBe(true)
+  await user.type(dialog.getByLabelText('In one line'), 'Export stops')
+  await user.type(dialog.getByLabelText(/What you did/), 'Chose PDF.')
+  await user.type(dialog.getByLabelText(/What happened/), 'Nothing arrives.')
+  await user.type(dialog.getByLabelText(/What you expected/), 'A PDF.')
+  const outgoing = () => (dialog.getByLabelText(/What goes out/) as HTMLTextAreaElement).value
+  expect(outgoing()).toBe('Bug: Export stops\n\nWhat I did:\nChose PDF.\n\nWhat happened:\nNothing arrives.\n\nWhat I expected:\nA PDF.\n\n---\nCoWriting Editor 0.1.0, macos aarch64\nShown in: en\nAI: anthropic, model claude-opus-5-5')
+  expect(outgoing()).not.toContain('48 subjects')
+  expect(calls.feedback).toEqual([])
+
+  // without the details only the author's words go, and what is handed over is what was shown
+  await user.click(dialog.getByRole('checkbox'))
+  await user.click(mail)
+  expect(calls.feedback).toEqual([['mail', 'Bug: Export stops', 'What I did:\nChose PDF.\n\nWhat happened:\nNothing arrives.\n\nWhat I expected:\nA PDF.']])
+  expect(dialog.getByRole('status').textContent).toContain('sent only when you send it there')
+  await user.click(dialog.getByRole('button', { name: 'Close' }))
+
+  // About names the contact and the project's page, and has the same forms
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(settings.getByRole('tab', { name: 'About' }))
+  settings.getByText('me@example.org')
+  await user.click(settings.getByRole('button', { name: 'github.com/dozwa/cowriting-editor' }))
+  expect(calls.pages).toEqual(['repository'])
+  await user.click(settings.getByRole('button', { name: 'Give feedback…' }))
+  const feedback = within(screen.getByRole('dialog', { name: 'Feedback' }))
+  await user.type(feedback.getByLabelText('In one line'), 'Footnotes')
+  await user.type(feedback.getByLabelText(/What you want to say/), 'I miss them in the export.')
+  await user.click(feedback.getByRole('checkbox'))
+  await user.click(feedback.getByRole('button', { name: 'Open as GitHub issue' }))
+  expect(calls.feedback.at(-1)).toEqual(['issue', 'Idea: Footnotes', 'I miss them in the export.'])
+  // closing the form leaves the settings open
+  await user.click(feedback.getByRole('button', { name: 'Close' }))
+  expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy()
+})
+
+test('at a start when the editor asks for support it asks once, and what the author chooses is told to the app', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ settings: { asking: { isDue: true, withStar: false } } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const dialog = within(await screen.findByRole('dialog', { name: 'Does the editor help you?' }))
+  // a star that was given is not asked for again
+  expect(dialog.queryByRole('button', { name: 'Star it on GitHub' })).toBeNull()
+  dialog.getByRole('button', { name: 'Give feedback' })
+  await user.click(dialog.getByRole('button', { name: 'Buy me a coffee' }))
+  expect(calls.support).toEqual(['coffee'])
+  expect(calls.pages).toEqual(['coffee'])
+  expect(screen.queryByRole('dialog', { name: 'Does the editor help you?' })).toBeNull()
+  // nothing asks when it is not such a start
+  const quiet = standIn()
+  render(<App api={quiet.api} makeEditor={plainEditor} />)
+  await screen.findAllByText('thesis.md')
+  expect(screen.queryByRole('dialog', { name: 'Does the editor help you?' })).toBeNull()
+})
+
+test('the author links a file as background, says whom it is for, and rewords an expert', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Experts' }))
+  screen.getByText('None linked.')
+  await user.click(screen.getByRole('button', { name: 'Link a file…' }))
+  await screen.findByText('wording.md')
+  expect(calls.project).toEqual([['link', '/work/wording.md', []]])
+
+  // for everyone until an expert is ticked
+  await user.click(screen.getByRole('button', { name: 'Who gets wording.md' }))
+  await user.click(within(screen.getByRole('group', { name: 'Who gets wording.md' })).getByRole('checkbox', { name: 'Reviewer #2' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['link', '/work/wording.md', ['reviewer-2']]))
+  expect(screen.getByRole('button', { name: 'Who gets wording.md' }).textContent).toBe('For Reviewer #2')
+
+  // the whole of what an expert is told can be reworded, and put back
+  const reviewer = () => within(screen.getByText('Weaknesses, limitations, tough questions').closest('li')!)
+  await user.click(reviewer().getByRole('button', { name: 'Prompt' }))
+  const prompt = reviewer().getByLabelText('What Reviewer #2 is told') as HTMLTextAreaElement
+  expect(prompt.value).toContain('the weak points')
+  await user.clear(prompt)
+  await user.type(prompt, 'You are kind.')
+  await user.click(reviewer().getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['prompt', 'reviewer-2', 'You are kind.']))
+  await user.click(await within(screen.getByText('Weaknesses, limitations, tough questions').closest('li')!).findByRole('button', { name: 'Back to the standard' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['prompt', 'reviewer-2', '']))
+
+  await user.click(screen.getByRole('button', { name: 'Unlink wording.md' }))
+  await screen.findByText('None linked.')
+})
+
+test('languages can be set for one document alone, and distraction-free hides the explanations until it is turned off', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  let dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(dialog.getByRole('tab', { name: 'Language' }))
+  await user.click(dialog.getByRole('checkbox', { name: /Only for thesis.md/ }))
+  await user.selectOptions(dialog.getByLabelText(/^Language the AI answers in/), 'de')
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['set', { writingLanguage: 'document', aiLanguage: 'de', disclosureLanguage: 'document' }]))
+  // the general settings keep what they had
+  expect(calls.preferences.at(-1)).toMatchObject({ aiLanguage: 'auto' })
+
+  // opened again, the dialog shows what holds for this document, and unticking makes it general
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(dialog.getByRole('tab', { name: 'Language' }))
+  expect((dialog.getByRole('checkbox', { name: /Only for thesis.md/ }) as HTMLInputElement).checked).toBe(true)
+  expect((dialog.getByLabelText(/^Language the AI answers in/) as HTMLSelectElement).value).toBe('de')
+  await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+
+  // distraction-free: from the status bar, kept with the settings
+  expect(document.documentElement.dataset.calm).toBeUndefined()
+  await user.click(screen.getByRole('button', { name: 'Calm' }))
+  await waitFor(() => expect(document.documentElement.dataset.calm).toBe(''))
+  expect(calls.preferences.at(-1)).toMatchObject({ calm: true })
+  await user.click(screen.getByRole('button', { name: 'Calm' }))
+  await waitFor(() => expect(document.documentElement.dataset.calm).toBeUndefined())
+})
+
+test('AI use outside the editor is stated in a form with two things needed, corrected, and taken back', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  // nothing logged yet: no disclosure, but the way to state outside use is there
+  expect((screen.getByRole('button', { name: 'Disclosure…' }) as HTMLButtonElement).disabled).toBe(true)
+  await user.click(screen.getByRole('tab', { name: /Log/ }))
+  await user.click(screen.getByRole('button', { name: 'State AI use elsewhere…' }))
+  let dialog = within(screen.getByRole('dialog', { name: 'AI use outside the editor' }))
+  const save = dialog.getByRole('button', { name: 'Add to the log' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  await user.type(dialog.getByLabelText('Tool'), 'ChatGPT')
+  expect(save.disabled).toBe(true)
+  await user.type(dialog.getByLabelText('What it was used for'), 'R code for the analysis')
+  await user.type(dialog.getByLabelText(/What it worked on/), 'the trial data')
+  await user.click(save)
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['state', { id: '', tool: 'ChatGPT', model: '', date: '', purpose: 'R code for the analysis', material: 'the trial data', result: '', checked: '' }]))
+  await screen.findByText('R code for the analysis')
+  expect(screen.queryByRole('dialog', { name: 'AI use outside the editor' })).toBeNull()
+  // a statement alone is something to disclose
+  expect((screen.getByRole('button', { name: 'Disclosure…' }) as HTMLButtonElement).disabled).toBe(false)
+
+  await user.click(screen.getByRole('button', { name: 'Correct the statement about ChatGPT' }))
+  dialog = within(screen.getByRole('dialog', { name: 'Correct the statement' }))
+  await user.type(dialog.getByLabelText(/Model or version/), 'GPT-x')
+  await user.click(dialog.getByRole('button', { name: 'Save the correction' }))
+  await waitFor(() => expect(calls.project.at(-1)).toMatchObject(['state', { id: 'x1', model: 'GPT-x', purpose: 'R code for the analysis' }]))
+  await screen.findByText('GPT-x')
+
+  await user.click(screen.getByRole('button', { name: 'Take back the statement about ChatGPT' }))
+  await waitFor(() => expect(screen.queryByText('R code for the analysis')).toBeNull())
+  expect(calls.project.at(-1)).toEqual(['withdraw', 'x1b'])
 })

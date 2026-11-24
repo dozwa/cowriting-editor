@@ -8,7 +8,7 @@ use crate::briefs::parse_briefs;
 use crate::scope::{day_number, numbered_text, parse_check, parse_scope, scope_check_system, Checked, PointStatus, ScopePlan};
 use crate::turn::{TurnError, Workspace};
 use crate::types::{LogEntry, PromptEntry, ResponseEntry};
-use crate::watch::{parse_hints, watch_excerpt, watch_system, GAP_MS, KEEP_HINTS, PER_HOUR, WATCH_DEFAULT};
+use crate::watch::{parse_hints, watch_excerpt, watch_system, Pace, KEEP_HINTS, WATCH_DEFAULT};
 use crate::words::{changed_paragraphs, Format};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -127,6 +127,8 @@ pub struct LiveState {
     pub review_times: Vec<u64>,
     /// Newest first.
     pub hints: Vec<LiveHint>,
+    /// The gap between reviews and the hourly limit that are kept.
+    pub pace: Pace,
 }
 
 /// What a call for a live review came to.
@@ -178,11 +180,11 @@ pub async fn live_review(
         return Ok(LiveOutcome::Unchanged);
     }
     let now = ms_of(&workspace.host.now());
-    if state.last_review_at > 0 && now.saturating_sub(state.last_review_at) < GAP_MS {
-        return Ok(LiveOutcome::Wait { ms: GAP_MS - now.saturating_sub(state.last_review_at) });
+    if state.last_review_at > 0 && now.saturating_sub(state.last_review_at) < state.pace.gap_ms {
+        return Ok(LiveOutcome::Wait { ms: state.pace.gap_ms - now.saturating_sub(state.last_review_at) });
     }
     state.review_times.retain(|t| now.saturating_sub(*t) < 3_600_000);
-    if state.review_times.len() >= PER_HOUR {
+    if state.review_times.len() >= state.pace.per_hour {
         return Ok(LiveOutcome::Paused);
     }
 
@@ -192,7 +194,9 @@ pub async fn live_review(
     let host = workspace.host.as_ref();
     let briefs = parse_briefs(&host.read(&workspace.sidecar.party_md()).unwrap_or_default(), &party);
     let file = workspace.sidecar.name.as_str();
-    let answer = ask_once(backend, watch_system(&personas, None, "", &briefs), watch_excerpt(&[(file, &changed)], 4000), model).await;
+    let watching: Vec<&str> = personas.iter().map(|p| p.id.as_str()).collect();
+    let knowledge = crate::project::knowledge_for(host, &workspace.sidecar, Some(&watching));
+    let answer = ask_once(backend, watch_system(&personas, workspace.answer_language(), "", &briefs) + &knowledge.section, watch_excerpt(&[(file, &changed)], 4000), model).await;
     let (answer, answered_by) = match answer {
         Ok(answer) => answer,
         Err(error) => return Ok(LiveOutcome::Failed { message: error.to_string() }),
@@ -264,7 +268,7 @@ pub async fn check_points(workspace: &Workspace, backend: &dyn Backend, model: &
         list.collect::<Vec<_>>().join("\n"),
         numbered_text(&[(&workspace.sidecar.name, document)], 80_000)
     );
-    let (answer, answered_by) = ask_once(backend, scope_check_system(None, Some(&workspace.sidecar.name)), prompt, model).await?;
+    let (answer, answered_by) = ask_once(backend, scope_check_system(workspace.answer_language(), Some(&workspace.sidecar.name)), prompt, model).await?;
     let results = parse_check(&answer, plan.points.len());
 
     let asked = format!("Scope check: which of {} planned points the manuscript makes", plan.points.len());

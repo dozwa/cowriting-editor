@@ -159,6 +159,61 @@ pub struct AiTextEntry {
     pub extra: Map<String, Value>,
 }
 
+/// AI use outside the editor, as the author states it: another tool, used for something that belongs to this work.
+/// The editor cannot see such use; this is the author's own word, and the disclosure says so.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ExternalEntry {
+    pub id: String,
+    /// When it was written down.
+    pub ts: String,
+    #[serde(default)]
+    pub session: String,
+    #[serde(default)]
+    pub paper: String,
+    /// The tool, as the author names it ("ChatGPT"). Empty in an entry that only withdraws another.
+    #[serde(default)]
+    pub tool: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub model: String,
+    /// When it was used: a day (YYYY-MM-DD), or whatever the author can say ("October 2026").
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub date: String,
+    /// What it was used for.
+    #[serde(default)]
+    pub purpose: String,
+    /// What it worked on: data, code, a text.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
+    /// What came of it, and how that was used in the work.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub result: String,
+    /// How the author checked the result.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub checked: String,
+    /// The earlier statement this one takes the place of: a correction, or (with no tool) a withdrawal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<String>,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+/// The author's statements of outside AI use as they stand now: corrected ones in their last
+/// wording, withdrawn ones gone, in the order they were first made.
+pub fn external_uses(entries: &[LogEntry]) -> Vec<ExternalEntry> {
+    let mut current: Vec<ExternalEntry> = Vec::new();
+    for entry in entries {
+        let LogEntry::External(stated) = entry else { continue };
+        let at = stated.replaces.as_ref().and_then(|old| current.iter().position(|e| &e.id == old));
+        match (at, stated.tool.trim().is_empty()) {
+            (Some(at), true) => drop(current.remove(at)),
+            (Some(at), false) => current[at] = stated.clone(),
+            (None, false) => current.push(stated.clone()),
+            (None, true) => {}
+        }
+    }
+    current
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum Known {
@@ -168,6 +223,7 @@ enum Known {
     Guard(GuardEntry),
     #[serde(rename = "ai_text")]
     AiText(AiTextEntry),
+    External(ExternalEntry),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -177,6 +233,7 @@ pub enum LogEntry {
     Annotation(AnnotationEntry),
     Guard(GuardEntry),
     AiText(AiTextEntry),
+    External(ExternalEntry),
     /// An entry of a type this version does not know, or one it knows but cannot read: kept, not used.
     Other(Value),
 }
@@ -193,6 +250,7 @@ impl LogEntry {
             Ok(Known::Annotation(e)) => LogEntry::Annotation(e),
             Ok(Known::Guard(e)) => LogEntry::Guard(e),
             Ok(Known::AiText(e)) => LogEntry::AiText(e),
+            Ok(Known::External(e)) => LogEntry::External(e),
             Err(_) => LogEntry::Other(value),
         })
     }
@@ -205,6 +263,7 @@ impl LogEntry {
             LogEntry::Annotation(e) => Known::Annotation(e.clone()),
             LogEntry::Guard(e) => Known::Guard(e.clone()),
             LogEntry::AiText(e) => Known::AiText(e.clone()),
+            LogEntry::External(e) => Known::External(e.clone()),
             LogEntry::Other(v) => return v.to_string(),
         };
         serde_json::to_string(&known).expect("a log entry is plain data")

@@ -2,6 +2,8 @@
 // the document, the log and the API key are only touched on the Rust side.
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { confirm, open, save } from '@tauri-apps/plugin-dialog'
+import { m } from './i18n'
+import type { Preferences } from './preferences'
 
 /** An AI log in the document's folder whose document is gone. */
 export type Orphan = { name: string; isSameText: boolean; questions: number }
@@ -10,7 +12,9 @@ export type Opened = { path: string; name: string; text: string; language: strin
 export type BibFile = { path: string; name: string; format: string; entries: number; isFromDocument: boolean; error?: string }
 export type RefRecord = { doi: string; title: string; year: string }
 export type CheckedRef = { key: string; derived: boolean; file: string; title: string; year: string; doi: string; status: 'ok' | 'mismatch' | 'not_found' | 'no_doi' | 'error'; found?: RefRecord; suggestion?: string; detail?: string }
-export type SourcesView = { files: BibFile[]; entries: number; cited: number; missing: string[]; checked: { ts: string; rows: CheckedRef[] } | null }
+export type SourcesView = { files: BibFile[]; entries: number; cited: number; missing: string[]; checked: { ts: string; rows: CheckedRef[] } | null; style: Style | null }
+/** The reference style of the export: a CSL file. `isFromDocument` when the front matter names it (`csl:`). */
+export type Style = { path: string; name: string; title: string; isFromDocument: boolean; error?: string }
 export type RefHit = { citekey: string | null; title: string; authors: string; year: string; doi: string; file?: string }
 export type SourceHits = { from: 'zotero' | 'bibliography'; hits: RefHit[] }
 
@@ -55,7 +59,16 @@ export type Expert = {
   isMember: boolean
   /** what the author told this expert about the document */
   brief: string
+  /** What the expert is told about its perspective and voice, and whether the author reworded it in this project. */
+  prompt: string
+  isPromptEdited: boolean
 }
+
+/** A file of the author's that the AI is given as background knowledge. `personas` empty: for everyone. */
+export type LinkedFile = { path: string; name: string; personas: string[]; isMissing: boolean; chars: number; isCut: boolean }
+/** What a project sets differently from the general settings; what is absent is as there. */
+export type ProjectOverrides = Partial<Pick<Preferences, 'writingLanguage' | 'aiLanguage' | 'disclosureLanguage' | 'livePauseSeconds' | 'liveGapSeconds' | 'livePerHour'>>
+export type ProjectView = { files: LinkedFile[]; overrides: ProjectOverrides; folder: string }
 
 export type PartyView = { experts: Expert[]; everyone: string; sharedPalette: Record<string, string> }
 
@@ -64,7 +77,7 @@ export type GuardRow = { ts: string; tool: string; input: string; files: string[
 /** A hint an expert left on a line the author just wrote. */
 export type LiveHint = { turn: string; persona: string; who: string; line: number; text: string; ts: string }
 
-export type LiveView = { isOn: boolean; personas: string[]; hints: LiveHint[]; pauseMs: number }
+export type LiveView = { isOn: boolean; personas: string[]; hints: LiveHint[]; pauseMs: number; gapMs: number; perHour: number }
 
 /** What a call for a live review came to. */
 export type LiveOutcome =
@@ -118,7 +131,12 @@ export type AiTextRow = {
   stillInText: boolean
 }
 
+/** AI use outside the editor, as the author states it. `id` is empty for a new statement. */
+export type ExternalUse = { id: string; tool: string; model: string; date: string; purpose: string; material: string; result: string; checked: string }
+
 export type LogView = {
+  /** what the author stated about other AI tools, the first statement first */
+  external: ExternalUse[]
   stats: { turns: number; today: number; unannotated: number; aiText: number; annotations: number; rejected: number; guardEvents: number }
   turns: TurnRow[]
   guard: GuardRow[]
@@ -137,36 +155,95 @@ export type AskEvent =
 
 export type AskResult = { id: string; answer: string; isAiText: boolean; refused: number; cutOff: string | null; withoutTools: boolean }
 
-export type Settings = { backend: string; model: string; baseUrl: string }
+/** `maxTokens` is the longest answer the author allows; 0 for no limit of theirs. */
+export type Settings = { backend: string; model: string; baseUrl: string; maxTokens: number }
 /** Whether a model kept to the assist-only rules in the behaviour suite. */
 export type ModelStatus = 'tested' | 'failed' | 'untested'
-export type SettingsView = Settings & { hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null }
+export type SettingsView = Settings & { hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean } }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean }
 export type Exported = { paths: string[]; register: string }
 
-const MARKDOWN = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+/** Read when a file dialog opens, so the name is in the language shown now. */
+const markdown = () => [{ name: m.dialogs.fileMarkdown, extensions: ['md', 'markdown'] }]
+
+/** The pages the editor can show in the browser; the addresses here are for reading, the app has its own. */
+export const GUIDES = {
+  markdown: {
+    get name(): string {
+      return m.formatbar.guides.markdown
+    },
+    address: 'commonmark.org/help',
+  },
+  pandoc: {
+    get name(): string {
+      return m.formatbar.guides.pandoc
+    },
+    address: 'pandoc.org/MANUAL.html',
+  },
+  styles: {
+    get name(): string {
+      return m.formatbar.guides.styles
+    },
+    address: 'zotero.org/styles',
+  },
+}
+export type Guide = keyof typeof GUIDES
+/** A page the app opens in the browser: a guide, the project's page, or the page for a coffee. */
+export type Page = Guide | 'repository' | 'coffee'
 
 export const api = {
   getSettings: () => invoke<SettingsView>('get_settings'),
   setSettings: (settings: Settings, apiKey: string | null) => invoke<void>('set_settings', { settings, apiKey }),
   /** Asks the provider for its models with settings that are not saved yet. */
   testConnection: (settings: Settings, apiKey: string | null) => invoke<ModelChoice[]>('test_connection', { settings, apiKey }),
-  /** Asks the author for a file; null when they cancel. */
-  pickDocument: async (): Promise<string | null> => {
-    const path = await open({ multiple: false, directory: false, filters: MARKDOWN })
+  /** Saves the preferences; returns them as the app keeps them, within their limits. */
+  setPreferences: (preferences: Preferences) => invoke<Preferences>('set_preferences', { preferences }),
+  /** Shows the folder the settings are in, in the system's file manager. */
+  showSettingsFolder: () => invoke<void>('show_settings_folder'),
+  /** Asks the author for a folder; null when they cancel. */
+  pickFolder: async (): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: true })
     return typeof path === 'string' ? path : null
   },
-  pickNewDocument: () => save({ filters: MARKDOWN, defaultPath: 'untitled.md' }),
+  /** Asks the author for a file, starting in `folder` if one is given; null when they cancel. */
+  pickDocument: async (folder = ''): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false, filters: markdown(), ...(folder === '' ? {} : { defaultPath: folder }) })
+    return typeof path === 'string' ? path : null
+  },
+  pickNewDocument: (folder = '') => save({ filters: markdown(), defaultPath: folder === '' ? 'untitled.md' : `${folder}${folder.includes('\\') ? '\\' : '/'}untitled.md` }),
   /** Asks before unsaved changes are left behind. */
-  confirmLeave: () => confirm('This document has changes that are not saved. Leave it anyway?', { title: 'Unsaved changes', kind: 'warning' }),
+  confirmLeave: () => confirm(m.dialogs.leaveQuestion, { title: m.dialogs.leaveTitle, kind: 'warning' }),
   openDocument: (path: string) => invoke<Opened>('open_document', { path }),
   newDocument: (path: string) => invoke<Opened>('new_document', { path }),
   /** The author says this document is the renamed one that log was kept for. */
+  /** Opens a report as a new issue in the browser or a new mail, filled in; the author sends it. Where it goes is fixed in the app. */
+  sendFeedback: (way: 'issue' | 'mail', title: string, text: string) => invoke<void>('send_feedback', { way, title, text }),
+  /** Shows a guide in the author's browser. Which pages these are is fixed in the app. */
+  openGuide: (which: Page) => invoke<void>('open_guide', { which }),
+  /** States AI use outside the editor, or corrects a statement (its `id` given). The log only grows. */
+  stateExternal: (stated: ExternalUse) => invoke<void>('state_external', { stated }),
+  /** Takes a statement back: it stays in the log and leaves the disclosure. */
+  withdrawExternal: (id: string) => invoke<void>('withdraw_external', { id }),
+  /** What belongs to the open project besides text and log: linked files, and its own settings. */
+  project: () => invoke<ProjectView>('project'),
+  /** Asks the author for a file to link; null when they cancel. */
+  pickLinkedFile: async (): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false })
+    return typeof path === 'string' ? path : null
+  },
+  /** Links a file as background knowledge for these experts (none: for everyone), or changes whom a linked file is for. */
+  linkFile: (path: string, personas: string[]) => invoke<ProjectView>('link_file', { path, personas }),
+  unlinkFile: (path: string) => invoke<ProjectView>('unlink_file', { path }),
+  setProject: (overrides: ProjectOverrides) => invoke<ProjectView>('set_project', { overrides }),
+  /** Rewords what an expert is told, in this project; empty brings back the standard for an expert that comes with the editor. */
+  setPrompt: (id: string, prompt: string) => invoke<void>('set_prompt', { id, prompt }),
+  /** The author answered the editor's asking for support: 'coffee', 'feedback', 'star' or 'later'. */
+  supportAnswered: (what: 'coffee' | 'feedback' | 'star' | 'later') => invoke<void>('support_answered', { what }),
   adoptLog: (name: string) => invoke<Opened>('adopt_log', { name }),
   /** Asks the author where the document should go; null when they cancel. */
-  pickMove: (current: string) => save({ filters: MARKDOWN, defaultPath: current }),
+  pickMove: (current: string) => save({ filters: markdown(), defaultPath: current }),
   /** Moves or renames the open document, with its log. */
   moveDocument: (target: string, text: string) => invoke<Opened>('move_document', { target, text }),
   /** Saves; returns the AI text found in what changed since the last save, now logged. */
@@ -191,11 +268,18 @@ export const api = {
   sources: (documentText: string) => invoke<SourcesView>('sources', { documentText }),
   /** Asks the author for a bibliography file; null when they cancel. */
   pickBibliography: async (): Promise<string | null> => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Bibliography', extensions: ['bib', 'bibtex', 'json', 'ris', 'nbib'] }] })
+    const path = await open({ multiple: false, directory: false, filters: [{ name: m.dialogs.fileBibliography, extensions: ['bib', 'bibtex', 'json', 'ris', 'nbib'] }] })
     return typeof path === 'string' ? path : null
   },
   addBibliography: (path: string, documentText: string) => invoke<void>('add_bibliography', { path, documentText }),
   removeBibliography: (path: string) => invoke<void>('remove_bibliography', { path }),
+  /** Asks the author for a reference style file; null when they cancel. */
+  pickStyle: async (): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false, filters: [{ name: m.dialogs.fileStyle, extensions: ['csl'] }] })
+    return typeof path === 'string' ? path : null
+  },
+  setStyle: (path: string, documentText: string) => invoke<void>('set_style', { path, documentText }),
+  removeStyle: () => invoke<void>('remove_style'),
   searchSources: (query: string, documentText: string) => invoke<SourceHits>('search_sources', { query, documentText }),
   checkReferences: (documentText: string) => invoke<SourcesView['checked']>('check_references', { documentText }),
   ask: (input: { text: string; replyTo: string | null; persona: string | null; command?: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {

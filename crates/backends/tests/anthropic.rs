@@ -108,6 +108,22 @@ fn the_request_carries_the_tools_and_sends_a_turn_back_as_it_came() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn the_author_s_limit_on_an_answer_s_length_is_what_is_sent() {
+    let sent = |backend: AnthropicBackend, served: std::thread::JoinHandle<String>| async move {
+        backend.complete(&request(), &mut |_: &str| {}).await.unwrap();
+        let asked = served.join().unwrap();
+        serde_json::from_str::<serde_json::Value>(&asked[asked.find("\r\n\r\n").unwrap() + 4..]).unwrap()["max_tokens"].clone()
+    };
+    let (address, served) = serve_once("200 OK", "text/event-stream", recorded());
+    assert_eq!(sent(AnthropicBackend::new("k", Some(&address)), served).await, 64_000, "room for a long answer when nothing is set");
+    let (address, served) = serve_once("200 OK", "text/event-stream", recorded());
+    assert_eq!(sent(AnthropicBackend::new("k", Some(&address)).with_max_tokens(2_000), served).await, 2_000);
+    // more than the editor itself would ask for is not asked for
+    let (address, served) = serve_once("200 OK", "text/event-stream", recorded());
+    assert_eq!(sent(AnthropicBackend::new("k", Some(&address)).with_max_tokens(900_000), served).await, 64_000);
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn over_http_the_answer_streams_and_the_key_goes_in_its_header() {
     let (address, served) = serve_once("200 OK", "text/event-stream", recorded());
     let backend = AnthropicBackend::new("sk-test-key", Some(&address));

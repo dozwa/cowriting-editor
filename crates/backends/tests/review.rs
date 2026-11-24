@@ -7,6 +7,7 @@ use cowriting_core::review::{check_points, live_review, ms_of, read_check, LiveO
 use cowriting_core::scope::PointStatus;
 use cowriting_core::turn::{TurnError, Workspace};
 use cowriting_core::types::LogEntry;
+use cowriting_core::watch::Pace;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -120,6 +121,27 @@ async fn reviews_keep_a_gap_stop_at_the_hourly_limit_and_survive_a_model_that_fa
     host.set_now("2026-11-23T10:30:00.000Z");
     assert_eq!(live_review(&workspace, &model, "m", &settings, &mut state, &text(99)).await.unwrap(), LiveOutcome::Paused);
     assert_eq!(model.requests().len(), 20);
+    // the author's own pace: a shorter gap and a smaller hourly limit are kept instead
+    let mut own = LiveState { baseline: Some(TEXT.into()), pace: Pace { pause_ms: 5_000, gap_ms: 15_000, per_hour: 2 }, ..Default::default() };
+    host.set_now("2026-11-23T10:40:00.000Z");
+    assert!(matches!(live_review(&workspace, &model, "m", &settings, &mut own, &text(1)).await.unwrap(), LiveOutcome::Reviewed { .. }));
+    host.set_now("2026-11-23T10:40:10.000Z");
+    assert_eq!(live_review(&workspace, &model, "m", &settings, &mut own, &text(2)).await.unwrap(), LiveOutcome::Wait { ms: 5_000 });
+    host.set_now("2026-11-23T10:40:15.000Z");
+    assert!(matches!(live_review(&workspace, &model, "m", &settings, &mut own, &text(2)).await.unwrap(), LiveOutcome::Reviewed { .. }));
+    host.set_now("2026-11-23T10:41:00.000Z");
+    assert_eq!(live_review(&workspace, &model, "m", &settings, &mut own, &text(3)).await.unwrap(), LiveOutcome::Paused);
+    assert_eq!(model.requests().len(), 22);
+
+    // hints in the language the author chose for the AI's answers; without a choice, the manuscript's
+    assert!(model.requests().last().unwrap().system.contains("Write the hints in the language of the manuscript."));
+    *workspace.languages.write().unwrap() = cowriting_core::turn::Languages { manuscript: None, answers: Some(cowriting_core::disclosure::Lang::De) };
+    let mut german = LiveState { baseline: Some(TEXT.into()), ..Default::default() };
+    host.set_now("2026-11-23T10:50:00.000Z");
+    assert!(matches!(live_review(&workspace, &model, "m", &settings, &mut german, &text(1)).await.unwrap(), LiveOutcome::Reviewed { .. }));
+    assert!(model.requests().last().unwrap().system.contains("Write the hints in German."));
+    *workspace.languages.write().unwrap() = Default::default();
+
     // an hour after the first review there is room again
     host.set_now("2026-11-23T11:00:30.000Z");
     assert!(matches!(live_review(&workspace, &model, "m", &settings, &mut state, &text(99)).await.unwrap(), LiveOutcome::Reviewed { .. }));

@@ -21,6 +21,23 @@ pub const PAUSE_MS: u64 = 20_000;
 pub const GAP_MS: u64 = 60_000;
 /// At most this many reviews in an hour.
 pub const PER_HOUR: usize = 20;
+/// How often live review asks the model. The standard is the plugin's; the author can change it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pace {
+    /// A review waits until the author has paused this long.
+    pub pause_ms: u64,
+    /// At least this long between two reviews.
+    pub gap_ms: u64,
+    /// At most this many reviews in an hour.
+    pub per_hour: usize,
+}
+
+impl Default for Pace {
+    fn default() -> Self {
+        Pace { pause_ms: PAUSE_MS, gap_ms: GAP_MS, per_hour: PER_HOUR }
+    }
+}
+
 /// How many hints are kept to show.
 pub const KEEP_HINTS: usize = 12;
 

@@ -1,19 +1,21 @@
 import type { Use } from './api'
+import { language, m } from './i18n'
 
-/** What the four classifications mean, in the words the buttons use (the plugin's `USE_LABELS`). */
+/** What the four classifications mean, in the words the buttons use (the plugin's `USE_LABELS`). Read when drawn, so they follow the language. */
 export const USE_LABELS: Record<Use, { button: string; meaning: string }> = {
-  adopted: { button: '✓ used', meaning: 'as suggested' },
-  adapted: { button: '✎ changed', meaning: 'in your own way' },
-  rejected: { button: '✗ not used', meaning: 'decided against it' },
-  info: { button: 'ℹ info', meaning: 'only informed you' },
+  get adopted() { return m.shared.use.adopted },
+  get adapted() { return m.shared.use.adapted },
+  get rejected() { return m.shared.use.rejected },
+  get info() { return m.shared.use.info },
 }
 
-/** "10:42" today, "23 Nov 10:42" otherwise, on the author's clock. */
+/** "10:42" today, "23 Nov 10:42" otherwise, on the author's clock and in the language shown: as the computer writes it where that is its language, else as the language usually does. */
 export function when(ts: string, now = new Date()): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ts
-  const clock = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return d.toDateString() === now.toDateString() ? clock : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${clock}`
+  const locale = navigator.language.toLowerCase().startsWith(language) ? [] : language
+  const clock = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+  return d.toDateString() === now.toDateString() ? clock : `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${clock}`
 }
 
 const LINE_REF = /\b(lines?|Zeilen?|l\.)\s*(\d+)(?:\s*[–-]\s*\d+)?/gi
@@ -31,6 +33,6 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
 /** What the author is told about a model the behaviour suite has not passed. Empty for a tested one. */
 export const MODEL_NOTICE: Record<'tested' | 'failed' | 'untested', string> = {
   tested: '',
-  untested: 'Untested model: it may not keep to the assist-only rules. Everything it says is logged all the same, and it cannot change your text.',
-  failed: 'This model did not keep to the assist-only rules when tested. Everything it says is logged all the same, and it cannot change your text.',
+  get untested() { return m.shared.modelUntested },
+  get failed() { return m.shared.modelFailed },
 }

@@ -1,135 +1,26 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import type { Api, ExportOptions, Exported, ModelChoice, Settings, SettingsView, DocumentExport, ExportTools, FileFormat, PdfChoice } from './api'
+import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, PdfChoice } from './api'
+import { language, m } from './i18n'
 
-function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+/** `mayClose` is asked when Escape is pressed; saying no keeps the dialog open. */
+export function Dialog({ title, onClose, mayClose, children }: { title: string; onClose(): void; mayClose?: () => boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     // jsdom has no showModal; the dialog is then simply shown
     if (ref.current !== null && !ref.current.open) ref.current.showModal?.()
+    // opening puts the focus on the first control; in a dialog longer than the window that may be
+    // at its end, so there the title takes the focus and the dialog is read from the top
+    const dialog = ref.current
+    if (dialog !== null && dialog.scrollHeight > dialog.clientHeight) {
+      dialog.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true })
+      dialog.scrollTop = 0
+    }
   }, [])
   return (
-    <dialog ref={ref} open={typeof HTMLDialogElement.prototype.showModal !== 'function' ? true : undefined} onClose={onClose} aria-label={title}>
-      <h2>{title}</h2>
+    <dialog ref={ref} open={typeof HTMLDialogElement.prototype.showModal !== 'function' ? true : undefined} onClose={onClose} onCancel={e => mayClose !== undefined && !mayClose() && e.preventDefault()} aria-label={title}>
+      <h2 tabIndex={-1}>{title}</h2>
       {children}
     </dialog>
-  )
-}
-
-type Kind = 'anthropic' | 'local' | 'other' | 'claudeCode'
-
-const KINDS: Record<Kind, { label: string; backend: string; address: string; model: string; sent: string }> = {
-  anthropic: { label: 'Claude, with an Anthropic API key', backend: 'anthropic', address: '', model: 'claude-opus-5-5', sent: 'Your questions and your document are sent to Anthropic when you ask.' },
-  local: { label: 'A model on this computer (Ollama, LM Studio)', backend: 'openai-compatible', address: 'http://localhost:11434/v1', model: '', sent: 'Nothing leaves this computer.' },
-  claudeCode: { label: 'Claude Code on this computer, with its own sign-in', backend: 'claude-code', address: '', model: 'sonnet', sent: 'Your questions and your document are sent to Anthropic by Claude Code, under the sign-in Claude Code already has. The editor does not see or store that sign-in, and Claude Code gets none of its own tools here, only the editor’s.' },
-  other: { label: 'Another provider (OpenAI-compatible API)', backend: 'openai-compatible', address: '', model: '', sent: 'Your questions and your document are sent to the provider at this address when you ask.' },
-}
-
-const isLocalAddress = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(url)
-
-const STATUS_WORDS = { tested: 'kept to the assist-only rules when tested', failed: 'did not keep to the assist-only rules when tested', untested: 'not tested for the assist-only rules' }
-
-export function SettingsDialog({ api, settings, onClose }: { api: Api; settings: SettingsView; onClose(saved: SettingsView | null): void }) {
-  const isScripted = settings.backend.startsWith('fake:')
-  const [kind, setKind] = useState<Kind>(settings.backend === 'claude-code' ? 'claudeCode' : settings.backend !== 'openai-compatible' ? 'anthropic' : isLocalAddress(settings.baseUrl) ? 'local' : 'other')
-  const [model, setModel] = useState(isScripted ? KINDS.anthropic.model : settings.model)
-  const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
-  const [key, setKey] = useState('')
-  const [choices, setChoices] = useState<ModelChoice[] | null>(null)
-  const [isTesting, setTesting] = useState(false)
-  const [error, setError] = useState('')
-  const chosen = KINDS[kind]
-  const next: Settings = { backend: chosen.backend, model: model.trim(), baseUrl: baseUrl.trim() }
-  const hasStoredKey = settings.hasKey && settings.backend === chosen.backend
-
-  const choose = (to: Kind) => {
-    setKind(to)
-    setBaseUrl(KINDS[to].address)
-    setModel(KINDS[to].model)
-    setChoices(null)
-    setError('')
-  }
-
-  const test = async () => {
-    setTesting(true)
-    setError('')
-    try {
-      const found = await api.testConnection(next, key.trim() === '' ? null : key.trim())
-      setChoices(found)
-      // a model the provider does not offer is replaced by one it does
-      if (found.length > 0 && !found.some(m => m.id === model.trim())) setModel(found[0]!.id)
-    } catch (e) {
-      setChoices(null)
-      setError(String(e))
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  const save = async () => {
-    try {
-      await api.setSettings(next, key.trim() === '' ? null : key.trim())
-      onClose(await api.getSettings())
-    } catch (e) {
-      setError(String(e))
-    }
-  }
-
-  const status = choices?.find(m => m.id === model.trim())?.status
-  return (
-    <Dialog title={settings.isFirstRun ? 'Set up the AI' : 'Settings'} onClose={() => onClose(null)}>
-      {settings.isFirstRun && <p>Choose where the AI's answers come from. You can change this later, and you can write without it.</p>}
-      {isScripted && <p className="hint">This run answers from a script, not a model. The settings below apply to normal runs.</p>}
-      <div className="choice" role="radiogroup" aria-label="Where the AI's answers come from">
-        {(Object.keys(KINDS) as Kind[]).map(k => (
-          <label key={k}>
-            <input type="radio" name="kind" checked={kind === k} onChange={() => choose(k)} /> {KINDS[k].label}
-          </label>
-        ))}
-      </div>
-      {kind !== 'local' && kind !== 'claudeCode' && (
-        <label>
-          API key
-          <input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} placeholder={hasStoredKey ? 'A key is stored. Type a new one to replace it.' : ''} />
-          <small>Kept in your system’s key store, not in a file.</small>
-        </label>
-      )}
-      {kind === 'claudeCode' && <p className="muted">Needs Claude Code installed and signed in (run “claude” once in a terminal). Whether your plan allows this use is between you and Anthropic.</p>}
-      {kind !== 'claudeCode' && (
-      <label>
-        {kind === 'anthropic' ? 'Address of the API (optional)' : 'Address of the API'}
-        <input value={baseUrl} onChange={e => (setBaseUrl(e.target.value), setChoices(null))} placeholder={kind === 'anthropic' ? 'https://api.anthropic.com' : kind === 'other' ? 'https://api.openai.com/v1' : ''} />
-        {kind === 'local' && (
-          <small>
-            <button className="link" onClick={() => setBaseUrl('http://localhost:11434/v1')}>Ollama</button> · <button className="link" onClick={() => setBaseUrl('http://localhost:1234/v1')}>LM Studio</button>
-          </small>
-        )}
-        {kind === 'anthropic' && <small>Only for a gateway that speaks the Claude API, such as one your institution runs.</small>}
-      </label>
-      )}
-      <label>
-        Model
-        {choices !== null && choices.length > 0 ? (
-          <select value={model} onChange={e => setModel(e.target.value)}>
-            {choices.map(m => (
-              <option key={m.id} value={m.id}>{m.name === m.id || m.name === '' ? m.id : `${m.name} (${m.id})`}{m.status === 'untested' ? '' : m.status === 'tested' ? ' ✓' : ' ✗'}</option>
-            ))}
-          </select>
-        ) : (
-          <input value={model} onChange={e => setModel(e.target.value)} placeholder={kind === 'local' ? 'Test the connection to list the models' : ''} />
-        )}
-        <small>{status !== undefined ? `This model: ${STATUS_WORDS[status]}. ` : ''}The disclosure names the model that answered.</small>
-      </label>
-      <div className="row">
-        <button onClick={() => void test()} disabled={isTesting}>{isTesting ? 'Testing…' : 'Test the connection'}</button>
-        {choices !== null && <span className="ok" role="status">{kind === 'claudeCode' ? 'Claude Code is installed' : `Connected: ${choices.length === 1 ? '1 model' : `${choices.length} models`}`}</span>}
-      </div>
-      <p className="muted">{chosen.sent}</p>
-      {error !== '' && <p className="error" role="alert">{error}</p>}
-      <div className="row end">
-        <button onClick={() => onClose(null)}>{settings.isFirstRun ? 'Later' : 'Cancel'}</button>
-        <button className="primary" onClick={() => void save()} disabled={model.trim() === '' || (kind !== 'anthropic' && baseUrl.trim() === '' && kind === 'local')}>Save</button>
-      </div>
-    </Dialog>
   )
 }
 
@@ -148,20 +39,21 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
     }
   }
 
+  const t = m.dialogs
   return (
-    <Dialog title="Disclosure of AI use" onClose={onClose}>
-      <p>A register of what the AI was used for, built from the log. Check it and adapt it to your institution’s rules before you hand it in.</p>
-      {open > 0 && <p className="hint">{open === 1 ? 'One AI input is' : `${open} AI inputs are`} not classified yet and will be listed as “not annotated”.</p>}
+    <Dialog title={t.disclosureTitle} onClose={onClose}>
+      <p>{t.disclosureIntro}</p>
+      {open > 0 && <p className="hint">{t.notClassified(open)}</p>}
       <div className="row">
         <label>
-          Language
+          {t.language}
           <select value={options.language} onChange={e => set({ language: e.target.value as 'en' | 'de' })}>
             <option value="en">English</option>
             <option value="de">Deutsch</option>
           </select>
         </label>
         <label>
-          Format
+          {t.format}
           <select value={options.format} onChange={e => set({ format: e.target.value as 'md' | 'tex' })}>
             <option value="md">Markdown</option>
             <option value="tex">LaTeX</option>
@@ -169,15 +61,15 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
         </label>
       </div>
       <label className="check">
-        <input type="checkbox" checked={options.withPrompts} onChange={e => set({ withPrompts: e.target.checked })} /> Also write the appendix with every prompt
+        <input type="checkbox" checked={options.withPrompts} onChange={e => set({ withPrompts: e.target.checked })} /> {t.withPrompts}
       </label>
       <label className="check">
-        <input type="checkbox" checked={options.withAnswers} disabled={!options.withPrompts} onChange={e => set({ withAnswers: e.target.checked })} /> Include the AI’s answers in the appendix
+        <input type="checkbox" checked={options.withAnswers} disabled={!options.withPrompts} onChange={e => set({ withAnswers: e.target.checked })} /> {t.withAnswers}
       </label>
       {error !== '' && <p className="error" role="alert">{error}</p>}
       {exported !== null && (
         <>
-          <p className="muted">Written to:</p>
+          <p className="muted">{t.writtenTo}</p>
           <ul className="paths">
             {exported.paths.map(path => (
               <li key={path}><code>{path}</code></li>
@@ -187,14 +79,15 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
         </>
       )}
       <div className="row end">
-        <button onClick={onClose}>Close</button>
-        <button className="primary" onClick={() => void write()}>{exported === null ? 'Write the disclosure' : 'Write again'}</button>
+        <button onClick={onClose}>{t.close}</button>
+        <button className="primary" onClick={() => void write()}>{exported === null ? t.writeDisclosure : t.writeAgain}</button>
       </div>
     </Dialog>
   )
 }
 
-const ENGINE_NAMES: Record<string, string> = { typst: 'Typst (comes with the editor)', xelatex: 'LaTeX (XeLaTeX)', lualatex: 'LaTeX (LuaLaTeX)', pdflatex: 'LaTeX (pdfLaTeX)', tectonic: 'LaTeX (Tectonic)' }
+/** The typesetting programs by the names authors know; read when drawn, for the language shown now. */
+const engineNames = (): Record<string, string> => ({ typst: m.dialogs.typstEngine, xelatex: 'LaTeX (XeLaTeX)', lualatex: 'LaTeX (LuaLaTeX)', pdflatex: 'LaTeX (pdfLaTeX)', tectonic: 'LaTeX (Tectonic)' })
 
 /** What the author chose last time, kept in this window's storage; a guess from the system's language the first time. */
 function rememberedPdf(): PdfChoice {
@@ -250,12 +143,13 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       // not remembered, then
     }
   }
-  const cannot = tools === undefined ? '' : !tools.hasPandoc ? 'pandoc was not found: it comes with the editor’s installer, so this copy is incomplete. Installing pandoc from pandoc.org also works.' : format === 'pdf' && engines.length === 0 ? 'A PDF needs a program that typesets it (Typst, or a LaTeX such as TeX Live, MacTeX or MiKTeX), and none was found. Word export works without.' : ''
+  const t = m.dialogs
+  const cannot = tools === undefined ? '' : !tools.hasPandoc ? t.noPandoc : format === 'pdf' && engines.length === 0 ? t.noPdfEngine : ''
   return (
-    <Dialog title="Export the document" onClose={onClose}>
-      <p>Makes a PDF or a Word file of the document as it is in the editor now. Citations like <code>[@smith2020]</code> become references. Your document is not changed.</p>
+    <Dialog title={t.exportTitle} onClose={onClose}>
+      <p>{t.exportIntro(<code>[@smith2020]</code>)}</p>
       <label>
-        Format
+        {t.format}
         <select value={format} onChange={e => (setFormat(e.target.value as FileFormat), setMade(null))}>
           <option value="pdf">PDF</option>
           <option value="docx">Word (.docx)</option>
@@ -264,7 +158,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       {format === 'pdf' && engines.length > 0 && (
         <div className="row">
           <label>
-            Paper
+            {t.paper}
             <select value={pdf.paper} onChange={e => choose({ paper: e.target.value as PdfChoice['paper'] })}>
               <option value="a4">A4</option>
               <option value="letter">US Letter</option>
@@ -272,34 +166,177 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
           </label>
           {engines.length > 1 && (
             <label>
-              Typeset with
+              {t.typesetWith}
               <select value={engine ?? ''} onChange={e => choose({ engine: e.target.value })}>
-                {engines.map(name => <option key={name} value={name}>{ENGINE_NAMES[name] ?? name}</option>)}
+                {engines.map(name => <option key={name} value={name}>{engineNames()[name] ?? name}</option>)}
               </select>
             </label>
           )}
         </div>
       )}
-      {format === 'docx' && <p className="muted">Page size, fonts and styles of a Word file are set in Word.</p>}
+      {format === 'docx' && <p className="muted">{t.wordNote}</p>}
       {tools !== undefined && (
-        <p className="muted">
-          {tools.hasZotero ? 'References come from your Zotero library by citekey (Better BibTeX), then from your bibliography files.' : 'Zotero with Better BibTeX is not running: references come from your bibliography files only.'}
-        </p>
+        <p className="muted">{tools.hasZotero ? t.fromZotero : t.zoteroNotRunning}</p>
       )}
       {cannot !== '' && <p className="hint">{cannot}</p>}
       {error !== '' && <p className="error" role="alert">{error}</p>}
       {made !== null && (
         <div role="status">
-          <p>Written to <code>{made.path}</code>.</p>
+          <p>{t.exportedTo(<code>{made.path}</code>)}</p>
           <p className="muted">
-            {made.cited === 0 ? 'The document cites nothing.' : `${made.cited} cited, ${made.fromZotero} of them from Zotero.`}
-            {made.missing.length > 0 && ` Not found anywhere, and left as they are in the text: ${made.missing.map(key => `@${key}`).join(', ')}.`}
+            {made.cited === 0 ? t.citedNothing : t.citedSummary(made.cited, made.fromZotero)}
+            {made.missing.length > 0 && ` ${t.notFound(made.missing.map(key => `@${key}`).join(', '))}`}
           </p>
         </div>
       )}
       <div className="actions">
-        <button onClick={onClose}>Close</button>
-        <button className="primary" disabled={setup === null || cannot !== '' || isWorking} onClick={() => void write()}>{isWorking ? 'Exporting…' : 'Export'}</button>
+        <button onClick={onClose}>{t.close}</button>
+        <button className="primary" disabled={setup === null || cannot !== '' || isWorking} onClick={() => void write()}>{isWorking ? t.exporting : t.exportButton}</button>
+      </div>
+    </Dialog>
+  )
+}
+
+/** The longest report the app hands over; it says no to more. */
+const LONGEST_TITLE = 150
+const LONGEST_TEXT = 4000
+
+export type FeedbackKind = 'bug' | 'idea' | 'other'
+
+/**
+ * What the editor adds about itself when the author wants that. In English whatever the window
+ * shows, since it is read by whoever maintains the editor. The provider's address is left out:
+ * it can be a private one.
+ */
+function technicalDetails(settings: SettingsView): string {
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(settings.baseUrl)
+  const ai = settings.backend.startsWith('fake:') ? 'scripted' : settings.backend === 'openai-compatible' ? `${isLocal ? 'a model on this computer' : 'an OpenAI-compatible provider'}, model ${settings.model}` : `${settings.backend}, model ${settings.model}`
+  return `CoWriting Editor ${settings.version}, ${settings.system}\nShown in: ${language}\nAI: ${ai}`
+}
+
+/**
+ * Feedback or a bug report to whoever maintains the editor. A bug is asked for in three parts, so
+ * that it can be found again. The author sees every character that goes out, and sends it themselves.
+ */
+export function FeedbackDialog({ api, settings, kind: startsAs = 'idea', onClose }: { api: Api; settings: SettingsView; kind?: FeedbackKind; onClose(): void }) {
+  const [kind, setKind] = useState<FeedbackKind>(startsAs)
+  const [subject, setSubject] = useState('')
+  const [text, setText] = useState('')
+  const [did, setDid] = useState('')
+  const [expected, setExpected] = useState('')
+  const [withDetails, setWithDetails] = useState(true)
+  const [status, setStatus] = useState('')
+  const [error, setError] = useState('')
+  const preview = useRef<HTMLTextAreaElement>(null)
+  const t = m.dialogs
+  const isBug = kind === 'bug'
+
+  const title = `${isBug ? 'Bug: ' : kind === 'idea' ? 'Idea: ' : 'Feedback: '}${subject.trim()}`
+  // the parts of a bug report are named in English: they are read by whoever maintains the editor
+  const said = isBug ? [`What I did:\n${did.trim() || '-'}`, `What happened:\n${text.trim()}`, `What I expected:\n${expected.trim() || '-'}`].join('\n\n') : text.trim()
+  const report = `${said}${withDetails ? `\n\n---\n${technicalDetails(settings)}` : ''}`
+  const left = LONGEST_TEXT - report.length
+  const canSend = subject.trim() !== '' && text.trim() !== '' && left >= 0
+
+  const send = async (way: 'issue' | 'mail') => {
+    setStatus('')
+    try {
+      await api.sendFeedback(way, title, report)
+      setError('')
+      setStatus(t.feedbackOpened(way))
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+  const copy = async () => {
+    const whole = `${title}\n\n${report}`
+    try {
+      await navigator.clipboard.writeText(whole)
+      setStatus(t.feedbackCopied)
+    } catch {
+      // a web view that keeps the clipboard to itself: the report is selected, and the author copies it
+      preview.current?.focus()
+      preview.current?.select()
+      setStatus(t.feedbackSelected)
+    }
+  }
+
+  return (
+    <Dialog title={startsAs === 'bug' ? t.bugTitle : t.feedbackTitle} onClose={onClose}>
+      <p className="muted">{t.feedbackIntro(settings.feedbackByMail)}</p>
+      <label>
+        {t.feedbackKind}
+        <select value={kind} onChange={e => setKind(e.target.value as FeedbackKind)}>
+          <option value="bug">{t.feedbackKinds.bug}</option>
+          <option value="idea">{t.feedbackKinds.idea}</option>
+          <option value="other">{t.feedbackKinds.other}</option>
+        </select>
+      </label>
+      <label>
+        {t.feedbackSubject}
+        <input value={subject} maxLength={LONGEST_TITLE - 10} onChange={e => setSubject(e.target.value)} />
+      </label>
+      {isBug && (
+        <label>
+          {t.bugDid}
+          <textarea rows={3} value={did} onChange={e => setDid(e.target.value)} />
+          <small>{t.bugDidHint}</small>
+        </label>
+      )}
+      <label>
+        {isBug ? t.bugHappened : t.feedbackText}
+        <textarea rows={isBug ? 3 : 5} value={text} onChange={e => setText(e.target.value)} aria-invalid={left < 0} />
+        {(left < 400 || !isBug) && <small className={left < 0 ? 'over' : undefined}>{t.feedbackLeft(left)}</small>}
+      </label>
+      {isBug && (
+        <label>
+          {t.bugExpected}
+          <textarea rows={2} value={expected} onChange={e => setExpected(e.target.value)} />
+        </label>
+      )}
+      <label className="check">
+        <input type="checkbox" checked={withDetails} onChange={e => setWithDetails(e.target.checked)} /> {t.feedbackDetails}
+      </label>
+      <label>
+        {t.feedbackPreview}
+        <textarea ref={preview} className="outgoing" readOnly rows={7} value={`${title}\n\n${report}`} />
+        <small>{t.feedbackNothingElse}</small>
+      </label>
+      {error !== '' && <p className="error" role="alert">{error}</p>}
+      {status !== '' && <p className="ok" role="status">{status}</p>}
+      {!settings.feedbackByMail && <p className="muted">{t.feedbackIssueNote}</p>}
+      <div className="row end">
+        <button onClick={onClose}>{t.close}</button>
+        <span className="spacer" />
+        <button onClick={() => void copy()} disabled={!canSend}>{t.feedbackCopy}</button>
+        <button className={settings.feedbackByMail ? undefined : 'primary'} onClick={() => void send('issue')} disabled={!canSend} title={t.feedbackIssueNote}>{t.feedbackIssue}</button>
+        {settings.feedbackByMail && <button className="primary" onClick={() => void send('mail')} disabled={!canSend}>{t.feedbackMail}</button>}
+      </div>
+    </Dialog>
+  )
+}
+
+/** Every tenth start the editor asks for a coffee, a word of feedback or a star. Whatever is chosen, it is quiet again for a while. */
+export function SupportDialog({ api, withStar, onFeedback, onClose }: { api: Api; withStar: boolean; onFeedback(): void; onClose(): void }) {
+  const t = m.dialogs
+  const answer = (what: 'coffee' | 'feedback' | 'star' | 'later') => {
+    void api.supportAnswered(what).catch(() => {})
+    if (what === 'coffee') void api.openGuide('coffee').catch(() => {})
+    if (what === 'star') void api.openGuide('repository').catch(() => {})
+    if (what === 'feedback') onFeedback()
+    else onClose()
+  }
+  return (
+    <Dialog title={t.supportTitle} onClose={() => answer('later')}>
+      <p>{t.supportIntro}</p>
+      <div className="support">
+        <button className="primary" onClick={() => answer('coffee')}>{t.supportCoffee}</button>
+        <button onClick={() => answer('feedback')}>{t.supportFeedback}</button>
+        {withStar && <button onClick={() => answer('star')}>{t.supportStar}</button>}
+      </div>
+      <p className="muted">{t.supportNote}</p>
+      <div className="row end">
+        <button onClick={() => answer('later')}>{t.supportLater}</button>
       </div>
     </Dialog>
   )

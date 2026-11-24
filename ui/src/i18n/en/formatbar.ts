@@ -1,0 +1,44 @@
+export const formatbar = {
+  toolbar: 'Markdown',
+  help: 'How markdown works',
+  // the buttons: `writes` is the markdown a button stands for, shown in its tooltip
+  formats: {
+    title: { name: 'Title', writes: '# Title' },
+    heading: { name: 'Heading', writes: '## Heading' },
+    subheading: { name: 'Subheading', writes: '### Subheading' },
+    bold: { name: 'Bold', writes: '**bold**' },
+    italic: { name: 'Italic', writes: '*italic*' },
+    bullets: { name: 'List', writes: '- item' },
+    numbers: { name: 'Numbered list', writes: '1. item' },
+    quote: { name: 'Quotation', writes: '> quoted text' },
+    link: { name: 'Link', writes: '[text](https://address)' },
+    image: { name: 'Picture', writes: '![description](file.png)' },
+    table: { name: 'Table', writes: '| Column | Column |' },
+    citation: { name: 'Citation', writes: '[@key]. The Sources tab finds the key' },
+    footnote: { name: 'Footnote', writes: '^[note]' },
+  },
+  intro: 'Markdown is plain text with a few marks that say what something is: a heading, a list, a quotation. You type the marks, or let the buttons above the text write them. The file stays readable in any program.',
+  // the marks worth knowing: `typed` is what the author types, an empty `note` is not shown
+  syntax: {
+    headings: { what: 'Title and headings', typed: '# Title\n## Heading\n### Subheading', note: '' },
+    paragraph: { what: 'New paragraph', typed: 'One paragraph.\n\nThe next one.', note: 'An empty line between them. A single line break does not start a paragraph.' },
+    emphasis: { what: 'Bold and italic', typed: '**bold** and *italic*', note: '' },
+    bullets: { what: 'List', typed: '- first\n- second', note: '' },
+    numbers: { what: 'Numbered list', typed: '1. first\n2. second', note: '' },
+    quote: { what: 'Quotation', typed: '> quoted text', note: '' },
+    link: { what: 'Link', typed: '[text](https://address)', note: '' },
+    image: { what: 'Picture', typed: '![description](file.png)', note: 'The file lies beside your document.' },
+    table: { what: 'Table', typed: '| Group | Mean |\n|-------|------|\n| A     | 4.2  |', note: '' },
+    citation: { what: 'Citation', typed: '[@smith2020]\n[@smith2020, p. 12; @lee2019]', note: 'The key is the one in your bibliography; the Sources tab finds it.' },
+    footnote: { what: 'Footnote', typed: 'A claim.^[The note, written where it belongs.]', note: '' },
+    frontMatter: { what: 'About the document', typed: '---\ntitle: Walking breaks\nbibliography: refs.bib\n---', note: 'Only at the very top. The export reads title, author and bibliography from here.' },
+  },
+  more: 'More, in your browser:',
+  close: 'Close',
+  // the pages the editor can show in the browser
+  guides: {
+    markdown: 'Markdown in 60 seconds',
+    pandoc: 'Everything the export understands',
+    styles: 'Reference styles to download',
+  },
+}

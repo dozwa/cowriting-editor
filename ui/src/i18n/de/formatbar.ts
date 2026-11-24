@@ -1,0 +1,43 @@
+import type { formatbar as pattern } from '../en/formatbar'
+
+export const formatbar: typeof pattern = {
+  toolbar: 'Markdown',
+  help: 'So funktioniert Markdown',
+  formats: {
+    title: { name: 'Titel', writes: '# Titel' },
+    heading: { name: 'Überschrift', writes: '## Überschrift' },
+    subheading: { name: 'Unterüberschrift', writes: '### Unterüberschrift' },
+    bold: { name: 'Fett', writes: '**fett**' },
+    italic: { name: 'Kursiv', writes: '*kursiv*' },
+    bullets: { name: 'Liste', writes: '- Punkt' },
+    numbers: { name: 'Nummerierte Liste', writes: '1. Punkt' },
+    quote: { name: 'Zitatblock', writes: '> zitierter Text' },
+    link: { name: 'Link', writes: '[Text](https://adresse)' },
+    image: { name: 'Bild', writes: '![Beschreibung](datei.png)' },
+    table: { name: 'Tabelle', writes: '| Spalte | Spalte |' },
+    citation: { name: 'Quellenangabe', writes: '[@schlüssel]. Der Tab „Quellen“ findet den Schlüssel' },
+    footnote: { name: 'Fußnote', writes: '^[Anmerkung]' },
+  },
+  intro: 'Markdown ist reiner Text mit ein paar Zeichen, die sagen, was etwas ist: eine Überschrift, eine Liste, ein Zitatblock. Die Zeichen werden getippt oder von den Schaltflächen über dem Text geschrieben. Die Datei bleibt in jedem Programm lesbar.',
+  syntax: {
+    headings: { what: 'Titel und Überschriften', typed: '# Titel\n## Überschrift\n### Unterüberschrift', note: '' },
+    paragraph: { what: 'Neuer Absatz', typed: 'Ein Absatz.\n\nDer nächste.', note: 'Eine Leerzeile dazwischen. Ein einzelner Zeilenumbruch beginnt keinen Absatz.' },
+    emphasis: { what: 'Fett und kursiv', typed: '**fett** und *kursiv*', note: '' },
+    bullets: { what: 'Liste', typed: '- erstens\n- zweitens', note: '' },
+    numbers: { what: 'Nummerierte Liste', typed: '1. erstens\n2. zweitens', note: '' },
+    quote: { what: 'Zitatblock', typed: '> zitierter Text', note: '' },
+    link: { what: 'Link', typed: '[Text](https://adresse)', note: '' },
+    image: { what: 'Bild', typed: '![Beschreibung](datei.png)', note: 'Die Datei liegt neben Ihrem Dokument.' },
+    table: { what: 'Tabelle', typed: '| Gruppe | Mittel |\n|--------|--------|\n| A      | 4,2    |', note: '' },
+    citation: { what: 'Quellenangabe', typed: '[@smith2020]\n[@smith2020, S. 12; @lee2019]', note: 'Der Schlüssel ist der aus Ihrem Literaturverzeichnis; der Tab „Quellen“ findet ihn.' },
+    footnote: { what: 'Fußnote', typed: 'Eine Behauptung.^[Die Anmerkung, dort geschrieben, wo sie hingehört.]', note: '' },
+    frontMatter: { what: 'Über das Dokument', typed: '---\ntitle: Gehpausen\nbibliography: refs.bib\n---', note: 'Nur ganz oben. Der Export liest Titel, Autor und Literaturverzeichnis von hier.' },
+  },
+  more: 'Mehr dazu, in Ihrem Browser:',
+  close: 'Schließen',
+  guides: {
+    markdown: 'Markdown in 60 Sekunden',
+    pandoc: 'Alles, was der Export versteht',
+    styles: 'Zitierstile zum Herunterladen',
+  },
+}

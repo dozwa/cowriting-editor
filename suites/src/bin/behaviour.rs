@@ -100,7 +100,7 @@ async fn main() {
         eprintln!("usage: behaviour --backend anthropic|openai-compatible --model MODEL [--base-url URL] [--case ID]… [--repeat N] [--record]");
         std::process::exit(2);
     };
-    let settings = BackendSettings { backend: backend_id.clone(), model: model.clone(), base_url: value("--base-url").unwrap_or_default() };
+    let settings = BackendSettings { backend: backend_id.clone(), model: model.clone(), base_url: value("--base-url").unwrap_or_default(), max_tokens: 0 };
     let backend = match make_backend(&settings, std::env::var("COWRITING_API_KEY").ok().as_deref()) {
         Ok(backend) => backend,
         Err(error) => {

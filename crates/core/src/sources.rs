@@ -575,8 +575,81 @@ pub fn added_files(host: &dyn Host, sidecar: &Sidecar) -> Vec<String> {
     saved.and_then(|v| serde_json::from_value(v["files"].clone()).ok()).unwrap_or_default()
 }
 
+/// `sources.json` as it is, to change one thing in it and keep the rest.
+fn sources_json(host: &dyn Host, sidecar: &Sidecar) -> Value {
+    host.read(&sidecar.sources_json()).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok()).filter(Value::is_object).unwrap_or_else(|| serde_json::json!({}))
+}
+
+fn save_sources_json(host: &dyn Host, sidecar: &Sidecar, json: &Value) -> std::io::Result<()> {
+    host.write(&sidecar.sources_json(), &format!("{}\n", serde_json::to_string_pretty(json).expect("plain data")))
+}
+
 pub fn save_added_files(host: &dyn Host, sidecar: &Sidecar, files: &[String]) -> std::io::Result<()> {
-    host.write(&sidecar.sources_json(), &format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({ "files": files })).expect("plain data")))
+    let mut json = sources_json(host, sidecar);
+    json["files"] = serde_json::json!(files);
+    save_sources_json(host, sidecar, &json)
+}
+
+/// The reference style a document is exported in: a CSL file. Read, never written.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Style {
+    pub path: String,
+    pub name: String,
+    /// What the style calls itself ("American Psychological Association 7th edition"); empty when the file says nothing.
+    pub title: String,
+    /// True when the document's front matter names it (`csl:`); false when the author chose it in the editor.
+    pub is_from_document: bool,
+    /// Why it cannot be used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+static STYLE_TITLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<title>\s*(.*?)\s*</title>").unwrap());
+
+/// What a CSL file calls itself, or why the text is not a CSL style.
+pub fn style_title(text: &str) -> Result<String, String> {
+    if !text.contains("<style") {
+        return Err("is not a CSL style (a .csl file, as zotero.org/styles has them)".into());
+    }
+    let title = STYLE_TITLE.captures(text).map(|found| found[1].replace("&amp;", "&")).unwrap_or_default();
+    Ok(title)
+}
+
+/// The style file the document's front matter names (pandoc's `csl:`).
+pub fn front_matter_style(document_text: &str) -> Option<String> {
+    let front = FRONT_MATTER.captures(document_text.trim_start_matches('\u{feff}'))?;
+    let line = front[1].lines().find(|line| line.starts_with("csl:"))?;
+    Some(line["csl:".len()..].trim().trim_matches(['"', '\'']).trim().to_string()).filter(|file| !file.is_empty())
+}
+
+/// The style file the author chose in the editor (`sources.json` in the sidecar), as a full path.
+pub fn added_style(host: &dyn Host, sidecar: &Sidecar) -> Option<String> {
+    sources_json(host, sidecar)["style"].as_str().filter(|path| !path.is_empty()).map(String::from)
+}
+
+pub fn save_added_style(host: &dyn Host, sidecar: &Sidecar, style: Option<&str>) -> std::io::Result<()> {
+    let mut json = sources_json(host, sidecar);
+    match style {
+        Some(path) => json["style"] = serde_json::json!(path),
+        None => {
+            json.as_object_mut().expect("an object").remove("style");
+        }
+    }
+    save_sources_json(host, sidecar, &json)
+}
+
+/// The document's reference style: the one its front matter names, else the one the author chose. None is pandoc's standard.
+pub fn load_style(host: &dyn Host, sidecar: &Sidecar, document_text: &str) -> Option<Style> {
+    let named = front_matter_style(document_text).map(|file| (if is_absolute(&file) { file } else { format!("{}/{file}", sidecar.folder) }, true));
+    let (path, is_from_document) = named.or_else(|| added_style(host, sidecar).map(|path| (path, false)))?;
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(&path).to_string();
+    let read = host.read(&path).map_err(|e| format!("could not be read: {e}")).and_then(|text| style_title(&text));
+    let (title, error) = match read {
+        Ok(title) => (title, None),
+        Err(error) => (String::new(), Some(error)),
+    };
+    Some(Style { path, name, title, is_from_document, error })
 }
 
 /// The document's bibliography: the files its front matter names, then the ones the author added. Read, never written.

@@ -1,6 +1,6 @@
 // Development only: the same commands over HTTP, for running the interface in an ordinary
 // browser against `cargo run -p cowriting-suites --bin bridge`. The bridge serves one document.
-import type { Api, AskEvent, AskResult } from './api'
+import { type Api, type AskEvent, type AskResult, GUIDES } from './api'
 
 async function call<T>(name: string, args: unknown = {}): Promise<T> {
   const response = await fetch(`/bridge/${name}`, { method: 'POST', body: JSON.stringify(args) })
@@ -13,6 +13,9 @@ export const bridgeApi: Api = {
   getSettings: () => call('get_settings'),
   setSettings: (settings, apiKey) => call('set_settings', { settings, apiKey }),
   testConnection: (settings, apiKey) => call('test_connection', { settings, apiKey }),
+  setPreferences: preferences => call('set_preferences', { preferences }),
+  showSettingsFolder: () => Promise.reject('The bridge has no settings folder.'),
+  pickFolder: async () => null,
   pickDocument: () => call('pick_document'),
   pickNewDocument: async () => null,
   confirmLeave: async () => true,
@@ -20,6 +23,17 @@ export const bridgeApi: Api = {
   newDocument: path => call('new_document', { path }),
   adoptLog: name => call('adopt_log', { name }),
   pickMove: () => call('pick_move'),
+  sendFeedback: () => Promise.reject('The bridge opens no reports. Copy the text instead.'),
+  openGuide: async which => (which === 'repository' || which === 'coffee' ? Promise.reject('The bridge opens guides only.') : void window.open(`https://${GUIDES[which].address}`, '_blank', 'noopener')),
+  stateExternal: stated => call('state_external', { stated }),
+  withdrawExternal: id => call('withdraw_external', { id }),
+  project: () => call('project'),
+  pickLinkedFile: async () => null,
+  linkFile: (path, personas) => call('link_file', { path, personas }),
+  unlinkFile: path => call('unlink_file', { path }),
+  setProject: () => Promise.reject('The bridge keeps general settings only.'),
+  setPrompt: (id, prompt) => call('set_prompt', { id, prompt }),
+  supportAnswered: async () => {},
   moveDocument: () => Promise.reject('The bridge serves one document at one place.'),
   saveDocument: text => call('save_document', { text }),
   reportPaste: (pasted, line, documentText) => call('report_paste', { pasted, line, documentText }),
@@ -37,6 +51,9 @@ export const bridgeApi: Api = {
   pickBibliography: () => call('pick_bibliography'),
   addBibliography: (path, documentText) => call('add_bibliography', { path, documentText }),
   removeBibliography: path => call('remove_bibliography', { path }),
+  pickStyle: async () => null,
+  setStyle: (path, documentText) => call('set_style', { path, documentText }),
+  removeStyle: () => call('remove_style'),
   searchSources: (query, documentText) => call('search_sources', { query, documentText }),
   checkReferences: documentText => call('check_references', { documentText }),
   ask: async (input, onEvent) => {

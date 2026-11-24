@@ -14,12 +14,21 @@ pub struct AnthropicBackend {
     api_key: String,
     base_url: String,
     http: reqwest::Client,
+    max_tokens: u32,
 }
 
 impl AnthropicBackend {
     pub fn new(api_key: impl Into<String>, base_url: Option<&str>) -> AnthropicBackend {
         let base_url = base_url.map(str::trim).filter(|u| !u.is_empty()).unwrap_or(DEFAULT_BASE_URL).trim_end_matches('/').to_string();
-        AnthropicBackend { api_key: api_key.into(), base_url, http: reqwest::Client::new() }
+        AnthropicBackend { api_key: api_key.into(), base_url, http: reqwest::Client::new(), max_tokens: MAX_TOKENS }
+    }
+
+    /// The longest answer the author allows, thinking included; 0 keeps the editor's own room for a long answer.
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> AnthropicBackend {
+        if max_tokens > 0 {
+            self.max_tokens = max_tokens.min(MAX_TOKENS);
+        }
+        self
     }
 
     /// The models this key can use: (id, display name), newest first as the API lists them.
@@ -84,9 +93,14 @@ fn message_json(message: &Message) -> Value {
 /// left to the model's default. Tool inputs are buffered by the API (no eager streaming): a
 /// note's text is not shown while it is written, so there is nothing to gain from fragments.
 pub fn request_body(request: &ModelRequest) -> Value {
+    request_body_within(request, MAX_TOKENS)
+}
+
+/// The request body with the answer's length limited to `max_tokens`.
+pub fn request_body_within(request: &ModelRequest, max_tokens: u32) -> Value {
     let mut body = json!({
         "model": request.model,
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": max_tokens,
         "stream": true,
         "system": request.system,
         "messages": request.messages.iter().map(message_json).collect::<Vec<_>>(),
@@ -240,7 +254,7 @@ impl Backend for AnthropicBackend {
             .post(format!("{}/v1/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", API_VERSION)
-            .json(&request_body(request))
+            .json(&request_body_within(request, self.max_tokens))
             .send()
             .await
             .map_err(unreachable)?;

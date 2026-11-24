@@ -127,6 +127,16 @@ fn the_request_carries_the_contract_the_tools_and_tool_results_in_the_api_s_orde
 }
 
 #[test]
+fn the_author_s_limit_on_an_answer_s_length_is_sent_under_the_name_the_provider_knows() {
+    let request = ModelRequest { system: "s".into(), messages: vec![Message::user("q")], tools: Vec::new(), model: "m".into() };
+    let limit = |body: serde_json::Value| (body.get("max_tokens").cloned(), body.get("max_completion_tokens").cloned());
+    // no limit set: none sent, the provider's own applies
+    assert_eq!(limit(OpenAiBackend::new("http://localhost:11434/v1", None).body(&request)), (None, None));
+    assert_eq!(limit(OpenAiBackend::new("http://localhost:11434/v1", None).with_max_tokens(1500).body(&request)), (Some(json!(1500)), None));
+    assert_eq!(limit(OpenAiBackend::new("", Some("k")).with_max_tokens(1500).body(&request)), (None, Some(json!(1500))));
+}
+
+#[test]
 fn the_provider_is_named_by_where_the_text_went() {
     assert_eq!(OpenAiBackend::new("", Some("k")).provider(), "OpenAI");
     assert_eq!(OpenAiBackend::new("http://localhost:11434/v1/", None).provider(), "a local model server (localhost:11434)");

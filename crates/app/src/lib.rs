@@ -3,6 +3,9 @@
 //! and is tested without one.
 
 pub mod export;
+pub mod feedback;
+pub mod preferences;
+pub mod support;
 
 use cowriting_backends::anthropic::AnthropicBackend;
 use cowriting_backends::fake::FakeBackend;
@@ -14,15 +17,20 @@ use cowriting_core::host::Host;
 use cowriting_core::log::{flatten, readable};
 use cowriting_core::paste_tracking::{check, is_logged, sources, still_in_text, Found};
 use cowriting_core::personas::{id_from_name, is_custom_id, persona_file, shared_palette, Persona};
+use cowriting_core::project::{LinkedFile, Project, LONGEST_FILE};
 use cowriting_core::review::{check_points, live_review, read_check, read_plan, CheckSummary, LiveHint, LiveOutcome, LiveSettings, LiveState};
 use cowriting_core::scope::{scope_progress, ScopeProgress};
-use cowriting_core::sources::{added_files, check_references, cited_keys, format_name, load_bibliography, save_added_files, search, BibFile, CheckedRef, Hit, References, Status};
+use cowriting_core::sources::{
+    added_files, added_style, check_references, cited_keys, format_name, load_bibliography, load_style, save_added_files, save_added_style, search, style_title, BibFile,
+    CheckedRef, Hit, References, Status, Style,
+};
 use cowriting_core::stats::compute_stats;
 use cowriting_core::thread::thread_of;
 use cowriting_core::turn::{annotate, run_turn, Ask, TurnEvent, TurnOutcome, Workspace};
+use cowriting_core::types::ExternalEntry;
 use cowriting_core::types::{AiTextEntry, AnnotationEntry};
 use cowriting_core::types::{LogEntry, Stats, ThreadMessage};
-use cowriting_core::watch::PAUSE_MS;
+use cowriting_core::watch::Pace;
 use cowriting_core::words::{changed_paragraphs, paragraphs};
 use cowriting_core::words::{count_words, Format};
 pub use export::{DocumentExport, ExportTools, FileFormat, Paper, PdfChoice};
@@ -107,7 +115,23 @@ pub struct LogView {
     pub guard: Vec<GuardRow>,
     /// AI text the editor saw enter the document, newest first.
     pub ai_text: Vec<AiTextRow>,
+    /// AI use outside the editor, as the author stated it; the first statement first.
+    pub external: Vec<ExternalUse>,
     pub words: usize,
+}
+
+/// AI use outside the editor as the author states it. `id` is empty for a new statement, and names the one a correction replaces.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExternalUse {
+    pub id: String,
+    pub tool: String,
+    pub model: String,
+    pub date: String,
+    pub purpose: String,
+    pub material: String,
+    pub result: String,
+    pub checked: String,
 }
 
 /// A passage of the document that matches a logged answer.
@@ -166,11 +190,14 @@ pub struct BackendSettings {
     /// Where the API is: a gateway, or a local model server. Empty for Anthropic or OpenAI itself.
     #[serde(default)]
     pub base_url: String,
+    /// The longest answer the author allows, in tokens; 0 leaves it to the editor and the provider.
+    #[serde(default)]
+    pub max_tokens: u32,
 }
 
 impl Default for BackendSettings {
     fn default() -> Self {
-        BackendSettings { backend: "anthropic".into(), model: "claude-opus-5-5".into(), base_url: String::new() }
+        BackendSettings { backend: "anthropic".into(), model: "claude-opus-5-5".into(), base_url: String::new(), max_tokens: 0 }
     }
 }
 
@@ -184,7 +211,7 @@ pub fn make_backend(settings: &BackendSettings, api_key: Option<&str>) -> Result
     }
     match settings.backend.as_str() {
         "anthropic" => match api_key.map(str::trim).filter(|k| !k.is_empty()) {
-            Some(key) => Ok(Box::new(AnthropicBackend::new(key, Some(&settings.base_url)))),
+            Some(key) => Ok(Box::new(AnthropicBackend::new(key, Some(&settings.base_url)).with_max_tokens(settings.max_tokens))),
             None => Err(NO_KEY.into()),
         },
         "openai-compatible" => {
@@ -194,7 +221,7 @@ pub fn make_backend(settings: &BackendSettings, api_key: Option<&str>) -> Result
             if key.is_none() && (base_url.is_empty() || base_url.trim_end_matches('/') == OPENAI_BASE_URL) {
                 return Err(NO_KEY.into());
             }
-            Ok(Box::new(OpenAiBackend::new(base_url, key)))
+            Ok(Box::new(OpenAiBackend::new(base_url, key).with_max_tokens(settings.max_tokens)))
         }
         // the author's own Claude Code, with its own sign-in: no key of ours
         "claude-code" => cowriting_backends::claude_code::find_claude()
@@ -261,6 +288,34 @@ pub struct ExpertView {
     pub is_member: bool,
     /// What the author told this expert about the document.
     pub brief: String,
+    /// The author reworded what this expert is told, in this project.
+    pub is_prompt_edited: bool,
+}
+
+/// A linked file as the window shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedFileView {
+    pub path: String,
+    pub name: String,
+    /// The experts that get it; empty for everyone.
+    pub personas: Vec<String>,
+    /// It cannot be read now: moved, deleted, or not a text file.
+    pub is_missing: bool,
+    /// Its length in characters, and whether only its beginning is passed on.
+    pub chars: usize,
+    pub is_cut: bool,
+}
+
+/// What belongs to the open project besides text and log.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectView {
+    pub files: Vec<LinkedFileView>,
+    /// What this project sets differently from the general settings; a field that is absent is as there.
+    pub overrides: Project,
+    /// Where the project's settings are kept.
+    pub folder: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -279,6 +334,8 @@ pub struct Session {
     /// What live review remembers while the document is open.
     live: Mutex<LiveState>,
     is_reviewing: AtomicBool,
+    /// The editor's folder for project settings; None keeps them beside the document.
+    projects: Option<String>,
 }
 
 /// Live review as the Live tab shows it.
@@ -292,6 +349,10 @@ pub struct LiveView {
     pub hints: Vec<LiveHint>,
     /// How long the author must have paused before a review is asked for.
     pub pause_ms: u64,
+    /// At least this long between two reviews.
+    pub gap_ms: u64,
+    /// At most this many reviews in an hour.
+    pub per_hour: usize,
 }
 
 /// The document's references as the Sources tab shows them.
@@ -307,6 +368,8 @@ pub struct SourcesView {
     pub missing: Vec<String>,
     /// What the last check against Crossref found.
     pub checked: Option<VerifyFile>,
+    /// The reference style of the export; none is pandoc's standard (Chicago author-date).
+    pub style: Option<Style>,
 }
 
 /// What a reference check found (`verify.json`).
@@ -390,14 +453,19 @@ fn error(e: impl std::fmt::Display) -> String {
 impl Session {
     /// Opens a markdown file. Nothing is created beside it until the AI is first asked.
     pub fn open(host: Arc<dyn Host>, path: &str) -> Result<(Session, Opened), String> {
+        Session::open_in(host, path, None)
+    }
+
+    /// Opens a markdown file whose project settings are kept in `projects`, the editor's own folder for them.
+    pub fn open_in(host: Arc<dyn Host>, path: &str, projects: Option<&str>) -> Result<(Session, Opened), String> {
         let text = host.read(path).map_err(|e| format!("{path} could not be opened: {e}"))?;
-        let workspace = Workspace::open(host, path, EDITOR_VERSION);
+        let workspace = Workspace::open_in(host, path, EDITOR_VERSION, projects);
         let orphans = if workspace.sidecar.info(workspace.host.as_ref()).is_some() { Vec::new() } else { orphans_of(&workspace, &text) };
         let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone(), orphans };
         // live review left on: what is in the document now is the baseline, as when it is turned on
         let baseline = LiveSettings::load(&workspace).is_on.then(|| opened.text.clone());
         let live = Mutex::new(LiveState { baseline, ..Default::default() });
-        Ok((Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false) }, opened))
+        Ok((Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false), projects: projects.map(String::from) }, opened))
     }
 
     /// The only code that writes the document: the author's own save.
@@ -457,7 +525,25 @@ impl Session {
 
     pub fn live_view(&self) -> LiveView {
         let settings = LiveSettings::load(&self.workspace);
-        LiveView { is_on: settings.is_on, personas: settings.personas, hints: self.live.lock().unwrap().hints.clone(), pause_ms: PAUSE_MS }
+        let live = self.live.lock().unwrap();
+        LiveView {
+            is_on: settings.is_on,
+            personas: settings.personas,
+            hints: live.hints.clone(),
+            pause_ms: live.pace.pause_ms,
+            gap_ms: live.pace.gap_ms,
+            per_hour: live.pace.per_hour,
+        }
+    }
+
+    /// What the author said about languages: the manuscript's, and the one the AI answers in. Holds from the next question on.
+    pub fn set_languages(&self, languages: cowriting_core::turn::Languages) {
+        *self.workspace.languages.write().unwrap() = languages;
+    }
+
+    /// How often live review asks from now on, as the author set it.
+    pub fn set_pace(&self, pace: Pace) {
+        self.live.lock().unwrap().pace = pace;
     }
 
     /// Turns live review on or off and says who watches. What is in the document now is not reviewed: only what changes from here on.
@@ -476,12 +562,17 @@ impl Session {
     pub async fn live_review(&self, backend: &dyn Backend, model: &str, document_text: &str) -> Result<LiveOutcome, String> {
         // one review at a time; a second call while one runs waits for the next pause
         if self.is_reviewing.swap(true, Ordering::SeqCst) {
-            return Ok(LiveOutcome::Wait { ms: PAUSE_MS });
+            return Ok(LiveOutcome::Wait { ms: self.live.lock().unwrap().pace.pause_ms });
         }
         let settings = LiveSettings::load(&self.workspace);
         let mut state = self.live.lock().unwrap().clone();
         let outcome = live_review(&self.workspace, backend, model, &settings, &mut state, document_text).await;
-        *self.live.lock().unwrap() = state;
+        {
+            // a pace set while the review ran is kept
+            let mut live = self.live.lock().unwrap();
+            state.pace = live.pace;
+            *live = state;
+        }
         self.is_reviewing.store(false, Ordering::SeqCst);
         outcome.map_err(error)
     }
@@ -520,7 +611,29 @@ impl Session {
             cited.iter().filter(|key| !bibliography.entries.iter().any(|e| !e.derived && &e.key == *key)).cloned().collect()
         };
         let checked = host.read(&self.workspace.sidecar.verify_json()).ok().and_then(|text| serde_json::from_str(&text).ok());
-        SourcesView { entries: bibliography.entries.len(), files: bibliography.files, cited: cited.len(), missing, checked }
+        let style = load_style(host, &self.workspace.sidecar, document_text);
+        SourcesView { entries: bibliography.entries.len(), files: bibliography.files, cited: cited.len(), missing, checked, style }
+    }
+
+    /// Sets the reference style of this document's exports: a CSL file of the author's. The file is read, never written.
+    pub fn set_style(&self, path: &str, document_text: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        if !path.to_lowercase().ends_with(".csl") {
+            return Err("A reference style is a .csl file, as zotero.org/styles has them.".into());
+        }
+        let text = host.read(path).map_err(|e| format!("The file could not be read: {e}"))?;
+        style_title(&text).map_err(|why| format!("That file {why}."))?;
+        sidecar.ensure(host, document_text).map_err(error)?;
+        save_added_style(host, sidecar, Some(path)).map_err(|e| format!("The style could not be saved: {e}"))
+    }
+
+    /// Back to pandoc's standard style. The file itself is left alone.
+    pub fn remove_style(&self) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        if added_style(host, sidecar).is_none() {
+            return Ok(());
+        }
+        save_added_style(host, sidecar, None).map_err(|e| format!("The style could not be saved: {e}"))
     }
 
     /// Adds a bibliography file of the author's to this document. The file is read, never written.
@@ -585,7 +698,20 @@ impl Session {
             host.write(&kept, csl).map_err(|e| format!("The references could not be saved: {e}"))?;
         }
         let used = export::references(&export::bibliography_of(&self.workspace, document_text), document_text, zotero.map(|csl| (kept.as_str(), csl)));
-        let args = export::pandoc_args(format, target, &sidecar.folder, &used.files, engine.as_ref().map(|(name, path)| (*name, path.as_str())), pdf.paper);
+        // a style the document names is pandoc's to read; one chosen here is handed over, if it can be read
+        let style = load_style(host, sidecar, document_text).filter(|style| !style.is_from_document);
+        if let Some(Style { name, error: Some(why), .. }) = &style {
+            return Err(format!("The reference style {name} {why}. Choose another in the Sources tab, or take it off there."));
+        }
+        let args = export::pandoc_args(
+            format,
+            target,
+            &sidecar.folder,
+            &used.files,
+            engine.as_ref().map(|(name, path)| (*name, path.as_str())),
+            pdf.paper,
+            style.as_ref().map(|s| s.path.as_str()),
+        );
         let warnings = export::run_pandoc(document_text, &sidecar.folder, &args)?;
         Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
     }
@@ -632,13 +758,146 @@ impl Session {
         let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
         let (from, _) =
             sidecar.orphans(host).into_iter().find(|(other, _)| other.name == name).ok_or_else(|| format!("This folder has no AI log for {name} without its document."))?;
-        sidecar.adopt(host, &from).map_err(|e| format!("The AI log could not be taken over: {e}"))
+        sidecar.adopt(host, &from).map_err(|e| format!("The AI log could not be taken over: {e}"))?;
+        sidecar.take_settings(host, &self.elsewhere(&from.document));
+        Ok(())
+    }
+
+    /// The sidecar of this project's document at another place, with its settings where the editor keeps them.
+    fn elsewhere(&self, document: &str) -> cowriting_core::sidecar::Sidecar {
+        let sidecar = cowriting_core::sidecar::Sidecar::for_document(document);
+        match &self.projects {
+            Some(projects) => sidecar.with_project(&format!("{projects}/{}", cowriting_core::sidecar::Sidecar::project_key(document))),
+            None => sidecar,
+        }
+    }
+
+    /// What belongs to this project besides text and log: linked files, and its own settings.
+    pub fn project_view(&self) -> ProjectView {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let project = Project::load(host, sidecar);
+        let files = project
+            .files
+            .iter()
+            .map(|file| {
+                let text = host.read(&file.path).ok();
+                let chars = text.as_deref().map_or(0, |t| t.trim().chars().count());
+                LinkedFileView {
+                    path: file.path.clone(),
+                    name: file.name().to_string(),
+                    personas: file.personas.clone(),
+                    is_missing: text.is_none(),
+                    chars,
+                    is_cut: chars > LONGEST_FILE,
+                }
+            })
+            .collect();
+        ProjectView { files, overrides: Project { files: Vec::new(), document: String::new(), ..project }, folder: sidecar.settings_dir() }
+    }
+
+    fn change_project(&self, change: impl FnOnce(&mut Project) -> Result<(), String>) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let mut project = Project::load(host, sidecar);
+        change(&mut project)?;
+        project.save(host, sidecar).map_err(|e| format!("The project's settings could not be saved: {e}"))
+    }
+
+    /// Links a file of the author's as background knowledge: for these experts, or for everyone when none is named.
+    /// Linking it again changes who gets it. Only its path is kept; the file stays where it is and is read when the AI is asked.
+    pub fn link_file(&self, path: &str, personas: &[String]) -> Result<(), String> {
+        let host = self.workspace.host.as_ref();
+        if path == self.workspace.sidecar.document {
+            return Err("That is the document itself; the AI reads it anyway.".into());
+        }
+        host.read(path).map_err(|_| {
+            format!("{path} cannot be read as text. Linked files are plain text: markdown, .txt, .csv, .bib and the like; a PDF or Word file has to be saved as text first.")
+        })?;
+        let party = self.workspace.party();
+        if let Some(unknown) = personas.iter().find(|id| party.by_id(id).is_none()) {
+            return Err(format!("This document's party has no expert “{unknown}”."));
+        }
+        self.change_project(|project| {
+            match project.files.iter_mut().find(|file| file.path == path) {
+                Some(file) => file.personas = personas.to_vec(),
+                None => project.files.push(LinkedFile { path: path.to_string(), personas: personas.to_vec() }),
+            }
+            Ok(())
+        })
+    }
+
+    pub fn unlink_file(&self, path: &str) -> Result<(), String> {
+        self.change_project(|project| {
+            project.files.retain(|file| file.path != path);
+            Ok(())
+        })
+    }
+
+    /// What this project sets differently from the general settings: languages and the pace of live review.
+    /// The linked files are not touched.
+    pub fn set_overrides(&self, overrides: Project) -> Result<(), String> {
+        let word = |value: Option<String>, allowed: &[&str]| value.filter(|v| allowed.contains(&v.as_str()));
+        self.change_project(|project| {
+            project.writing_language = word(overrides.writing_language, &["document", "en", "de"]);
+            project.ai_language = word(overrides.ai_language, &["auto", "en", "de"]);
+            project.disclosure_language = word(overrides.disclosure_language, &["document", "en", "de"]);
+            project.live_pause_seconds = overrides.live_pause_seconds;
+            project.live_gap_seconds = overrides.live_gap_seconds;
+            project.live_per_hour = overrides.live_per_hour;
+            Ok(())
+        })
+    }
+
+    /// The general preferences with what this project sets for itself.
+    pub fn preferences_here(&self, general: &preferences::Preferences) -> preferences::Preferences {
+        let project = Project::load(self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let mut here = general.clone();
+        here.writing_language = project.writing_language.unwrap_or(here.writing_language);
+        here.ai_language = project.ai_language.unwrap_or(here.ai_language);
+        here.disclosure_language = project.disclosure_language.unwrap_or(here.disclosure_language);
+        here.live_pause_seconds = project.live_pause_seconds.unwrap_or(here.live_pause_seconds);
+        here.live_gap_seconds = project.live_gap_seconds.unwrap_or(here.live_gap_seconds);
+        here.live_per_hour = project.live_per_hour.unwrap_or(here.live_per_hour);
+        here.within_limits()
+    }
+
+    /// Rewords what an expert is told, in this project. The assist-only rules are not part of it and stay as they are.
+    /// For an expert that comes with the editor, an empty text (or the standard one) brings the standard back.
+    pub fn set_prompt(&self, id: &str, prompt: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let prompt = prompt.trim();
+        let failed = |e: std::io::Error| format!("The expert could not be saved: {e}");
+        if prompt.chars().count() > 20_000 {
+            return Err("That is too long for what an expert is told: at most 20,000 characters. Longer material belongs in a linked file.".into());
+        }
+        match cowriting_core::personas::standard_prompt(id) {
+            Some(standard) => {
+                let file = format!("{}/{id}.md", sidecar.prompts_dir());
+                if prompt.is_empty() || prompt == standard.trim() {
+                    if host.exists(&file) {
+                        host.remove(&file).map_err(failed)
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    host.write(&file, &format!("{prompt}\n")).map_err(failed)
+                }
+            }
+            None => {
+                let file = format!("{}/{id}.md", sidecar.party_dir());
+                let before = host.read(&file).map_err(|_| format!("This document's party has no expert “{id}”."))?;
+                if prompt.is_empty() {
+                    return Err("An expert of your own needs a few words on what they look at.".into());
+                }
+                let after = cowriting_core::personas::with_prompt(&before, prompt).ok_or("The expert's file cannot be read.")?;
+                host.write(&file, &after).map_err(failed)
+            }
+        }
     }
 
     /// Moves or renames the document, and its AI log, notes and settings with it. The text given is what is written.
     pub fn move_document(&self, target: &str, document_text: &str) -> Result<(), String> {
         let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
-        let to = cowriting_core::sidecar::Sidecar::for_document(target);
+        let to = self.elsewhere(target);
         if std::path::Path::new(target) == std::path::Path::new(&sidecar.document) {
             return Err("That is where the document already is.".into());
         }
@@ -655,6 +914,7 @@ impl Session {
             to.adopt(host, sidecar).map_err(|e| format!("The document is at its new place, but its AI log could not be moved from {}: {e}", sidecar.dir()))?;
             to.ensure(host, document_text).map_err(error)?;
         }
+        to.take_settings(host, sidecar);
         host.remove(&sidecar.document).map_err(|e| format!("The document and its log are at the new place; the old file could not be removed: {e}"))
     }
 
@@ -668,6 +928,48 @@ impl Session {
         self.workspace.log.append(&LogEntry::Annotation(entry)).map_err(error)
     }
 
+    /// The author states AI use outside the editor, or corrects an earlier statement (`id` given).
+    /// The log only grows: a correction is a new entry that names the one it replaces.
+    pub fn state_external(&self, stated: &ExternalUse) -> Result<(), String> {
+        let one_line = |text: &str, most: usize| text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(most).collect::<String>();
+        let (tool, purpose) = (one_line(&stated.tool, 80), one_line(&stated.purpose, 600));
+        if tool.is_empty() || purpose.is_empty() {
+            return Err("A statement of AI use needs the tool and what it was used for.".into());
+        }
+        self.append_external(ExternalEntry {
+            tool,
+            purpose,
+            model: one_line(&stated.model, 80),
+            date: one_line(&stated.date, 40),
+            material: one_line(&stated.material, 600),
+            result: one_line(&stated.result, 600),
+            checked: one_line(&stated.checked, 600),
+            replaces: Some(stated.id.clone()).filter(|id| !id.is_empty()),
+            ..Default::default()
+        })
+    }
+
+    /// The author takes a statement of outside AI use back. It stays in the log, and is no longer in the disclosure.
+    pub fn withdraw_external(&self, id: &str) -> Result<(), String> {
+        self.append_external(ExternalEntry { replaces: Some(id.to_string()), ..Default::default() })
+    }
+
+    fn append_external(&self, mut entry: ExternalEntry) -> Result<(), String> {
+        let (host, workspace) = (self.workspace.host.as_ref(), &self.workspace);
+        let entries = workspace.log.read().map_err(error)?;
+        if let Some(old) = &entry.replaces {
+            if !cowriting_core::types::external_uses(&entries).iter().any(|e| &e.id == old) {
+                return Err("That statement is not in the log, or was already replaced.".into());
+            }
+        }
+        workspace.sidecar.ensure(host, &self.saved.lock().unwrap()).map_err(error)?;
+        entry.id = host.new_id();
+        entry.ts = host.now();
+        entry.session = workspace.session.clone();
+        entry.paper = workspace.sidecar.name.clone();
+        workspace.log.append(&LogEntry::External(entry)).map_err(error)
+    }
+
     pub async fn ask(&self, backend: &dyn Backend, ask: Ask, on_event: &mut (dyn FnMut(TurnEvent) + Send)) -> Result<TurnOutcome, String> {
         run_turn(&self.workspace, backend, ask, on_event).await.map_err(error)
     }
@@ -676,7 +978,16 @@ impl Session {
     pub fn party_view(&self) -> PartyView {
         let party = self.workspace.party();
         let mut briefs = parse_briefs(&self.workspace.host.read(&self.workspace.sidecar.party_md()).unwrap_or_default(), &party);
-        let experts = party.all().iter().map(|p| ExpertView { is_member: party.is_member(&p.id), brief: briefs.remove(&p.id).unwrap_or_default(), persona: p.clone() }).collect();
+        let experts = party
+            .all()
+            .iter()
+            .map(|p| ExpertView {
+                is_member: party.is_member(&p.id),
+                brief: briefs.remove(&p.id).unwrap_or_default(),
+                is_prompt_edited: cowriting_core::personas::standard_prompt(&p.id).is_some_and(|standard| standard.trim() != p.prompt.trim()),
+                persona: p.clone(),
+            })
+            .collect();
         PartyView { experts, everyone: briefs.remove("everyone").unwrap_or_default(), shared_palette: shared_palette().clone() }
     }
 
@@ -766,7 +1077,11 @@ impl Session {
             .rev()
             .collect();
         let ai_text = entries.iter().rev().filter_map(|e| if let LogEntry::AiText(found) = e { Some(ai_text_row(found, &entries, document_text)) } else { None }).collect();
-        Ok(LogView { stats: compute_stats(&entries, &today, &party), turns: rows, guard, ai_text, words: count_words(document_text, Format::Markdown) })
+        let external = cowriting_core::types::external_uses(&entries)
+            .into_iter()
+            .map(|e| ExternalUse { id: e.id, tool: e.tool, model: e.model, date: e.date, purpose: e.purpose, material: e.material, result: e.result, checked: e.checked })
+            .collect();
+        Ok(LogView { stats: compute_stats(&entries, &today, &party), turns: rows, guard, ai_text, external, words: count_words(document_text, Format::Markdown) })
     }
 
     /// Writes the AI register, and the prompts appendix if asked for, into the sidecar's `disclosure/`.

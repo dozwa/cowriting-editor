@@ -17,6 +17,8 @@ pub struct Sidecar {
     pub folder: String,
     /// The document's file name.
     pub name: String,
+    /// Where the project's settings are kept, when that is not beside the document: a folder of the editor's own.
+    pub project: Option<String>,
 }
 
 /// What the sidecar remembers about its document: `doc.json`.
@@ -56,7 +58,59 @@ impl Sidecar {
             Some(at) => (&path[..at], &path[at + 1..]),
             None => (".", path),
         };
-        Sidecar { document: path.to_string(), folder: if folder.is_empty() { "/".into() } else { folder.to_string() }, name: name.to_string() }
+        Sidecar { document: path.to_string(), folder: if folder.is_empty() { "/".into() } else { folder.to_string() }, name: name.to_string(), project: None }
+    }
+
+    /// The same document with its project's settings in `folder`, away from the document.
+    pub fn with_project(mut self, folder: &str) -> Sidecar {
+        self.project = Some(folder.trim_end_matches(['/', '\\']).to_string());
+        self
+    }
+
+    /// A folder name for a document's project: its file name, and a fingerprint of where it lies.
+    pub fn project_key(document: &str) -> String {
+        let name: String =
+            document.rsplit(['/', '\\']).next().unwrap_or("document").chars().map(|c| if c.is_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).take(60).collect();
+        format!("{name}-{}", content_hash(document))
+    }
+
+    /// Where the project's settings are: the experts and what they were told, the plan, the sources,
+    /// live review, linked files. In the editor's own folder when one was given, else with the log.
+    pub fn settings_dir(&self) -> String {
+        self.project.clone().unwrap_or_else(|| self.dir())
+    }
+
+    /// Linked files, and what this project sets differently from the general settings.
+    pub fn project_json(&self) -> String {
+        format!("{}/project.json", self.settings_dir())
+    }
+
+    /// The author's own wording of the experts that come with the editor, one file each.
+    pub fn prompts_dir(&self) -> String {
+        format!("{}/prompts", self.settings_dir())
+    }
+
+    /// Settings that an earlier version kept beside the document move to the project's folder, once.
+    /// Nothing that is already there is replaced.
+    pub fn bring_settings(&self, host: &dyn Host) {
+        if self.project.is_none() {
+            return;
+        }
+        for name in ["party.md", "party", "party.json", "scope.md", "live.json", "sources.json"] {
+            let (old, new) = (format!("{}/{name}", self.dir()), format!("{}/{name}", self.settings_dir()));
+            if host.exists(&old) && !host.exists(&new) {
+                let _ = host.rename(&old, &new);
+            }
+        }
+    }
+
+    /// The settings of a project that was at `from` come along to this one, when the document was moved or renamed.
+    pub fn take_settings(&self, host: &dyn Host, from: &Sidecar) {
+        if let (Some(old), Some(new)) = (&from.project, &self.project) {
+            if old != new && host.exists(old) && !host.exists(new) {
+                let _ = host.rename(old, new);
+            }
+        }
     }
 
     /// The sidecar's folder, relative to the document's folder.
@@ -92,22 +146,22 @@ impl Sidecar {
 
     /// The author's briefing of the experts.
     pub fn party_md(&self) -> String {
-        format!("{}/party.md", self.dir())
+        format!("{}/party.md", self.settings_dir())
     }
 
     /// The document's own experts, one file each.
     pub fn party_dir(&self) -> String {
-        format!("{}/party", self.dir())
+        format!("{}/party", self.settings_dir())
     }
 
     /// Which experts are in the document's party.
     pub fn party_json(&self) -> String {
-        format!("{}/party.json", self.dir())
+        format!("{}/party.json", self.settings_dir())
     }
 
     /// The author's plan: goal, targets, sections, points.
     pub fn scope_md(&self) -> String {
-        format!("{}/scope.md", self.dir())
+        format!("{}/scope.md", self.settings_dir())
     }
 
     /// What the last point check found.
@@ -117,12 +171,12 @@ impl Sidecar {
 
     /// Whether live review is on, and who watches.
     pub fn live_json(&self) -> String {
-        format!("{}/live.json", self.dir())
+        format!("{}/live.json", self.settings_dir())
     }
 
     /// The bibliography files the author added in the editor.
     pub fn sources_json(&self) -> String {
-        format!("{}/sources.json", self.dir())
+        format!("{}/sources.json", self.settings_dir())
     }
 
     /// The references an export takes from the author's Zotero, for pandoc.

@@ -74,7 +74,7 @@ async fn open_ask_classify_export_and_everything_is_on_disk() {
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), edited);
     assert_eq!(folder.files().len(), 3);
 
-    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
     let backend = make_backend(&settings, None).unwrap();
     let ask = Ask { text: "Any feedback on my methods?".into(), document_text: edited.clone(), model: settings.model.clone(), ..Default::default() };
     let outcome = session.ask(backend.as_ref(), ask, &mut |_| {}).await.unwrap();
@@ -134,12 +134,12 @@ fn without_a_key_the_editor_says_so_instead_of_asking() {
     assert_eq!(error, "No API key is set yet. Add one in the settings to ask the AI.");
     assert!(make_backend(&BackendSettings::default(), Some("sk-something")).is_ok());
     // OpenAI itself wants a key; a local model server does not
-    let other = |base_url: &str| BackendSettings { backend: "openai-compatible".into(), model: "m".into(), base_url: base_url.into() };
+    let other = |base_url: &str| BackendSettings { backend: "openai-compatible".into(), model: "m".into(), base_url: base_url.into(), max_tokens: 0 };
     assert!(make_backend(&other(""), None).is_err());
     assert!(make_backend(&other("http://localhost:11434/v1"), None).is_ok());
     assert_eq!(make_backend(&other("http://localhost:11434/v1"), None).unwrap().provider(), "a local model server (localhost:11434)");
     // Claude Code needs no key of ours, only to be installed
-    let claude_code = BackendSettings { backend: "claude-code".into(), model: "sonnet".into(), base_url: String::new() };
+    let claude_code = BackendSettings { backend: "claude-code".into(), model: "sonnet".into(), base_url: String::new(), max_tokens: 0 };
     std::env::set_var("COWRITING_CLAUDE", "/nowhere/claude");
     assert!(make_backend(&claude_code, None).err().unwrap().starts_with("Claude Code was not found on this computer."));
     std::env::set_var("COWRITING_CLAUDE", concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
@@ -206,7 +206,7 @@ async fn the_author_briefs_the_party_adds_an_expert_and_asks_it() {
     assert!(briefing.contains("## reviewer-2 — Reviewer #2\nBe hard on the sampling after all.\n") && !briefing.contains("Go easy"));
     assert!(std::fs::read_to_string(folder.path(".cowriting/thesis.md/party/health-economist.md")).unwrap().starts_with("---\nname: The Health Economist\n"));
 
-    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
     let backend = make_backend(&settings, None).unwrap();
     let ask = Ask {
         text: "Review my methods.".into(),
@@ -239,7 +239,7 @@ async fn ai_text_that_enters_the_document_is_logged_once_and_declared() {
     assert_eq!(session.save(TEXT).unwrap(), []);
     assert_eq!(folder.files(), ["script.json", "thesis.md"]);
 
-    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
     let backend = make_backend(&settings, None).unwrap();
     let ask = |text: &str, command: &str| Ask { text: text.into(), command: Some(command.into()), document_text: TEXT.into(), model: "scripted".into(), ..Default::default() };
     let first = session.ask(backend.as_ref(), ask("Write me a sentence on assignment.", "ask"), &mut |_| {}).await.unwrap();
@@ -306,7 +306,7 @@ async fn the_author_plans_checks_the_points_and_lets_experts_watch() {
     ]});
     std::fs::write(folder.path("script.json"), script.to_string()).unwrap();
     let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
-    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
     let backend = make_backend(&settings, None).unwrap();
 
     // no plan yet: a template to start from, no progress, nothing written
@@ -334,6 +334,12 @@ async fn the_author_plans_checks_the_points_and_lets_experts_watch() {
     // live review: off until the author turns it on; then only what changes from there on
     let live = session.live_view();
     assert_eq!((live.is_on, live.personas.as_slice(), live.pause_ms), (false, ["grammar-guy", "terminologist", "style-coach", "architect"].map(String::from).as_slice(), 20_000));
+    assert_eq!((live.gap_ms, live.per_hour), (60_000, 20));
+    // the author's own pace is what the tab is told, and it goes back to the standard
+    session.set_pace(cowriting_core::watch::Pace { pause_ms: 45_000, gap_ms: 120_000, per_hour: 6 });
+    let slower = session.live_view();
+    assert_eq!((slower.pause_ms, slower.gap_ms, slower.per_hour), (45_000, 120_000, 6));
+    session.set_pace(Default::default());
     assert!(session.set_live(true, &["ghostwriter".to_string()], TEXT).is_err());
     session.set_live(true, &["architect".to_string()], TEXT).unwrap();
     let written = format!("{TEXT}\nThey walked for five minutes in every hour of work.\n");
@@ -450,15 +456,44 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     assert_eq!((used.files.clone(), used.from_zotero, used.missing.clone()), (vec!["/kept/references.json".to_string(), beside.clone()], 1, vec!["ghost1999".to_string()]));
     let offline = references(&bibliography, text, None);
     assert_eq!((offline.files.len(), offline.from_zotero, offline.missing), (1, 0, vec!["fromzotero2024".to_string(), "ghost1999".to_string()]));
-    let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some(("typst", "/tools/typst")), Paper::A4);
+    let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some(("typst", "/tools/typst")), Paper::A4, None);
     let expected = format!("--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine /tools/typst --variable papersize=a4", beside.clone());
     assert_eq!(args.join(" "), expected);
     // Typst and LaTeX name US letter differently; a Word file has no engine and no paper setting
-    let letter = |engine: &str| pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some((engine, engine)), Paper::Letter).last().cloned();
+    let letter = |engine: &str| pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some((engine, engine)), Paper::Letter, None).last().cloned();
     assert_eq!((letter("typst").as_deref(), letter("xelatex").as_deref()), (Some("papersize=us-letter"), Some("papersize=letter")));
-    assert!(!pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], Some(("typst", "/tools/typst")), Paper::A4)
+    assert!(!pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], Some(("typst", "/tools/typst")), Paper::A4, None)
         .iter()
         .any(|arg| arg == "--pdf-engine" || arg.starts_with("papersize")));
+
+    // the reference style: none at first, which is pandoc's standard
+    let csl =
+        r#"<?xml version="1.0" encoding="utf-8"?><style xmlns="http://purl.org/net/xbiblio/csl" version="1.0"><info><title>Journal of Work &amp; Rest</title></info></style>"#;
+    std::fs::write(folder.path("work.csl"), csl).unwrap();
+    std::fs::write(folder.path("notes.csl"), "just some notes").unwrap();
+    assert_eq!(session.sources_view(text).style, None);
+    // only a real style file is taken, and the refusal says why
+    assert!(session.set_style(&folder.path("refs.bib"), text).unwrap_err().contains(".csl file"));
+    assert!(session.set_style(&folder.path("notes.csl"), text).unwrap_err().contains("is not a CSL style"));
+    assert!(session.set_style(&folder.path("gone.csl"), text).unwrap_err().contains("could not be read"));
+    session.set_style(&folder.path("work.csl"), text).unwrap();
+    let style = session.sources_view(text).style.unwrap();
+    assert_eq!((style.name.as_str(), style.title.as_str(), style.is_from_document, style.error.clone()), ("work.csl", "Journal of Work & Rest", false, None));
+    assert_eq!(session.sources_view(text).files.len(), 2, "choosing a style kept the bibliography files");
+    let styled = pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], None, Paper::A4, Some(&style.path));
+    assert_eq!(styled[styled.len() - 2..], ["--csl".to_string(), folder.path("work.csl")]);
+    // a style the document names itself comes first, and is left to pandoc
+    let naming = text.replace("bibliography: refs.bib", "bibliography: refs.bib\ncsl: \"house.csl\"");
+    let named = session.sources_view(&naming).style.unwrap();
+    assert_eq!((named.name.as_str(), named.is_from_document, named.error.is_some()), ("house.csl", true, true), "named, and not there");
+    // the chosen file vanishes: the export says so instead of failing somewhere inside pandoc
+    std::fs::remove_file(folder.path("work.csl")).unwrap();
+    let failed = session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), text, None, &PdfChoice { engine: None, paper: Paper::A4 }).unwrap_err();
+    assert!(failed.contains("The reference style work.csl could not be read"), "{failed}");
+    session.remove_style().unwrap();
+    std::fs::remove_file(folder.path("notes.csl")).unwrap();
+    assert_eq!(session.sources_view(text).style, None);
+    assert_eq!(session.sources_view(text).files.len(), 2);
 
     // the target is a file of the chosen kind and never the document
     assert!(check_target(FileFormat::Pdf, &folder.path("thesis.docx"), &folder.path("thesis.md")).is_err());
@@ -524,7 +559,7 @@ async fn a_document_that_moves_or_was_renamed_keeps_its_log() {
     std::fs::write(folder.path("script.json"), json!({ "replies": [{ "text": "Who are the subjects?" }] }).to_string()).unwrap();
     let (session, opened) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
     assert!(opened.orphans.is_empty());
-    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new() };
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
     let backend = make_backend(&settings, None).unwrap();
     session.ask(backend.as_ref(), Ask { text: "Is line 3 clear?".into(), document_text: TEXT.into(), model: "scripted".into(), ..Default::default() }, &mut |_| {}).await.unwrap();
     let log_before = std::fs::read_to_string(

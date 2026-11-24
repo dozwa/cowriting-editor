@@ -1,12 +1,45 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
+import type { ProjectView as Project, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
-import { LivePanel, ScopePanel } from './plan'
+import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
-import { DisclosureDialog, SettingsDialog, ExportDialog } from './dialogs'
-import { createEditor, type Editor } from './editor'
+import { DisclosureDialog, ExportDialog, FeedbackDialog, SupportDialog } from './dialogs'
+import { createEditor, type Editor, type Format } from './editor'
+import { FormatBar, MarkdownHelp } from './formatbar'
 import { AskPanel, LogPanel } from './panels'
-import { MODEL_NOTICE, plural, when } from './text'
+import { languageFor, m, setLanguage } from './i18n'
+import { type Action, type Preferences, STANDARD, TAB_OF, type Tab, type TabAction, applyLook, keysOf, shortcutsOf } from './preferences'
+import { SettingsDialog } from './settings'
+import { MODEL_NOTICE, when } from './text'
+
+/** The side panel is never narrower than this, and the text never narrower than `TEXT_MIN`. */
+const PANEL_MIN = 300
+const TEXT_MIN = 320
+const PANEL_STANDARD = 400
+
+/** How the author likes the text shown: the markdown buttons, line numbers, styled or as source. */
+type Look = { buttons: boolean; lineNumbers: boolean; source: boolean }
+
+function rememberedLook(): Look {
+  const look: Look = { buttons: true, lineNumbers: false, source: false }
+  try {
+    const kept = JSON.parse(localStorage.getItem('cowriting.look') ?? 'null') as Partial<Look> | null
+    for (const key of ['buttons', 'lineNumbers', 'source'] as const) if (typeof kept?.[key] === 'boolean') look[key] = kept[key]
+  } catch {
+    // the standard look, then
+  }
+  return look
+}
+
+/** The panel's width as the author left it, kept in this window's storage; null for the standard width. */
+function rememberedPanel(): number | null {
+  try {
+    const kept = Number(localStorage.getItem('cowriting.panel'))
+    return Number.isFinite(kept) && kept >= PANEL_MIN ? kept : null
+  } catch {
+    return null
+  }
+}
 
 type Props = {
   api: Api
@@ -24,23 +57,12 @@ export type Live = {
   steps: string[]
 }
 
-const EMPTY_LOG: LogView = { stats: { turns: 0, today: 0, unannotated: 0, aiText: 0, annotations: 0, rejected: 0, guardEvents: 0 }, turns: [], guard: [], aiText: [], words: 0 }
-
-const TOOL_STEPS: Record<string, string> = {
-  read_document: 'reading your document',
-  search_document: 'searching your document',
-  list_notes: 'looking at its notes',
-  search_bibliography: 'searching your references',
-  read_note: 'reading a note',
-  write_note: 'writing a note',
-}
+const EMPTY_LOG: LogView = { stats: { turns: 0, today: 0, unannotated: 0, aiText: 0, annotations: 0, rejected: 0, guardEvents: 0 }, turns: [], guard: [], aiText: [], external: [], words: 0 }
 
 /** What the author is told when text from an AI answer entered the document. */
 function foundNotice(rows: AiTextRow[]): string {
   const words = rows.reduce((sum, row) => sum + row.words, 0)
-  const how = rows.every(row => row.source === 'paste') ? 'you pasted' : 'in your document'
-  const what = rows.every(row => row.kind === 'correction') ? 'a language correction from an AI answer' : 'text from an AI answer'
-  return `Logged: ${words} words ${how} match ${what}. Nothing was changed; the passage will be listed in your disclosure.`
+  return m.app.found(words, rows.every(row => row.source === 'paste'), rows.every(row => row.kind === 'correction'))
 }
 
 export function App({ api, makeEditor = createEditor }: Props) {
@@ -49,17 +71,20 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [doc, setDoc] = useState<Opened | null>(null)
   const [isDirty, setDirty] = useState(false)
   const [settings, setSettings] = useState<SettingsView | null>(null)
-  const [tab, setTab] = useState<'ask' | 'experts' | 'live' | 'scope' | 'sources' | 'log'>('ask')
+  const [tab, setTab] = useState<Tab>('ask')
   const [log, setLog] = useState<LogView>(EMPTY_LOG)
   const [thread, setThread] = useState<ThreadMessage[]>([])
   const [live, setLive] = useState<Live | null>(null)
   const [error, setError] = useState('')
-  const [dialog, setDialog] = useState<'settings' | 'disclosure' | 'export' | null>(null)
+  const [dialog, setDialog] = useState<'settings' | 'disclosure' | 'export' | 'markdown' | 'feedback' | 'bug' | null>(null)
+  /** The editor asked for support at this start, and the author answered. */
+  const [isAsked, setAsked] = useState(false)
+  const [project, setProject] = useState<Project | null>(null)
   const [isWithoutTools, setWithoutTools] = useState(false)
   const [party, setParty] = useState<PartyView | null>(null)
   const [watching, setWatching] = useState<LiveView | null>(null)
   const [watchStatus, setWatchStatus] = useState('')
-  /** Hints that arrived while the Live tab was not open. */
+  /** Hints that arrived while the Live review tab was not open. */
   const [newHints, setNewHints] = useState(0)
   const [scope, setScope] = useState<ScopeView | null>(null)
   const [sources, setSources] = useState<SourcesView | null>(null)
@@ -69,6 +94,47 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [found, setFound] = useState('')
   /** The author said the logs without a document are not this one's. */
   const [orphansSeen, setOrphansSeen] = useState(false)
+  const [panelWidth, setPanelWidth] = useState(rememberedPanel)
+  const [look, setLook] = useState(rememberedLook)
+  /** The preferences as the settings dialog has them while it is open, to show at once. */
+  const [preview, setPreview] = useState<Preferences | null>(null)
+  const preferences = settings?.preferences ?? STANDARD
+  const preferencesRef = useRef(preferences)
+  preferencesRef.current = preferences
+  useEffect(() => applyLook(preview ?? preferences), [preview, preferences])
+  // the editor's own words, in the language set (or being tried in the settings); everything drawn below reads them
+  setLanguage(languageFor((preview ?? preferences).interfaceLanguage))
+  // the experts that come with the editor, named in the language shown; an author's own experts stay as written
+  const shownParty: PartyView | null = party === null ? null : { ...party, experts: party.experts.map(expert => (expert.isCustom ? expert : { ...expert, ...m.experts.builtIn[expert.id] })) }
+  /** The language the author writes in: what they said in the settings, else what the document was found to be. */
+  // what this project sets for itself goes before the general settings
+  const here: Preferences = { ...preferences, ...Object.fromEntries(Object.entries(project?.overrides ?? {}).filter(([key, value]) => key in STANDARD && value !== null && value !== undefined)) }
+  const said = (preview ?? here).writingLanguage
+  const writing: 'en' | 'de' = said !== 'document' ? said : doc?.language === 'de' ? 'de' : 'en'
+  const turn = (key: keyof Look) => {
+    const next = { ...look, [key]: !look[key] }
+    setLook(next)
+    try {
+      localStorage.setItem('cowriting.look', JSON.stringify(next))
+    } catch {
+      // not remembered, then
+    }
+  }
+  const work = useRef<HTMLDivElement>(null)
+  const dragFrom = useRef(0)
+
+  /** The side panel as wide as the author wants it, within what leaves room for the text; null is the standard width. */
+  const resizePanel = (width: number | null) => {
+    const next = width === null ? null : Math.round(Math.min(Math.max(width, PANEL_MIN), Math.max(PANEL_MIN, window.innerWidth - TEXT_MIN)))
+    setPanelWidth(next)
+    try {
+      if (next === null) localStorage.removeItem('cowriting.panel')
+      else localStorage.setItem('cowriting.panel', String(next))
+    } catch {
+      // not remembered, then
+    }
+  }
+  const panelNow = () => panelWidth ?? (work.current?.querySelector('.panel')?.getBoundingClientRect().width || PANEL_STANDARD)
 
   const fail = (e: unknown) => setError(typeof e === 'string' ? e : e instanceof Error ? e.message : String(e))
 
@@ -117,21 +183,22 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const review = useCallback(async () => {
     if (editor.current === null) return
     try {
-      setWatchStatus('reviewing…')
+      setWatchStatus(m.app.reviewing)
       const outcome = await api.liveReview(editor.current.getText())
       if (outcome.kind === 'wait') {
-        setWatchStatus('waiting: at most one review a minute')
+        const gap = watchingRef.current?.gapMs ?? 60_000
+        setWatchStatus(m.app.waiting(span(gap), gap))
         window.clearTimeout(pausing.current)
         pausing.current = window.setTimeout(() => void reviewRef.current(), outcome.ms)
         return
       }
       if (outcome.kind === 'reviewed') {
-        setWatchStatus(outcome.hints > 0 ? `${plural(outcome.hints, 'hint')} at ${when(outcome.ts)}` : `looked at ${when(outcome.ts)}: nothing to add, keep writing`)
+        setWatchStatus(outcome.hints > 0 ? m.app.hintsAt(outcome.hints, when(outcome.ts)) : m.app.nothingToAdd(when(outcome.ts)))
         setWatching(await api.liveView())
         if (tabRef.current !== 'live') setNewHints(n => n + outcome.hints)
         await refreshRef.current()
-      } else if (outcome.kind === 'paused') setWatchStatus('paused: 20 reviews in the last hour')
-      else if (outcome.kind === 'failed') setWatchStatus('the last live review failed; it will try again after your next change')
+      } else if (outcome.kind === 'paused') setWatchStatus(m.app.paused(watchingRef.current?.perHour ?? 20))
+      else if (outcome.kind === 'failed') setWatchStatus(m.app.reviewFailed)
       else setWatchStatus('')
     } catch (e) {
       setWatchStatus('')
@@ -189,7 +256,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
     setCheckNote('')
     try {
       const found = await api.checkPoints(editor.current.getText())
-      setCheckNote(`${found.covered} covered, ${found.partial} partly, ${found.missing} missing`)
+      setCheckNote(m.app.pointsFound(found.covered, found.partial, found.missing))
       await refreshLog()
       setError('')
     } catch (e) {
@@ -208,6 +275,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const refreshRef = useRef(refreshLog)
   refreshRef.current = refreshLog
   const counting = useRef<number | undefined>(undefined)
+  const autosaving = useRef<number | undefined>(undefined)
 
   const show = useCallback(
     async (opened: Opened) => {
@@ -220,6 +288,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setDirty(false)
       setLog(await api.logView(opened.text))
       setParty(await api.party())
+      setProject(await api.project())
       setWatching(await api.liveView())
       setScope(await api.scope(opened.text))
       setSources(await api.sources(opened.text))
@@ -237,19 +306,26 @@ export function App({ api, makeEditor = createEditor }: Props) {
         setDirty(true)
         window.clearTimeout(counting.current)
         counting.current = window.setTimeout(() => void refreshRef.current(), 600)
+        // saving by itself, if the author wants that: once they have paused
+        window.clearTimeout(autosaving.current)
+        const pause = preferencesRef.current.autosaveSeconds
+        if (pause > 0) autosaving.current = window.setTimeout(() => void saveRef.current(), pause * 1000)
         if (watchingRef.current?.isOn === true) {
-          setWatchStatus('you are writing…')
+          setWatchStatus(m.app.writing)
           window.clearTimeout(pausing.current)
           pausing.current = window.setTimeout(() => void reviewRef.current(), watchingRef.current.pauseMs)
         }
       },
-      onSave: () => void saveRef.current(),
       onPaste: (text, line) => void pastedRef.current(text, line),
     })
     editor.current.setText(doc.text)
     setDirty(false)
     editor.current.focus()
   }, [doc, makeEditor])
+
+  useEffect(() => {
+    editor.current?.setView({ lineNumbers: look.lineNumbers, source: look.source, spellcheck: (preview ?? preferences).spellcheck, language: writing })
+  }, [doc, look.lineNumbers, look.source, preview, preferences, writing])
 
   useEffect(() => {
     api
@@ -267,7 +343,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const open = async () => {
     if (!(await leaveIsFine())) return
     try {
-      const path = await api.pickDocument()
+      const path = await api.pickDocument(preferences.documentsFolder)
       if (path !== null) await show(await api.openDocument(path))
     } catch (e) {
       fail(e)
@@ -296,7 +372,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const create = async () => {
     if (!(await leaveIsFine())) return
     try {
-      const path = await api.pickNewDocument()
+      const path = await api.pickNewDocument(preferences.documentsFolder)
       if (path !== null) await show(await api.newDocument(path))
     } catch (e) {
       fail(e)
@@ -308,13 +384,13 @@ export function App({ api, makeEditor = createEditor }: Props) {
     setError('')
     setTab('ask')
     if (replyTo === null) setThread([])
-    setLive({ asked: text, who: persona === null ? 'Assistant' : (party?.experts.find(e => e.id === persona)?.name ?? persona), text: '', steps: [] })
+    setLive({ asked: text, who: persona === null ? m.app.assistant : (shownParty?.experts.find(e => e.id === persona)?.name ?? persona), text: '', steps: [] })
     const onEvent = (event: AskEvent) =>
       setLive(now => {
         if (now === null) return now
         if (event.kind === 'text') return { ...now, text: now.text + event.text }
-        if (event.kind === 'tool') return { ...now, steps: [...now.steps, TOOL_STEPS[event.name] ?? `asking for “${event.name}”`] }
-        if (event.kind === 'refused') return { ...now, steps: [...now.steps.slice(0, -1), `tried to write where it may not (${event.input}): refused and logged`] }
+        if (event.kind === 'tool') return { ...now, steps: [...now.steps, (m.app.toolSteps as Record<string, string>)[event.name] ?? m.app.askingFor(event.name)] }
+        if (event.kind === 'refused') return { ...now, steps: [...now.steps.slice(0, -1), m.app.refusedWrite(event.input)] }
         return now
       })
     try {
@@ -360,13 +436,94 @@ export function App({ api, makeEditor = createEditor }: Props) {
     }
   }
 
+  /** Distraction-free on or off: kept with the settings, like the look it is part of. */
+  const setCalm = async (calm: boolean) => {
+    try {
+      await api.setPreferences({ ...preferences, calm })
+      setSettings(await api.getSettings())
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const withProject = async (change: () => Promise<Project>) => {
+    try {
+      setProject(await change())
+      setError('')
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  /** Shows a tab of the side panel, with what opening it means. */
+  const showTab = (to: Tab) => {
+    setTab(to)
+    if (to === 'live') setNewHints(0)
+    if (to === 'sources') void refreshLog()
+  }
+
+  // the shortcuts, as the author set them; they rest while a dialog is open
+  const act = useRef<(action: Action) => void>(() => {})
+  act.current = action => {
+    if (action === 'open') void open()
+    else if (action === 'new') void create()
+    else if (action === 'settings') setDialog('settings')
+    else if (action === 'buttons' || action === 'lineNumbers' || action === 'source') turn(action)
+    else if (action === 'calm') void setCalm(!preferences.calm)
+    else if (doc === null) return
+    else if (action === 'save') void save()
+    else if (action === 'export') setDialog('export')
+    else if (action === 'ask') {
+      setTab('ask')
+      window.setTimeout(() => document.querySelector<HTMLElement>('.composer textarea')?.focus())
+    } else if (action in TAB_OF) showTab(TAB_OF[action as TabAction])
+    else editor.current?.format(action as Format)
+  }
+  const dialogRef = useRef(dialog)
+  dialogRef.current = dialog
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (dialogRef.current !== null) return
+      const pressed = keysOf(event)
+      if (pressed === null) return
+      const keys = shortcutsOf(preferencesRef.current.shortcuts)
+      const action = (Object.keys(keys) as Action[]).find(id => keys[id] === pressed)
+      if (action === undefined) return
+      // a markdown shortcut writes into the text, so it only works while the cursor is there
+      const isOfTheWindow = ['save', 'open', 'new', 'export', 'settings', 'ask', 'buttons', 'lineNumbers', 'source', 'calm'].includes(action) || action in TAB_OF
+      if (!isOfTheWindow && !(event.target instanceof Element && event.target.closest('.sheet') !== null)) return
+      event.preventDefault()
+      event.stopPropagation()
+      act.current(action)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
   const settingsDialog = dialog === 'settings' && settings !== null && (
-    <SettingsDialog api={api} settings={settings} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false)))} />
+    <SettingsDialog api={api} settings={settings} project={doc === null ? null : project} documentName={doc?.name ?? ''} onPreview={setPreview} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false), doc !== null && void api.project().then(setProject, () => {}), void api.liveView().then(setWatching, () => {})))} />
   )
+  const isSupportDue = settings !== null && settings.asking.isDue && !isAsked && !settings.isFirstRun && dialog === null
+  const otherDialogs = settings !== null && (
+    <>
+      {(dialog === 'feedback' || dialog === 'bug') && <FeedbackDialog api={api} settings={settings} kind={dialog === 'bug' ? 'bug' : 'idea'} onClose={() => setDialog(null)} />}
+      {isSupportDue && <SupportDialog api={api} withStar={settings.asking.withStar} onFeedback={() => (setAsked(true), setDialog('feedback'))} onClose={() => setAsked(true)} />}
+    </>
+  )
+  /** Where negative feedback goes: one button everybody finds. */
+  const bugButton = (
+    <button className="bug" onClick={() => setDialog('bug')} title={m.app.reportBugTitle}>
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+        <ellipse cx="8" cy="9.2" rx="3.4" ry="4.3" />
+        <path d="M5.6 4.9a2.4 2.4 0 0 1 4.8 0M8 5v8.5M4.6 8H1.8M14.2 8h-2.8M4.9 11.2l-2.3 1.6M11.1 11.2l2.3 1.6M5 6.2 3 4.4M11 6.2l2-1.8" />
+      </svg>
+      {m.app.reportBug}
+    </button>
+  )
+  const version = settings !== null && <span className="version" title={m.app.alphaTitle}>{m.app.alpha(settings.version)}</span>
   const isScripted = settings?.backend.startsWith('fake:') ?? false
   const notice = [
     settings === null || isScripted ? '' : MODEL_NOTICE[settings.modelStatus],
-    isWithoutTools ? 'This model cannot use tools: your document is sent along with each question, and it cannot write notes.' : '',
+    isWithoutTools ? m.app.withoutTools : '',
   ]
     .filter(line => line !== '')
     .join(' ')
@@ -374,19 +531,20 @@ export function App({ api, makeEditor = createEditor }: Props) {
   if (doc === null) {
     return (
       <main className="welcome">
-        <h1>CoWriting Editor</h1>
-        <p>You write. The AI gives feedback, asks questions and explains: it cannot change your text. Everything it says is logged, and the log becomes your disclosure of AI use.</p>
+        <h1>{m.app.welcomeTitle}</h1>
+        <p className="margin-note">{m.app.welcomeMargin}</p>
+        <p className="promise">{m.app.welcomePromise}</p>
         <div className="row">
-          <button className="primary" onClick={open}>Open a markdown file…</button>
-          <button onClick={create}>New document…</button>
+          <button className="primary" onClick={open}>{m.app.openFile}</button>
+          <button onClick={create}>{m.app.newDocument}</button>
         </div>
         {settings !== null && !settings.isReady && (
-          <p className="muted">
-            The AI is not set up yet. <button className="link" onClick={() => setDialog('settings')}>Set it up</button>
-          </p>
+          <p className="muted">{m.app.notSetUp(<button className="link" onClick={() => setDialog('settings')}>{m.app.setItUp}</button>)}</p>
         )}
         {error !== '' && <p className="error" role="alert">{error}</p>}
+        <p className="row foot">{version}{bugButton}</p>
         {settingsDialog}
+        {otherDialogs}
       </main>
     )
   }
@@ -395,72 +553,109 @@ export function App({ api, makeEditor = createEditor }: Props) {
   return (
     <div className="app">
       <header className="bar">
-        <button onClick={open}>Open…</button>
-        <button onClick={create}>New…</button>
-        <button onClick={() => void save()} disabled={!isDirty}>Save</button>
-        <button onClick={() => void move()} title="Rename or move this document. Its AI log goes with it.">Move…</button>
+        <button onClick={open}>{m.app.open}</button>
+        <button onClick={create}>{m.app.new}</button>
+        <button onClick={() => void save()} disabled={!isDirty}>{m.app.save}</button>
+        <button onClick={() => void move()} title={m.app.moveTitle}>{m.app.move}</button>
         <span className="name" title={doc.path}>
           {doc.name}
-          <span className={isDirty ? 'state dirty' : 'state'}>{isDirty ? 'not saved' : 'saved'}</span>
+          <span className={isDirty ? 'state dirty' : 'state'}>{isDirty ? m.app.notSaved : m.app.saved}</span>
         </span>
         <span className="spacer" />
-        <span className="muted">{plural(log.words, 'word')}</span>
-        <button onClick={() => setDialog('export')}>Export…</button>
-        <button onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0} title={log.stats.turns === 0 ? 'Nothing to disclose yet: the AI has not been asked' : undefined}>Disclosure…</button>
-        <button onClick={() => setDialog('settings')}>Settings…</button>
+        <span className="muted">{m.app.words(log.words)}</span>
+        <button onClick={() => setDialog('export')}>{m.app.export}</button>
+        <button onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0 && log.external.length === 0} title={log.stats.turns === 0 && log.external.length === 0 ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
+        <button onClick={() => setDialog('settings')}>{m.app.settings}</button>
+        {bugButton}
       </header>
       {doc.orphans.length > 0 && !orphansSeen && (
         <div className="notice" role="note">
           {doc.orphans.slice(0, 3).map(orphan => (
             <p key={orphan.name}>
-              This folder holds an AI log for <strong>{orphan.name}</strong> ({plural(orphan.questions, 'question')}), and that file is gone.{' '}
-              {orphan.isSameText ? 'Its last saved text is exactly this document.' : 'Its last saved text differs from this document.'} Is {doc.name} that document, renamed?{' '}
-              <button className="link" onClick={() => void adopt(orphan.name)}>Yes, continue its log</button>
+              {m.app.orphan(<strong>{orphan.name}</strong>, orphan.questions, orphan.isSameText, doc.name)}{' '}
+              <button className="link" onClick={() => void adopt(orphan.name)}>{m.app.continueLog}</button>
             </p>
           ))}
-          <button className="link" onClick={() => setOrphansSeen(true)}>No, this is a new document</button>
+          <button className="link" onClick={() => setOrphansSeen(true)}>{m.app.newDocumentHere}</button>
         </div>
       )}
       {found !== '' && (
         <p className="found" role="status">
           {found}{' '}
-          <button className="link" onClick={() => (setTab('log'), setFound(''))}>Show in the log</button>{' '}
-          <button className="link" onClick={() => setFound('')}>Dismiss</button>
+          <button className="link" onClick={() => (setTab('log'), setFound(''))}>{m.app.showInLog}</button>{' '}
+          <button className="link" onClick={() => setFound('')}>{m.app.dismiss}</button>
         </p>
       )}
       {error !== '' && (
         <p className="error" role="alert">
-          {error} <button className="link" onClick={() => setError('')}>Dismiss</button>
+          {error} <button className="link" onClick={() => setError('')}>{m.app.dismiss}</button>
         </p>
       )}
-      <div className="work">
-        <section className="page" ref={host} />
+      <div className="work" ref={work} style={panelWidth === null ? undefined : ({ '--panel': `${panelWidth}px` } as CSSProperties)}>
+        <section className="page">
+          {look.buttons && <FormatBar keys={shortcutsOf(preferences.shortcuts)} onFormat={kind => editor.current?.format(kind)} onHelp={() => setDialog('markdown')} />}
+          <div className="sheet" ref={host} />
+        </section>
         <aside className="panel">
+          <div
+            className="divider"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={m.app.panelWidth}
+            aria-valuenow={Math.round(panelNow())}
+            aria-valuemin={PANEL_MIN}
+            tabIndex={0}
+            title={m.app.panelWidthTitle}
+            onPointerDown={e => {
+              e.currentTarget.setPointerCapture?.(e.pointerId)
+              dragFrom.current = e.clientX
+            }}
+            onPointerMove={e => {
+              // a click or double-click that trembles is not a drag
+              if (e.currentTarget.hasPointerCapture?.(e.pointerId) && work.current !== null && Math.abs(e.clientX - dragFrom.current) > 3) resizePanel(work.current.getBoundingClientRect().right - e.clientX)
+            }}
+            onDoubleClick={() => resizePanel(null)}
+            onKeyDown={e => {
+              if (e.key === 'ArrowLeft') resizePanel(panelNow() + 24)
+              else if (e.key === 'ArrowRight') resizePanel(panelNow() - 24)
+              else if (e.key === 'Home') resizePanel(null)
+              else return
+              e.preventDefault()
+            }}
+          />
           <nav className="tabs" role="tablist">
-            <button role="tab" aria-selected={tab === 'ask'} onClick={() => setTab('ask')}>Ask</button>
-            <button role="tab" aria-selected={tab === 'experts'} onClick={() => setTab('experts')}>Experts</button>
-            <button role="tab" aria-selected={tab === 'live'} onClick={() => (setTab('live'), setNewHints(0))}>
-              Live{newHints > 0 && <span className="badge" title={`${plural(newHints, 'new hint')}`}>{newHints}</span>}
+            <button role="tab" title={m.app.tabAskTitle} aria-selected={tab === 'ask'} onClick={() => showTab('ask')}>{m.app.tabAsk}</button>
+            <button role="tab" title={m.app.tabExpertsTitle} aria-selected={tab === 'experts'} onClick={() => showTab('experts')}>{m.app.tabExperts}</button>
+            <button role="tab" title={m.app.tabLiveTitle} aria-selected={tab === 'live'} onClick={() => showTab('live')}>
+              {m.app.tabLive}{newHints > 0 && <span className="badge hints" title={m.app.newHints(newHints)}>{newHints}</span>}
             </button>
-            <button role="tab" aria-selected={tab === 'scope'} onClick={() => setTab('scope')}>Scope</button>
-            <button role="tab" aria-selected={tab === 'sources'} onClick={() => (setTab('sources'), void refreshLog())}>Sources</button>
-            <button role="tab" aria-selected={tab === 'log'} onClick={() => setTab('log')}>
-              Log{open_ > 0 && <span className="badge" title={`${plural(open_, 'answer')} to classify`}>{open_}</span>}
+            <button role="tab" title={m.app.tabPlanTitle} aria-selected={tab === 'scope'} onClick={() => showTab('scope')}>{m.app.tabPlan}</button>
+            <button role="tab" title={m.app.tabSourcesTitle} aria-selected={tab === 'sources'} onClick={() => showTab('sources')}>{m.app.tabSources}</button>
+            <button role="tab" title={m.app.tabLogTitle} aria-selected={tab === 'log'} onClick={() => showTab('log')}>
+              {m.app.tabLog}{open_ > 0 && <span className="badge" title={m.app.toClassify(open_)}>{open_}</span>}
             </button>
           </nav>
           {tab === 'ask' ? (
-            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={party} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onSettings={() => setDialog('settings')} />
-          ) : tab === 'experts' && party !== null ? (
+            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={shownParty} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onSettings={() => setDialog('settings')} />
+          ) : tab === 'experts' && shownParty !== null ? (
             <ExpertsPanel
-              party={party}
+              party={shownParty}
+              files={project?.files ?? []}
+              onLink={async () => {
+                const path = await api.pickLinkedFile()
+                if (path !== null) await withProject(() => api.linkFile(path, []))
+              }}
+              onFileFor={(path, personas) => void withProject(() => api.linkFile(path, personas))}
+              onUnlink={path => void withProject(() => api.unlinkFile(path))}
+              onPrompt={(id, prompt) => void changeParty(() => api.setPrompt(id, prompt))}
               canAsk={(settings?.isReady ?? true) && live === null}
-              onReview={id => void ask('Please review my document.', null, id)}
+              onReview={id => void ask(m.app.reviewRequest, null, id)}
               onBrief={(key, body) => void changeParty(() => api.setBrief(key, body))}
               onMember={(id, isMember) => void changeParty(() => api.setMember(id, isMember))}
               onAdd={(name, role, looksAt) => changeParty(() => api.addExpert(name, role, looksAt))}
             />
-          ) : tab === 'live' && watching !== null && party !== null ? (
-            <LivePanel view={watching} party={party} status={watchStatus} isReady={settings?.isReady ?? true} onChange={(isOn, personas) => void changeWatching(isOn, personas)} onJump={line => editor.current?.jumpToLine(line)} onOpen={openTurn} />
+          ) : tab === 'live' && watching !== null && shownParty !== null ? (
+            <LivePanel view={watching} party={shownParty} status={watchStatus} isReady={settings?.isReady ?? true} onChange={(isOn, personas) => void changeWatching(isOn, personas)} onJump={line => editor.current?.jumpToLine(line)} onOpen={openTurn} />
           ) : tab === 'scope' && scope !== null ? (
             <ScopePanel view={scope} canCheck={settings?.isReady ?? true} isChecking={isChecking} note={checkNote} onSave={saveScope} onCheck={() => void checkPoints()} onJump={line => editor.current?.jumpToLine(line)} />
           ) : tab === 'sources' && sources !== null ? (
@@ -471,12 +666,28 @@ export function App({ api, makeEditor = createEditor }: Props) {
                 if (path !== null) await withSources(text => api.addBibliography(path, text))
               }}
               onRemove={async path => void (await withSources(() => api.removeBibliography(path)))}
+              onStyle={async () => {
+                const path = await api.pickStyle()
+                if (path !== null) await withSources(text => api.setStyle(path, text))
+              }}
+              onNoStyle={async () => void (await withSources(() => api.removeStyle()))}
+              onStyles={() => void api.openGuide('styles').catch(fail)}
               onSearch={query => withSources(text => api.searchSources(query, text))}
               onCheck={async () => void (await withSources(text => api.checkReferences(text)))}
               onCite={key => editor.current?.insert(`[@${key}]`)}
             />
           ) : (
-            <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} onComment={async (id, note) => {
+            <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} onExternal={async stated => {
+              try {
+                await api.stateExternal(stated)
+                await refreshLog()
+                setError('')
+                return true
+              } catch (e) {
+                fail(e)
+                return false
+              }
+            }} onWithdraw={id => void api.withdrawExternal(id).then(refreshLog, fail)} onComment={async (id, note) => {
               try {
                 await api.commentAiText(id, note)
                 await refreshLog()
@@ -489,15 +700,24 @@ export function App({ api, makeEditor = createEditor }: Props) {
       </div>
       <footer className="status">
         <span>
-          {settings === null ? '' : isScripted ? 'Scripted answers (no model)' : `${settings.model} · ${settings.baseUrl !== '' ? settings.baseUrl : settings.backend === 'anthropic' ? 'Anthropic' : settings.backend === 'claude-code' ? 'Claude Code' : 'OpenAI'}`}
-          {settings !== null && !isScripted && settings.modelStatus !== 'tested' && <span className="flag" title={MODEL_NOTICE[settings.modelStatus]}>{settings.modelStatus === 'failed' ? 'failed the rule test' : 'untested model'}</span>}
+          {settings === null ? '' : isScripted ? m.app.scripted : `${settings.model} · ${settings.baseUrl !== '' ? settings.baseUrl : settings.backend === 'anthropic' ? 'Anthropic' : settings.backend === 'claude-code' ? 'Claude Code' : 'OpenAI'}`}
+          {settings !== null && !isScripted && settings.modelStatus !== 'tested' && <span className="flag" title={MODEL_NOTICE[settings.modelStatus]}>{settings.modelStatus === 'failed' ? m.app.failedModel : m.app.untestedModel}</span>}
         </span>
         <span className="spacer" />
-        <span>{plural(log.stats.turns, 'AI input')} logged{open_ > 0 ? ` · ${open_} to classify` : ''}{log.guard.length > 0 ? ` · ${plural(log.guard.length, 'refused write')}` : ''}</span>
+        <span className="looks" role="group" aria-label={m.app.looks}>
+          <button aria-pressed={look.buttons} onClick={() => turn('buttons')} title={m.app.markdownButtonsTitle}>{m.app.markdownButtons}</button>
+          <button aria-pressed={look.lineNumbers} onClick={() => turn('lineNumbers')} title={m.app.lineNumbersTitle}>{m.app.lineNumbers}</button>
+          <button aria-pressed={look.source} onClick={() => turn('source')} title={m.app.sourceTitle}>{m.app.source}</button>
+          <button aria-pressed={preferences.calm} onClick={() => void setCalm(!preferences.calm)} title={m.app.calmTitle}>{m.app.calm}</button>
+        </span>
+        <span>{m.app.logged(log.stats.turns, open_, log.guard.length)}</span>
+        {version}
       </footer>
       {settingsDialog}
+      {otherDialogs}
+      {dialog === 'markdown' && <MarkdownHelp onOpen={which => void api.openGuide(which).catch(fail)} onClose={() => setDialog(null)} />}
       {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
-      {dialog === 'disclosure' && <DisclosureDialog api={api} language={doc.language === 'de' ? 'de' : 'en'} open={open_} onClose={() => setDialog(null)} />}
+      {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} onClose={() => setDialog(null)} />}
     </div>
   )
 }

@@ -12,6 +12,7 @@ pub mod host;
 pub mod log;
 pub mod paste_tracking;
 pub mod personas;
+pub mod project;
 pub mod review;
 pub mod scope;
 pub mod sidecar;

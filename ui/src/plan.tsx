@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { LiveView, PartyView, ScopeProgress, ScopeView } from './api'
 import { Sprite } from './experts'
-import { plural, when } from './text'
+import { m } from './i18n'
+import { when } from './text'
 
 type LiveProps = {
   view: LiveView
@@ -13,6 +14,9 @@ type LiveProps = {
   onOpen(turn: string): void
 }
 
+/** “minute”, “90 seconds”, “5 minutes”: a time between reviews, in the words that follow “every”. */
+export const span = (ms: number) => m.plan.span(ms)
+
 /** Live review: experts leave short hints on what the author just wrote. */
 export function LivePanel({ view, party, status, isReady, onChange, onJump, onOpen }: LiveProps) {
   const members = party.experts.filter(e => e.isMember)
@@ -21,17 +25,17 @@ export function LivePanel({ view, party, status, isReady, onChange, onJump, onOp
     <div className="live">
       <section>
         <label className="switch">
-          <input type="checkbox" checked={view.isOn} disabled={!isReady && !view.isOn} onChange={e => onChange(e.target.checked, view.personas)} /> Live review
+          <input type="checkbox" checked={view.isOn} disabled={!isReady && !view.isOn} onChange={e => onChange(e.target.checked, view.personas)} /> {m.plan.liveReview}
         </label>
         <p className="muted">
-          While it is on, the paragraphs you change are sent to the AI once you pause for {seconds} seconds: at most one review a minute and 20 an hour. Each review is logged. The experts give hints; they do not write for you.
+          {m.plan.liveExplained(seconds, span(view.gapMs), view.perHour)}
         </p>
         {status !== '' && <p className="state" role="status">{status}</p>}
       </section>
       <section>
-        <h3>Hints</h3>
+        <h3>{m.plan.hints}</h3>
         {view.hints.length === 0 ? (
-          <p className="muted">{view.isOn ? 'No hints yet. Keep writing.' : 'Turn live review on to get hints while you write.'}</p>
+          <p className="muted">{view.isOn ? m.plan.noHintsYet : m.plan.turnOnForHints}</p>
         ) : (
           <ul className="hints">
             {view.hints.map((hint, i) => {
@@ -42,11 +46,11 @@ export function LivePanel({ view, party, status, isReady, onChange, onJump, onOp
                   <div>
                     <span className="top">
                       <strong>{hint.who}</strong>
-                      {hint.line > 0 && <button className="link" onClick={() => onJump(hint.line)}>line {hint.line}</button>}
+                      {hint.line > 0 && <button className="link" onClick={() => onJump(hint.line)}>{m.plan.line(hint.line)}</button>}
                       <span className="muted">{when(hint.ts)}</span>
                     </span>
                     <p>{hint.text}</p>
-                    <button className="link" onClick={() => onOpen(hint.turn)}>Classify or reply</button>
+                    <button className="link" onClick={() => onOpen(hint.turn)}>{m.plan.classifyOrReply}</button>
                   </div>
                 </li>
               )
@@ -55,7 +59,7 @@ export function LivePanel({ view, party, status, isReady, onChange, onJump, onOp
         )}
       </section>
       <section>
-        <h3>Who watches</h3>
+        <h3>{m.plan.whoWatches}</h3>
         <ul className="watchers">
           {members.map(expert => (
             <li key={expert.id}>
@@ -83,12 +87,10 @@ function Meter({ label, done, target }: { label: string; done: number; target?: 
     <li>
       <span>{label}</span>
       <progress aria-label={label} max={target} value={Math.min(done, target)} />
-      <span className="muted">{done} of {target}</span>
+      <span className="muted">{m.plan.doneOf(done, target)}</span>
     </li>
   )
 }
-
-const STATUS = { covered: '✓ covered', partial: '◐ partly', missing: '○ missing' } as const
 
 /** The line a check's "file:line" points at. */
 const lineOf = (where: string | undefined) => {
@@ -101,30 +103,30 @@ function Progress({ progress, onJump }: { progress: ScopeProgress; onJump(line: 
     <>
       <section>
         <p className="overall">
-          <strong>{percent(progress.overall)}</strong> of your plan
-          {progress.daysLeft !== undefined && <span className="muted"> · {progress.daysLeft >= 0 ? `${plural(progress.daysLeft, 'day')} left` : `${plural(-progress.daysLeft, 'day')} past the deadline`}</span>}
-          {progress.wordsPerDay !== undefined && progress.wordsPerDay > 0 && <span className="muted"> · {progress.wordsPerDay} words a day to get there</span>}
+          {m.plan.ofYourPlan(<strong>{percent(progress.overall)}</strong>)}
+          {progress.daysLeft !== undefined && <span className="muted"> · {progress.daysLeft >= 0 ? m.plan.daysLeft(progress.daysLeft) : m.plan.daysPast(-progress.daysLeft)}</span>}
+          {progress.wordsPerDay !== undefined && progress.wordsPerDay > 0 && <span className="muted"> · {m.plan.wordsPerDay(progress.wordsPerDay)}</span>}
         </p>
         {progress.goal !== '' && <p className="muted">{progress.goal}</p>}
         <ul className="meters">
-          <Meter label="Words" {...progress.words} />
-          <Meter label="Figures" {...progress.figures} />
-          <Meter label="Tables" {...progress.tables} />
-          <Meter label="References" {...progress.references} />
+          <Meter label={m.plan.words} {...progress.words} />
+          <Meter label={m.plan.figures} {...progress.figures} />
+          <Meter label={m.plan.tables} {...progress.tables} />
+          <Meter label={m.plan.references} {...progress.references} />
         </ul>
-        {progress.markers > 0 && <p className="muted">{plural(progress.markers, 'open marker')} (TODO, ??, UNVERIFIED…) in the text</p>}
+        {progress.markers > 0 && <p className="muted">{m.plan.openMarkers(progress.markers)}</p>}
       </section>
       {progress.sections.length > 0 && (
         <section>
-          <h3>Sections</h3>
+          <h3>{m.plan.sections}</h3>
           <ul className="sections">
             {progress.sections.map(section => (
               <li key={section.name}>
                 <span>{section.name}</span>
                 <span className="muted">
-                  {section.isFound ? `${section.words}${section.target !== undefined ? ` of ${section.target}` : ''} words` : 'no heading of that name yet'}
+                  {section.isFound ? m.plan.sectionWords(section.words, section.target) : m.plan.noHeadingYet}
                   {section.stage !== undefined ? ` · ${section.stage}` : ''}
-                  {section.markers > 0 ? ` · ${plural(section.markers, 'marker')}` : ''}
+                  {section.markers > 0 ? ` · ${m.plan.markers(section.markers)}` : ''}
                 </span>
               </li>
             ))}
@@ -133,13 +135,13 @@ function Progress({ progress, onJump }: { progress: ScopeProgress; onJump(line: 
       )}
       {progress.points.length > 0 && (
         <section>
-          <h3>Points</h3>
+          <h3>{m.plan.points}</h3>
           <ul className="points">
             {progress.points.map(point => {
               const line = lineOf(point.where)
               return (
                 <li key={point.text}>
-                  <span className={point.isTicked ? 'point-status covered' : `point-status ${point.status ?? 'open'}`}>{point.isTicked ? '✓ ticked by you' : point.status === undefined ? '· not checked' : STATUS[point.status]}</span>
+                  <span className={point.isTicked ? 'point-status covered' : `point-status ${point.status ?? 'open'}`}>{point.isTicked ? m.plan.tickedByYou : point.status === undefined ? m.plan.notChecked : m.plan[point.status]}</span>
                   <span>
                     {point.text}
                     {point.section !== undefined && <span className="muted"> ({point.section})</span>}
@@ -147,14 +149,14 @@ function Progress({ progress, onJump }: { progress: ScopeProgress; onJump(line: 
                   {(point.note !== undefined || line > 0) && (
                     <span className="muted">
                       {point.note}
-                      {line > 0 && <> <button className="link" onClick={() => onJump(line)}>line {line}</button></>}
+                      {line > 0 && <> <button className="link" onClick={() => onJump(line)}>{m.plan.line(line)}</button></>}
                     </span>
                   )}
                 </li>
               )
             })}
           </ul>
-          {progress.checkedAt !== undefined && <p className="muted">Last checked {when(progress.checkedAt)}. A check is the AI's reading, not a verdict.</p>}
+          {progress.checkedAt !== undefined && <p className="muted">{m.plan.lastChecked(when(progress.checkedAt))}</p>}
         </section>
       )}
     </>
@@ -190,11 +192,11 @@ export function ScopePanel({ view, canCheck, isChecking, note, onSave, onCheck, 
           if (await onSave(text)) setEditing(false)
         }}
       >
-        <p className="muted">Your plan, in plain text: a goal, targets, sections and the points the text must make. It is yours; the AI cannot change it.</p>
-        <textarea aria-label="Your plan" rows={22} value={text} onChange={e => setText(e.target.value)} spellCheck={false} />
+        <p className="muted">{m.plan.planExplained}</p>
+        <textarea aria-label={m.plan.yourPlan} rows={22} value={text} onChange={e => setText(e.target.value)} spellCheck={false} />
         <div className="row">
-          <button className="primary" type="submit">Save the plan</button>
-          <button type="button" onClick={() => setEditing(false)}>Cancel</button>
+          <button className="primary" type="submit">{m.plan.savePlan}</button>
+          <button type="button" onClick={() => setEditing(false)}>{m.plan.cancel}</button>
         </div>
       </form>
     )
@@ -203,18 +205,18 @@ export function ScopePanel({ view, canCheck, isChecking, note, onSave, onCheck, 
     <div className="scope">
       {view.progress === null ? (
         <section>
-          <p>No plan yet. Say what the text should reach (words, sections, the points it must make) and see how far you are while you write.</p>
-          <button className="primary" onClick={edit}>{view.text === '' ? 'Make a plan' : 'Edit the plan'}</button>
+          <p>{m.plan.noPlanYet}</p>
+          <button className="primary" onClick={edit}>{view.text === '' ? m.plan.makePlan : m.plan.editPlan}</button>
         </section>
       ) : (
         <>
           <Progress progress={view.progress} onJump={onJump} />
           <section>
             <div className="row">
-              <button onClick={edit}>Edit the plan</button>
-              <button onClick={onCheck} disabled={!canCheck || !hasPoints || isChecking} title={hasPoints ? undefined : 'Your plan has no points yet'}>{isChecking ? 'Checking…' : 'Check the points'}</button>
+              <button onClick={edit}>{m.plan.editPlan}</button>
+              <button onClick={onCheck} disabled={!canCheck || !hasPoints || isChecking} title={hasPoints ? undefined : m.plan.noPointsYet}>{isChecking ? m.plan.checking : m.plan.checkPoints}</button>
             </div>
-            <p className="muted">The check sends your plan's points and the document to the AI and asks which points the text makes. It is logged.</p>
+            <p className="muted">{m.plan.checkExplained}</p>
             {note !== '' && <p className="state" role="status">{note}</p>}
           </section>
         </>

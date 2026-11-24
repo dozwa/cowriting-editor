@@ -7,6 +7,7 @@
 use crate::backend::{Backend, Block, Message, ModelRequest, Role, Stop};
 use crate::briefs::{brief_for, parse_briefs};
 use crate::contract::contract_text;
+use crate::disclosure::Lang;
 use crate::host::Host;
 use crate::log::{category_for, Log, AI_TEXT_MARKER};
 use crate::personas::{Party, EXPERT_RULES};
@@ -15,7 +16,7 @@ use crate::thread::thread_of;
 use crate::tools::{execute, numbered, tool_defs, ToolContext};
 use crate::types::{AnnotationEntry, GuardEntry, LogEntry, PromptEntry, ResponseEntry};
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// How often the model may ask for tools in one turn before it has to answer.
 const MAX_ROUNDS: usize = 12;
@@ -29,16 +30,78 @@ pub struct Workspace {
     pub session: String,
     /// The editor's version, as the log records it.
     pub editor: String,
-    /// The manuscript's language: 'en' or 'de'.
+    /// The manuscript's language as the sidecar has it: 'en' or 'de'.
     pub language: String,
+    /// What the author said about languages in the editor's settings; it can change while the document is open.
+    pub languages: RwLock<Languages>,
+}
+
+/// The author's own word on languages; nothing said leaves things as they were found.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Languages {
+    /// The language the manuscript is written in, when the author named it.
+    pub manuscript: Option<Lang>,
+    /// The language every answer is to be in, whatever the manuscript's or the question's.
+    pub answers: Option<Lang>,
+}
+
+fn code(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "en",
+        Lang::De => "de",
+    }
+}
+
+fn name(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "English",
+        Lang::De => "German",
+    }
+}
+
+/// What an assistant or expert is told when the author chose the language of the answers. It comes last, where a model reads last.
+pub fn answer_language_rule(lang: Lang) -> String {
+    format!(
+        "\n\n# The language of your answers\n\nThe author has set the language of your answers: write every answer in {0}, whatever language the manuscript or the question is in. Quotations from the manuscript, and corrected sentences in a language check, stay in the manuscript's language; everything you say about them is in {0}.",
+        name(lang)
+    )
+}
+
+/// The rules with the author's choice of the answers' language in them: the lines that leave the
+/// language to the question or the manuscript are replaced, so nothing contradicts the choice.
+pub fn with_answer_language(system: &str, manuscript_language: &str, lang: Lang) -> String {
+    let always = format!("- Reply in {0}, also when you give feedback on the manuscript: the author has set {0} as the language of your answers.", name(lang));
+    system.replace(&format!("- Reply in the author's language; give manuscript feedback in the manuscript's language ({manuscript_language})."), &always).replace(
+        "- Answer in the language of the manuscript, unless the author writes to you in another language.",
+        &format!("- Answer in {}: the author has set it as the language of your answers.", name(lang)),
+    )
 }
 
 impl Workspace {
     pub fn open(host: Arc<dyn Host>, document: &str, editor: &str) -> Workspace {
-        let sidecar = Sidecar::for_document(document);
+        Workspace::open_in(host, document, editor, None)
+    }
+
+    /// Opens a document whose project settings are kept in `projects`, a folder of the editor's own, and not beside it.
+    pub fn open_in(host: Arc<dyn Host>, document: &str, editor: &str, projects: Option<&str>) -> Workspace {
+        let mut sidecar = Sidecar::for_document(document);
+        if let Some(projects) = projects {
+            sidecar = sidecar.with_project(&format!("{}/{}", projects.trim_end_matches(['/', '\\']), Sidecar::project_key(document)));
+            sidecar.bring_settings(host.as_ref());
+        }
         let log = Log::new(host.clone(), sidecar.log_dir(), sidecar.rewrites_dir());
         let language = sidecar.info(host.as_ref()).map_or("en".to_string(), |info| info.language);
-        Workspace { session: host.new_id(), host, sidecar, log, editor: editor.to_string(), language }
+        Workspace { session: host.new_id(), host, sidecar, log, editor: editor.to_string(), language, languages: RwLock::default() }
+    }
+
+    /// The manuscript's language: what the author said, else what the sidecar has.
+    pub fn manuscript_language(&self) -> String {
+        self.languages.read().unwrap().manuscript.map_or_else(|| self.language.clone(), |lang| code(lang).to_string())
+    }
+
+    /// The language the author wants every answer in, if they chose one.
+    pub fn answer_language(&self) -> Option<Lang> {
+        self.languages.read().unwrap().answers
     }
 }
 
@@ -175,6 +238,12 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
     }
     workspace.sidecar.ensure(host, &ask.document_text)?;
     let before = workspace.log.snapshot()?;
+    // the author's linked files for whoever answers; the log names them, since they shaped the answer
+    let knowledge = crate::project::knowledge_for(host, &workspace.sidecar, expert.as_ref().map(|e| [e.id.as_str()]).as_ref().map(|ids| ids.as_slice()));
+    let mut extra = serde_json::Map::new();
+    if !knowledge.names.is_empty() {
+        extra.insert("files".into(), serde_json::json!(knowledge.names));
+    }
 
     // the question is on the record, with the text it was asked about, before anything is sent
     let id = host.new_id();
@@ -187,6 +256,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         command: ask.command.clone(),
         reply_to: ask.reply_to.clone(),
         text: ask.text.clone(),
+        extra,
         ..Default::default()
     }))?;
     host.write(&format!("{}/{id}.md", workspace.sidecar.snapshots_dir()), &ask.document_text)?;
@@ -197,7 +267,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         Some(Message { role: Role::User, content }) => content.push(Block::Text { text: ask.text.clone() }),
         _ => messages.push(Message::user(ask.text.clone())),
     }
-    let mut contract = contract_text(&workspace.sidecar.name, &workspace.language);
+    let mut contract = contract_text(&workspace.sidecar.name, &workspace.manuscript_language());
     if let Some(expert) = &expert {
         // one call per expert: the contract, its perspective, the party's rules, the author's briefing
         let briefs = parse_briefs(&host.read(&workspace.sidecar.party_md()).unwrap_or_default(), &party);
@@ -207,14 +277,21 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
             contract.push_str(&format!("\n\n## The author's briefing for you in this project\n\n{brief}"));
         }
     }
+    contract.push_str(&knowledge.section);
     if let Some(action) = action {
         contract = format!("{contract}\n\n# What the author asked for: {}\n\n{}", action.label, action.instructions);
     }
+    // the author's choice of the answers' language replaces the rules that leave it open, and is said again at the very end
+    let mut closing = String::new();
+    if let Some(lang) = workspace.answer_language() {
+        contract = with_answer_language(&contract, &workspace.manuscript_language(), lang);
+        closing = answer_language_rule(lang);
+    }
     let mut without_tools = !backend.uses_tools();
     let mut request = if without_tools {
-        ModelRequest { system: system_without_tools(&contract, &ask.document_text), messages, tools: Vec::new(), model: ask.model.clone() }
+        ModelRequest { system: system_without_tools(&contract, &ask.document_text) + &closing, messages, tools: Vec::new(), model: ask.model.clone() }
     } else {
-        ModelRequest { system: contract.clone(), messages, tools: tool_defs(), model: ask.model.clone() }
+        ModelRequest { system: format!("{contract}{closing}"), messages, tools: tool_defs(), model: ask.model.clone() }
     };
     let context = ToolContext { host, sidecar: &workspace.sidecar, document_text: &ask.document_text, model: &ask.model };
 
@@ -274,7 +351,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
                 // the backend just learned that its model has no tools: ask again, with the document in the question
                 Err(_) if !without_tools && !backend.uses_tools() && round == 0 => {
                     without_tools = true;
-                    request.system = system_without_tools(&contract, &ask.document_text);
+                    request.system = system_without_tools(&contract, &ask.document_text) + &closing;
                     request.tools.clear();
                     continue;
                 }
