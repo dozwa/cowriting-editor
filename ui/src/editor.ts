@@ -30,6 +30,8 @@ const MARKS = new Set(['HeaderMark', 'EmphasisMark', 'CodeMark', 'StrikethroughM
 const hidden = Decoration.replace({})
 /** A line of the YAML block at the top: set apart from the prose. */
 const frontLine = Decoration.line({ class: 'md-front' })
+/** A line of a table: it stays source, in a face of one width, so that its columns stand under each other. */
+const tableLine = Decoration.line({ class: 'md-table' })
 
 function hiddenMarks(view: EditorView): DecorationSet {
   const { state } = view
@@ -46,6 +48,10 @@ function hiddenMarks(view: EditorView): DecorationSet {
       enter(node) {
         if (node.name === 'Frontmatter') {
           for (let n = state.doc.lineAt(node.from).number; n <= state.doc.lineAt(node.to).number; n++) out.push(frontLine.range(state.doc.line(n).from))
+          return
+        }
+        if (node.name === 'Table') {
+          for (let n = state.doc.lineAt(node.from).number; n <= state.doc.lineAt(node.to).number; n++) out.push(tableLine.range(state.doc.line(n).from))
           return
         }
         if (!MARKS.has(node.name) || active.has(state.doc.lineAt(node.from).number)) return

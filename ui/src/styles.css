@@ -185,6 +185,8 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .md-url, .md-mark, .md-comment { color: var(--soft); }
 .md-quote { color: var(--soft); font-style: italic; }
 /* front matter is settings, not prose */
+.page .cm-line.md-table { font-family: var(--mono); font-size: 0.8em; line-height: 2.1; }
+.page .cm-source .cm-line.md-table { font-size: inherit; line-height: inherit; }
 .page .cm-line.md-front { font: 13px/1.9 var(--mono); color: var(--soft); }
 
 /* the margin: where the AI speaks */

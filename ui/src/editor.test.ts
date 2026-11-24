@@ -89,3 +89,9 @@ test('line numbers and the source view are switched on and off, and neither chan
   expect(editor.getText()).toBe('# Title\n\nSome **bold** text.')
   expect(changes.length).toBe(before)
 })
+
+test('the lines of a table are set in one width, and only those', () => {
+  const { parent } = editing('Before.\n\n| Group | n |\n|---|---|\n| A | 24 |\n\nAfter.[]')
+  const lines = [...parent.querySelectorAll('.cm-line')].map(line => [line.textContent, line.classList.contains('md-table')])
+  expect(lines).toEqual([['Before.', false], ['', false], ['| Group | n |', true], ['|---|---|', true], ['| A | 24 |', true], ['', false], ['After.', false]])
+})
