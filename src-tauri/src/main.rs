@@ -597,6 +597,14 @@ struct AskResult {
     without_tools: bool,
 }
 
+/// The author ends the answer under way.
+#[tauri::command]
+fn stop_answer(editor: State<Editor>) -> Result<(), String> {
+    editor.session()?.stop_answer();
+    note("ask", "stopped by the author");
+    Ok(())
+}
+
 #[tauri::command]
 async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, on_event: Channel<AskEvent>) -> Result<AskResult, String> {
     let session = editor.session()?;
@@ -851,6 +859,7 @@ fn main() {
             privacy_statement,
             move_document,
             ask,
+            stop_answer,
             log_view,
             thread,
             annotate,

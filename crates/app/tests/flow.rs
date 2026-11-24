@@ -3,7 +3,7 @@
 
 use cowriting_app::{make_backend, BackendSettings, ExportOptions, Session};
 use cowriting_core::host::DiskHost;
-use cowriting_core::turn::Ask;
+use cowriting_core::turn::{Ask, TurnEvent};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -620,4 +620,46 @@ async fn a_document_that_moves_or_was_renamed_keeps_its_log() {
     std::fs::write(folder.path("drafts/intro-2.md"), "# Something else entirely\n").unwrap();
     let (_, opened) = Session::open(Arc::new(DiskHost), &folder.path("drafts/intro-2.md")).unwrap();
     assert_eq!((opened.orphans[0].name.as_str(), opened.orphans[0].is_same_text), ("intro.md", false));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_the_author_stops_is_logged_as_far_as_it_was_read() {
+    let folder = Folder::new("stop");
+    std::fs::write(folder.path("thesis.md"), TEXT).unwrap();
+    std::fs::write(
+        folder.path("script.json"),
+        r#"{"replies": [
+            {"text": "Let me read it first.", "tools": [{"name": "write_note", "input": {"name": "seen.md", "text": "a note"}}]},
+            {"text": "Never said."},
+            {"text": "A whole answer."}
+        ]}"#,
+    )
+    .unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
+    let backend = make_backend(&settings, None).unwrap();
+    let ask = |text: &str| Ask { text: text.into(), document_text: TEXT.into(), model: "scripted".into(), ..Default::default() };
+
+    // stopped while the first words arrive: the tool the model asked for is not run, the model is not asked again
+    let mut events = Vec::new();
+    let outcome = session
+        .ask(backend.as_ref(), ask("Any feedback?"), &mut |event| {
+            if matches!(event, TurnEvent::Text(_)) {
+                session.stop_answer();
+            }
+            events.push(event);
+        })
+        .await
+        .unwrap();
+    assert_eq!(outcome.answer, "Let me read it first.\n\n[The answer is incomplete: The author stopped it.]");
+    assert_eq!(outcome.cut_off.as_deref(), Some("The author stopped it."));
+    assert!(!events.iter().any(|event| matches!(event, TurnEvent::Tool { .. })), "{events:?}");
+    assert!(!folder.files().iter().any(|f| f.contains("/notes/")), "no note was written");
+    let view = session.log_view(TEXT).unwrap();
+    assert_eq!((view.stats.turns, view.turns[0].is_open), (1, true), "it is a turn like any other: to be classified, and in the disclosure");
+    assert!(view.turns[0].answer.ends_with("The author stopped it.]"));
+
+    // the word was for that answer only
+    let next = session.ask(backend.as_ref(), ask("And now?"), &mut |_| {}).await.unwrap();
+    assert_eq!((next.answer.as_str(), next.cut_off), ("Never said.", None));
 }

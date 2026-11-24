@@ -664,7 +664,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
             </button>
           </nav>
           {tab === 'ask' ? (
-            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={shownParty} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onSettings={() => setDialog('settings')} />
+            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={shownParty} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onStop={() => void api.stopAnswer().catch(fail)} onSettings={() => setDialog('settings')} />
           ) : tab === 'experts' && shownParty !== null ? (
             <ExpertsPanel
               party={shownParty}

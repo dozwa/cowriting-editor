@@ -66,6 +66,8 @@ type AskProps = {
   onAnnotate(id: string, use: Use, note: string): void
   onJump(line: number): void
   onNew(): void
+  /** Ends the answer that is coming in. */
+  onStop(): void
   onSettings(): void
 }
 
@@ -82,7 +84,7 @@ export const ACTIONS: { id: string; label: string; hint: string; request: string
   { id: 'consistency', get label() { return m.panels.consistency }, get hint() { return m.panels.consistencyHint }, get request() { return m.panels.consistencyRequest } },
 ]
 
-export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, onAnnotate, onJump, onNew, onSettings }: AskProps) {
+export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, onAnnotate, onJump, onNew, onStop, onSettings }: AskProps) {
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
   const byId = new Map(turns.map(t => [t.id, t]))
@@ -193,6 +195,7 @@ export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, o
             <button className="primary" type="submit" disabled={live !== null || text.trim() === ''}>
               {live !== null ? m.panels.answering : isReply ? m.panels.reply : m.panels.ask}
             </button>
+            {live !== null && <button type="button" onClick={onStop}>{m.panels.stop}</button>}
             {isReply && live === null && <button type="button" onClick={onNew}>{m.panels.newQuestion}</button>}
             {!isReply && party !== null && (
               <select aria-label={m.panels.whoToAsk} value={asked} onChange={e => setAsked(e.target.value)}>

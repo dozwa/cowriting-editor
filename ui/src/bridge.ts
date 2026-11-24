@@ -67,6 +67,7 @@ export const bridgeApi: Api = {
   removeStyle: () => call('remove_style'),
   searchSources: (query, documentText) => call('search_sources', { query, documentText }),
   checkReferences: documentText => call('check_references', { documentText }),
+  stopAnswer: () => Promise.reject('The bridge cannot stop an answer.'),
   ask: async (input, onEvent) => {
     const response = await fetch('/bridge/ask', { method: 'POST', body: JSON.stringify({ input }) })
     const reader = response.body!.getReader()

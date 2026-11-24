@@ -1065,6 +1065,11 @@ impl Session {
         workspace.log.append(&LogEntry::External(entry)).map_err(error)
     }
 
+    /// Ends the answer under way: what was read so far is logged as an incomplete answer.
+    pub fn stop_answer(&self) {
+        self.workspace.stop.ask();
+    }
+
     pub async fn ask(&self, backend: &dyn Backend, ask: Ask, on_event: &mut (dyn FnMut(TurnEvent) + Send)) -> Result<TurnOutcome, String> {
         run_turn(&self.workspace, backend, ask, on_event).await.map_err(error)
     }

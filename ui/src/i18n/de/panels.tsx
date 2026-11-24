@@ -41,6 +41,7 @@ export const panels: typeof pattern = {
   replyPlaceholder: name => (name === '' ? 'Antworten…' : `Antwort an ${name}…`),
   askPlaceholder: name => (name === '' ? 'Frage zu Ihrem Text…' : `Frage an ${name}…`),
   answering: 'Antwortet…',
+  stop: 'Anhalten',
   reply: 'Antworten',
   ask: 'Fragen',
   newQuestion: 'Neue Frage',

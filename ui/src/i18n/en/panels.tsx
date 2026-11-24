@@ -44,6 +44,7 @@ export const panels = {
   replyPlaceholder: (name: string) => (name === '' ? 'Reply…' : `Reply to ${name}…`),
   askPlaceholder: (name: string) => (name === '' ? 'Ask about your text…' : `Ask ${name}…`),
   answering: 'Answering…',
+  stop: 'Stop',
   reply: 'Reply',
   ask: 'Ask',
   newQuestion: 'New question',

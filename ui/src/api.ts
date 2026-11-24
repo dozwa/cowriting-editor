@@ -301,6 +301,8 @@ export const api = {
   removeStyle: () => invoke<void>('remove_style'),
   searchSources: (query: string, documentText: string) => invoke<SourceHits>('search_sources', { query, documentText }),
   checkReferences: (documentText: string) => invoke<SourcesView['checked']>('check_references', { documentText }),
+  /** Ends the answer under way; `ask` then comes back with what was read so far. */
+  stopAnswer: () => invoke<void>('stop_answer'),
   ask: (input: { text: string; replyTo: string | null; persona: string | null; command?: string | null; documentText: string }, onEvent: (event: AskEvent) => void) => {
     const channel = new Channel<AskEvent>()
     channel.onmessage = onEvent

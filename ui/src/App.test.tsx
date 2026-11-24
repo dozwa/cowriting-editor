@@ -31,8 +31,9 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
 }
 let lastEditor: Editor & Seen
 
-function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string } = {}) {
   const turns: TurnRow[] = []
+  let release = () => {}
   const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[] } = { feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
@@ -229,12 +230,25 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       calls.comments.push([id, note])
       aiText.find(row => row.id === id)!.note = note
     },
+    stopAnswer: async () => {
+      calls.picked.push('stopped')
+      release()
+    },
     ask: async (input, onEvent: (event: AskEvent) => void) => {
       calls.asked.push(input)
       const id = `t${turns.length + 1}`
-      const answer = options.answer ?? 'On line 3: why subjects and not participants?'
+      let answer = options.answer ?? 'On line 3: why subjects and not participants?'
       onEvent({ kind: 'started', id })
       onEvent({ kind: 'tool', name: 'read_document' })
+      if (options.holdAnswer === true) {
+        // an answer that comes in slowly, until the author stops it
+        answer = 'Why subjects'
+        onEvent({ kind: 'text', text: answer })
+        await new Promise<void>(stopped => (release = stopped))
+        answer += '\n\n[The answer is incomplete: The author stopped it.]'
+        turns.push({ id, ts: '2026-11-23T10:00:00Z', category: 'general', asked: input.text, answer, excerpt: answer, model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: [], use: '', note: '', isOpen: true, isAiText: false, replyTo: input.replyTo, persona: input.persona ?? '', who: '' })
+        return { id, answer, isAiText: false, refused: 0, cutOff: 'The author stopped it.', withoutTools: false }
+      }
       onEvent({ kind: 'text', text: answer })
       turns.push({ id, ts: '2026-11-23T10:00:00Z', category: 'general', asked: input.text, answer, excerpt: answer, model: 'claude-opus-5-5', provider: 'Anthropic', toolsUsed: ['read_document'], use: '', note: '', isOpen: true, isAiText: false, replyTo: input.replyTo, persona: input.persona ?? '', who: experts.find(e => e.id === input.persona)?.name ?? '' })
       return { id, answer, isAiText: false, refused: 0, cutOff: null, withoutTools: options.withoutTools ?? false }
@@ -1584,4 +1598,21 @@ test('Escape closes a dialog', async () => {
   await user.click(await screen.findByLabelText('Format'))
   await user.keyboard('{Escape}')
   await waitFor(() => expect(screen.queryByLabelText('Format')).toBeNull())
+})
+
+test('an answer that is coming in can be stopped, and what was read stays', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ holdAnswer: true })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+  await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await screen.findByText('Why subjects')
+  await user.click(screen.getByRole('button', { name: 'Stop' }))
+  expect(calls.picked).toEqual(['stopped'])
+  // the part that came is the answer, marked as incomplete, and waits to be classified like any other
+  await screen.findByText(/The answer is incomplete: The author stopped it\./)
+  expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+  expect(await screen.findByRole('button', { name: '✓ used' })).toBeTruthy()
 })

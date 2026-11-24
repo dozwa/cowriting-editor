@@ -34,6 +34,49 @@ pub struct Workspace {
     pub language: String,
     /// What the author said about languages in the editor's settings; it can change while the document is open.
     pub languages: RwLock<Languages>,
+    /// The author's word that the answer under way is to end.
+    pub stop: Halt,
+}
+
+/// What the log says of an answer the author ended.
+pub const STOPPED: &str = "The author stopped it.";
+
+/// A word from outside that the work under way is to end: asked from any thread, heard at once.
+#[derive(Default)]
+pub struct Halt {
+    is_asked: std::sync::atomic::AtomicBool,
+    waiting: std::sync::Mutex<Option<std::task::Waker>>,
+}
+
+impl Halt {
+    pub fn ask(&self) {
+        self.is_asked.store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Some(waiting) = self.waiting.lock().unwrap().take() {
+            waiting.wake();
+        }
+    }
+
+    pub fn is_asked(&self) -> bool {
+        self.is_asked.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Before new work: a word said earlier is not meant for it.
+    pub fn clear(&self) {
+        self.is_asked.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// What the work comes to, or None when it was stopped first; the work is dropped then, where it stood.
+    pub async fn or<T>(&self, work: impl std::future::Future<Output = T>) -> Option<T> {
+        let mut work = std::pin::pin!(work);
+        std::future::poll_fn(|context| {
+            *self.waiting.lock().unwrap() = Some(context.waker().clone());
+            if self.is_asked() {
+                return std::task::Poll::Ready(None);
+            }
+            work.as_mut().poll(context).map(Some)
+        })
+        .await
+    }
 }
 
 /// The author's own word on languages; nothing said leaves things as they were found.
@@ -91,7 +134,7 @@ impl Workspace {
         }
         let log = Log::new(host.clone(), sidecar.log_dir(), sidecar.rewrites_dir());
         let language = sidecar.info(host.as_ref()).map_or("en".to_string(), |info| info.language);
-        Workspace { session: host.new_id(), host, sidecar, log, editor: editor.to_string(), language, languages: RwLock::default() }
+        Workspace { session: host.new_id(), host, sidecar, log, editor: editor.to_string(), language, languages: RwLock::default(), stop: Halt::default() }
     }
 
     /// The manuscript's language: what the author said, else what the sidecar has.
@@ -237,6 +280,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         }
     }
     workspace.sidecar.ensure(host, &ask.document_text)?;
+    workspace.stop.clear();
     let before = workspace.log.snapshot()?;
     // the author's linked files for whoever answers; the log names them, since they shaped the answer
     let knowledge = crate::project::knowledge_for(host, &workspace.sidecar, expert.as_ref().map(|e| [e.id.as_str()]).as_ref().map(|ids| ids.as_slice()));
@@ -341,10 +385,20 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
                 streamed.push_str(text);
                 emit(TurnEvent::Text(text.to_string()));
             };
-            let reply = if backend.runs_tools_itself() && !without_tools {
-                backend.complete_with_tools(&request, &mut on_text, &mut run_tool).await
-            } else {
-                backend.complete(&request, &mut on_text).await
+            let work = async {
+                if backend.runs_tools_itself() && !without_tools {
+                    backend.complete_with_tools(&request, &mut on_text, &mut run_tool).await
+                } else {
+                    backend.complete(&request, &mut on_text).await
+                }
+            };
+            // the author ended it: the connection is dropped, and what was read so far stays on the record
+            let Some(reply) = workspace.stop.or(work).await else {
+                if !streamed.trim().is_empty() {
+                    answer.push(streamed);
+                }
+                cut_off = Some(STOPPED.into());
+                break;
             };
             let reply = match reply {
                 Ok(reply) => reply,
@@ -380,6 +434,11 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
                 _ => {}
             }
             if calls.is_empty() || cut_off.is_some() {
+                break;
+            }
+            // stopped between two rounds: no tool is run and the model is not asked again
+            if workspace.stop.is_asked() {
+                cut_off = Some(STOPPED.into());
                 break;
             }
             if round + 1 >= MAX_ROUNDS {
