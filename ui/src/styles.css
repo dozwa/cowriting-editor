@@ -398,10 +398,12 @@ dialog .choice label:has(input:checked) { border-color: var(--ink); background: 
 .preview { background: var(--desk); border-radius: var(--radius); padding: 12px; max-height: 14rem; overflow: auto; font: 12px/1.55 var(--mono); white-space: pre-wrap; }
 
 @media (max-width: 900px) {
-  .work { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .work { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  /* under the text the panel is low: what does not fit scrolls inside it and never lies over the foot */
+  .panel { overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
+  .ask { grid-template-rows: minmax(4rem, 1fr) auto; overflow-y: auto; }
   .panel { border-left: 0; border-top: 1px solid var(--rule); }
   .divider { display: none; }
-  .bar { overflow-x: auto; }
 }
 
 /* the one place for what went wrong: seen at once, without shouting */
@@ -475,3 +477,10 @@ dialog > button.link { display: block; margin-top: -6px; font-size: 13px; }
 
 /* what can be done with a file just written */
 dialog .row.written { margin: 10px 0 2px; gap: 8px; align-items: center; }
+
+/* a narrow window: the bar and the foot break into rows of whole things; nothing is cut off or squeezed away */
+.bar { flex-wrap: wrap; row-gap: 2px; }
+.bar button, .status > span, .looks button { white-space: nowrap; }
+.bar .name { flex: 0 1 auto; min-width: min(9rem, 100%); }
+.status { flex-wrap: wrap; row-gap: 2px; }
+.status > span:first-child { flex: 0 1 auto; min-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
