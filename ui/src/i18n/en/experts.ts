@@ -43,6 +43,13 @@ export const experts = {
   fileMissing: 'cannot be read',
   fileConverted: 'its text, as the editor read it',
   fileCut: 'long: only its beginning is sent',
+  ownFiles: (count: number): string => (count === 0 ? 'Files' : `Files (${count})`),
+  filesOf: (name: string) => `Background files of ${name}`,
+  noOwnFiles: (name: string) => `No file is linked for ${name} alone.`,
+  sharedFiles: (names: string) => `Gets what everyone gets, too: ${names}`,
+  linkFileFor: (name: string) => `Link a file for ${name}…`,
+  takeFile: 'Take away',
+  takeFileFrom: (file: string, name: string) => `Take ${file} away from ${name}`,
   unlink: 'Unlink',
   unlinkFile: (name: string) => `Unlink ${name}`,
   // what an expert is told

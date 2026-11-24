@@ -99,7 +99,8 @@ kept in the editor's own folder (`projects/<file name>-<fingerprint>/` beside `s
 the experts and what you told them, the plan, the bibliography files, live review, and
 
 - **Background files** (Experts tab): files of yours the AI should know, such as wording rules, a
-  glossary or the methods. Each is for everyone or for the experts you tick. Only the path is
+  glossary or the methods. Each is for everyone or for the experts you tick; "Files" on an
+  expert's card links a file for that expert alone and shows what it gets. Only the path is
   kept; the file is read when the AI is asked, sent along (at most 24,000 characters of a file),
   and named in the log. Text files as they are; of a Word file (.docx, .odt, .rtf) or a PDF the
   editor reads the text once, keeps that copy in the project's folder and reads the file again

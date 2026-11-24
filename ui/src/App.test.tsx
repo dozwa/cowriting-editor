@@ -1527,3 +1527,35 @@ test('a document can have an AI of its own: it is kept with the document, and th
   expect(calls.settings).toEqual([])
   await waitFor(() => expect(within(screen.getByRole('contentinfo')).getByText(/claude-opus-5-5/)).toBeTruthy())
 })
+
+test('a file is linked for one expert from that expert’s own card, and taken away there', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Experts' }))
+  const files = (name: string) => screen.getByRole('button', { name: `Background files of ${name}` })
+  expect(files('Reviewer #2').textContent).toBe('Files')
+  await user.click(files('Reviewer #2'))
+  const reviewer = () => within(screen.getByRole('group', { name: 'Background files of Reviewer #2' }))
+  reviewer().getByText('No file is linked for Reviewer #2 alone.')
+  await user.click(reviewer().getByRole('button', { name: 'Link a file for Reviewer #2…' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['link', '/work/wording.md', ['reviewer-2']]))
+  await waitFor(() => expect(files('Reviewer #2').textContent).toBe('Files (1)'))
+  // the list of all files says the same
+  expect(screen.getByRole('button', { name: 'Who gets wording.md' }).textContent).toBe('For Reviewer #2')
+
+  // the same file for a second expert: both get it
+  await user.click(files('The Clinician'))
+  await user.click(screen.getByRole('button', { name: 'Link a file for The Clinician…' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['link', '/work/wording.md', ['reviewer-2', 'clinician']]))
+
+  // taken from one it stays with the other; taken from the last it is unlinked, not handed to everyone
+  await user.click(files('Reviewer #2'))
+  await user.click(screen.getByRole('button', { name: 'Take wording.md away from Reviewer #2' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['link', '/work/wording.md', ['clinician']]))
+  await user.click(files('The Clinician'))
+  await user.click(screen.getByRole('button', { name: 'Take wording.md away from The Clinician' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['unlink', '/work/wording.md']))
+  await screen.findByText('None linked.')
+})

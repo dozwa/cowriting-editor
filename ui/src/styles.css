@@ -467,3 +467,8 @@ button.toured { outline-offset: 2px; }
 }
 /* a link that stands alone under a field belongs to that field's note */
 dialog > button.link { display: block; margin-top: -6px; font-size: 13px; }
+
+/* one expert's own background files, under its card */
+.own-files ul { display: grid; gap: 4px; }
+.own-files li { display: flex; gap: 8px; align-items: baseline; }
+.own-files li span:first-child { font-weight: 650; overflow-wrap: anywhere; }

@@ -673,6 +673,14 @@ export function App({ api, makeEditor = createEditor }: Props) {
                 const path = await api.pickLinkedFile()
                 if (path !== null) await withProject(() => api.linkFile(path, []))
               }}
+              onLinkFor={async id => {
+                const path = await api.pickLinkedFile()
+                if (path === null) return
+                // a file everyone gets already reaches this expert; one for others is now for this one too
+                const linked = project?.files.find(file => file.path === path)
+                const personas = linked === undefined ? [id] : linked.personas.length === 0 ? [] : [...new Set([...linked.personas, id])]
+                await withProject(() => api.linkFile(path, personas))
+              }}
               onFileFor={(path, personas) => void withProject(() => api.linkFile(path, personas))}
               onUnlink={path => void withProject(() => api.unlinkFile(path))}
               onPrompt={(id, prompt) => void changeParty(() => api.setPrompt(id, prompt))}

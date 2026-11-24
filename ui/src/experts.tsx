@@ -93,10 +93,41 @@ function Files({ files, experts, onLink, onFor, onUnlink }: { files: LinkedFile[
   )
 }
 
+/** The background files one expert gets: its own, and those everyone gets. Linking here links for this expert. */
+function OwnFiles({ expert, files, onLink, onFor, onUnlink }: { expert: Expert; files: LinkedFile[]; onLink(): void; onFor(path: string, personas: string[]): void; onUnlink(path: string): void }) {
+  const own = files.filter(file => file.personas.includes(expert.id))
+  const shared = files.filter(file => file.personas.length === 0)
+  // taken from the last expert it was for, a file would be for everyone: it is unlinked instead
+  const take = (file: LinkedFile) => (file.personas.length === 1 ? onUnlink(file.path) : onFor(file.path, file.personas.filter(id => id !== expert.id)))
+  return (
+    <div className="brief own-files" role="group" aria-label={m.experts.filesOf(expert.name)}>
+      {own.length === 0 && <p className="muted">{m.experts.noOwnFiles(expert.name)}</p>}
+      {own.length > 0 && (
+        <ul>
+          {own.map(file => (
+            <li key={file.path}>
+              <span title={file.path}>{file.name}</span>
+              {file.isMissing && <span className="flag">{m.experts.fileMissing}</span>}
+              <span className="spacer" />
+              <button className="link" aria-label={m.experts.takeFileFrom(file.name, expert.name)} onClick={() => take(file)}>{m.experts.takeFile}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {shared.length > 0 && <p className="muted">{m.experts.sharedFiles(shared.map(file => file.name).join(', '))}</p>}
+      <div className="row">
+        <button onClick={onLink}>{m.experts.linkFileFor(expert.name)}</button>
+      </div>
+    </div>
+  )
+}
+
 type Props = {
   party: PartyView
   files: LinkedFile[]
   onLink(): void
+  /** Asks for a file and links it for this expert alone. */
+  onLinkFor(expertId: string): void
   onFileFor(path: string, personas: string[]): void
   onUnlink(path: string): void
   onPrompt(id: string, prompt: string): void
@@ -107,7 +138,8 @@ type Props = {
   onAdd(name: string, role: string, looksAt: string): Promise<boolean>
 }
 
-export function ExpertsPanel({ party, files, canAsk, onReview, onBrief, onMember, onAdd, onLink, onFileFor, onUnlink, onPrompt }: Props) {
+export function ExpertsPanel({ party, files, canAsk, onReview, onBrief, onMember, onAdd, onLink, onLinkFor, onFileFor, onUnlink, onPrompt }: Props) {
+  const [filing, setFiling] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [prompting, setPrompting] = useState<string | null>(null)
   const [isAdding, setAdding] = useState(false)
@@ -132,11 +164,14 @@ export function ExpertsPanel({ party, files, canAsk, onReview, onBrief, onMember
               <span className="muted">{expert.role}</span>
               <div className="row">
                 <button onClick={() => onReview(expert.id)} disabled={!canAsk} title={canAsk ? undefined : m.experts.cannotAskNow}>{m.experts.askForReview}</button>
-                <button className="link" aria-expanded={open === expert.id} onClick={() => (setOpen(open === expert.id ? null : expert.id), setPrompting(null))}>
+                <button className="link" aria-expanded={open === expert.id} onClick={() => (setOpen(open === expert.id ? null : expert.id), setPrompting(null), setFiling(null))}>
                   {expert.brief === '' ? m.experts.brief : m.experts.briefed}
                 </button>
-                <button className="link" aria-expanded={prompting === expert.id} onClick={() => (setPrompting(prompting === expert.id ? null : expert.id), setOpen(null))}>
+                <button className="link" aria-expanded={prompting === expert.id} onClick={() => (setPrompting(prompting === expert.id ? null : expert.id), setOpen(null), setFiling(null))}>
                   {expert.isPromptEdited ? m.experts.promptEdited : m.experts.prompt}
+                </button>
+                <button className="link" aria-expanded={filing === expert.id} aria-label={m.experts.filesOf(expert.name)} onClick={() => (setFiling(filing === expert.id ? null : expert.id), setOpen(null), setPrompting(null))}>
+                  {m.experts.ownFiles(files.filter(file => file.personas.includes(expert.id)).length)}
                 </button>
                 <label className="member">
                   <input type="checkbox" checked={expert.isMember} onChange={e => onMember(expert.id, e.target.checked)} aria-label={m.experts.isInParty(expert.name)} /> {m.experts.inParty}
@@ -145,6 +180,7 @@ export function ExpertsPanel({ party, files, canAsk, onReview, onBrief, onMember
               {open === expert.id && (
                 <Brief key={expert.brief} label={m.experts.briefingFor(expert.name)} hint={m.experts.briefingForHint(expert.name)} value={expert.brief} onSave={body => onBrief(expert.id, body)} />
               )}
+              {filing === expert.id && <OwnFiles expert={expert} files={files} onLink={() => onLinkFor(expert.id)} onFor={onFileFor} onUnlink={onUnlink} />}
               {prompting === expert.id && <Prompt key={expert.prompt} expert={expert} onSave={prompt => onPrompt(expert.id, prompt)} />}
             </div>
           </li>
