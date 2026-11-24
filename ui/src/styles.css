@@ -292,7 +292,9 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .switch { font-weight: 650; font-size: 14px; display: flex; gap: 8px; align-items: center; }
 .live .state, .scope .state { margin: 0; font-size: 12.5px; color: var(--soft); }
 .watchers, .hints, .meters, .sections, .points { display: grid; gap: 6px; }
-.watchers label { display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap; }
+.watchers label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 7px; align-items: baseline; }
+/* what an expert looks at stands under its name for every one of them, not beside it for the short ones only */
+.watchers label .muted { grid-column: 2; }
 .hints li { display: flex; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--rule); }
 .hints li:first-child { border-top: 0; padding-top: 2px; }
 .hints .top { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
@@ -503,3 +505,6 @@ dialog > .actions:last-child, dialog > .row.end:last-child { position: sticky; b
 
 /* citations with no bibliography file behind them: said where the files are listed */
 .sources .hint { display: block; max-width: none; padding: 8px 10px; border-radius: var(--radius); background: var(--marker-wash); color: var(--marker); font-size: 12.5px; }
+
+/* the dialog scrolls and keeps its buttons in reach: the disclosure's text needs no scrolling of its own inside it */
+dialog .preview { max-height: none; }

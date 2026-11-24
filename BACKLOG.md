@@ -5,7 +5,8 @@ Asked for, not built, in no order.
 - **German, what is left.** The window is in German, and so are the experts that come with the
   editor. What the app itself reports is still English: error messages about files, providers and
   the export. The log and the disclosure keep the experts' English names, so a log reads the same
-  whatever the window was set to.
+  whatever the window was set to. The menu at the top of the screen (File, Edit, View) is the
+  system's standard one and English as well.
 - **More languages.** A language is a folder in `ui/src/i18n` and one line in its `index.ts`; the
   writing language, the AI's language and the disclosure know English and German only.
 - **Projects, what is left.** A document moved outside the editor without its `.cowriting` folder
