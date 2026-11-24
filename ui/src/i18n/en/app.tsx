@@ -103,5 +103,5 @@ export const app = {
   alpha: (version: string) => `alpha ${version}`,
   alphaTitle: 'An early version: things are missing and can break. Reports help.',
   calm: 'Calm',
-  calmTitle: 'Distraction-free: hide the explanations and hints around the controls',
+  calmTitle: 'Hide the explanations and hints around the controls',
 }

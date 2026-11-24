@@ -96,5 +96,5 @@ export const app: typeof pattern = {
   alpha: version => `Alpha ${version}`,
   alphaTitle: 'Eine frühe Version: Manches fehlt, manches kann brechen. Meldungen helfen.',
   calm: 'Ruhig',
-  calmTitle: 'Ablenkungsfrei: Erklärungen und Hinweise um die Bedienelemente ausblenden',
+  calmTitle: 'Erklärungen und Hinweise um die Bedienelemente ausblenden',
 }

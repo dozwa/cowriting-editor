@@ -162,7 +162,7 @@ parts to fill in, and while either is so the editor neither asks nor sends.
 
 Every tenth start it asks for a coffee, feedback or a star on
 GitHub: twenty starts of quiet after a coffee or feedback, and never again for a star once you
-followed that link. "Calm" in the status bar (distraction-free) hides the explanations and hints.
+followed that link. "Calm" in the status bar hides the explanations and hints.
 
 ## Ready-made requests
 
