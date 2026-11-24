@@ -12,6 +12,7 @@ async function call<T>(name: string, args: unknown = {}): Promise<T> {
 export const bridgeApi: Api = {
   getSettings: () => call('get_settings'),
   setSettings: (settings, apiKey) => call('set_settings', { settings, apiKey }),
+  setApiKey: () => Promise.reject('The bridge keeps no keys.'),
   testConnection: (settings, apiKey) => call('test_connection', { settings, apiKey }),
   setPreferences: preferences => call('set_preferences', { preferences }),
   showSettingsFolder: () => Promise.reject('The bridge has no settings folder.'),

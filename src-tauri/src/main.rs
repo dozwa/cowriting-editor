@@ -6,17 +6,17 @@
 //! are only ever touched here.
 
 use cowriting_app::diagnostics::{name_only, Diagnostics, Seen};
-use cowriting_app::usage::{self, Counted, Sender};
 use cowriting_app::preferences::{in_export_folder, last_document, remember_document, Preferences, SettingsFile};
+use cowriting_app::usage::{self, Counted, Sender};
 use cowriting_app::{
     export_tools, list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, DocumentExport, ExportOptions, ExportTools, Exported, FileFormat, LiveView,
     LogView, Opened, PartyView, PdfChoice, ScopeView, Session, SourceHits, SourcesView, VerifyFile,
 };
 use cowriting_core::host::{DiskHost, Host};
-use cowriting_core::words::{count_words, Format};
 use cowriting_core::review::{CheckSummary, LiveOutcome};
 use cowriting_core::turn::{Ask, TurnEvent};
 use cowriting_core::types::ThreadMessage;
+use cowriting_core::words::{count_words, Format};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -151,6 +151,17 @@ fn read_settings(app: &tauri::AppHandle) -> BackendSettings {
     settings
 }
 
+/// The AI's settings as they hold now: the open document's own if it has them, else the general
+/// ones. `COWRITING_BACKEND` (for tests and trials) overrides the backend in both.
+fn settings_here(app: &tauri::AppHandle, session: Option<&Session>) -> BackendSettings {
+    let general = read_file(app).backend.unwrap_or_default();
+    let mut settings = session.map_or(general.clone(), |session| session.settings_here(general));
+    if let Ok(backend) = std::env::var("COWRITING_BACKEND") {
+        settings.backend = backend;
+    }
+    settings
+}
+
 /// The key the system's key store holds for a backend. An environment variable serves where there is no key store.
 fn api_key(backend: &str) -> Option<String> {
     let from_environment = || if backend == "anthropic" { std::env::var("ANTHROPIC_API_KEY").ok() } else { None };
@@ -160,8 +171,12 @@ fn api_key(backend: &str) -> Option<String> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SettingsView {
+    /// The AI as it holds for the open document: its own, or the general one.
     #[serde(flatten)]
     settings: BackendSettings,
+    /// The general settings, and whether the open document has its own instead.
+    general: BackendSettings,
+    is_ai_own: bool,
     /// A key for this backend is in the key store.
     has_key: bool,
     /// The AI can be asked with these settings.
@@ -203,15 +218,19 @@ struct UsageView {
 }
 
 #[tauri::command]
-fn get_settings(app: tauri::AppHandle) -> SettingsView {
+fn get_settings(app: tauri::AppHandle, editor: State<Editor>) -> SettingsView {
     let file = read_file(&app);
-    let settings = read_settings(&app);
+    let session = editor.session().ok();
+    let settings = settings_here(&app, session.as_deref());
+    let general = read_settings(&app);
     let key = api_key(&settings.backend);
     let is_ready = make_backend(&settings, key.as_deref()).is_ok();
     let model_status = model_status(&tested_models(), &settings.backend, &settings.model);
     let is_first_run = file.backend.is_none() && std::env::var("COWRITING_BACKEND").is_err();
     let last = || if file.preferences.reopen_last { state_file(&app).and_then(|state| last_document(&state)) } else { None };
     SettingsView {
+        is_ai_own: session.as_deref().is_some_and(|session| session.project_view().overrides.ai.is_some()),
+        general,
         settings,
         has_key: key.is_some(),
         is_ready,
@@ -225,7 +244,7 @@ fn get_settings(app: tauri::AppHandle) -> SettingsView {
         feedback_by_mail: cowriting_app::feedback::has_mail(),
         contact: cowriting_app::feedback::MAIL,
         repository: cowriting_app::feedback::REPOSITORY,
-        asking: *app.state::<Editor>().asking.lock().unwrap(),
+        asking: *editor.asking.lock().unwrap(),
         // a scripted run (tests) is not interrupted by it
         show_tour: std::env::var("COWRITING_BACKEND").is_err() && state_file(&app).is_some_and(|state| cowriting_app::preferences::is_tour_due(&state)),
         usage: UsageView {
@@ -246,6 +265,17 @@ fn set_settings(app: tauri::AppHandle, settings: BackendSettings, api_key: Optio
             .map_err(|e| format!("The key could not be put into the system's key store: {e}"))?;
     }
     Ok(())
+}
+
+/// Puts a key for one provider into the system's key store: for a document whose own AI is not the general one.
+#[tauri::command]
+fn set_api_key(backend: String, api_key: String) -> Result<(), String> {
+    if !["anthropic", "openai-compatible"].contains(&backend.as_str()) || api_key.trim().is_empty() {
+        return Err("A key needs a provider that takes one.".into());
+    }
+    keyring::Entry::new(KEY_SERVICE, &backend)
+        .and_then(|entry| entry.set_password(api_key.trim()))
+        .map_err(|e| format!("The key could not be put into the system's key store: {e}"))
 }
 
 /// Saves the preferences and returns them as saved, within their limits. An open document's live review keeps the new pace at once.
@@ -289,7 +319,11 @@ fn usage_answered(app: tauri::AppHandle, ping: bool, figures: bool) -> Result<Pr
 /// The two messages as they would be sent now, for the author to read: the sign of use, and this session's figures so far.
 #[tauri::command]
 fn usage_preview(app: tauri::AppHandle, editor: State<Editor>) -> (String, String) {
-    let sender = usage_sender(&app).unwrap_or_else(|| Sender { installation: "(a random number, made when you agree)".into(), version: app.package_info().version.to_string(), system: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH) });
+    let sender = usage_sender(&app).unwrap_or_else(|| Sender {
+        installation: "(a random number, made when you agree)".into(),
+        version: app.package_info().version.to_string(),
+        system: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
+    });
     let counted = editor.counted.lock().unwrap().clone();
     let pretty = |message: &serde_json::Value| serde_json::to_string_pretty(message).unwrap_or_default();
     (pretty(&usage::start_message(&sender)), pretty(&usage::session_message(&sender, &counted, STARTED.get().map(std::time::Instant::elapsed).unwrap_or_default())))
@@ -563,7 +597,7 @@ struct AskResult {
 #[tauri::command]
 async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, on_event: Channel<AskEvent>) -> Result<AskResult, String> {
     let session = editor.session()?;
-    let settings = read_settings(&app);
+    let settings = settings_here(&app, Some(&session));
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
     let command = input.persona.as_ref().map(|_| "ask".to_string()).or(input.command);
     let about = format!(
@@ -623,7 +657,7 @@ fn set_live(editor: State<Editor>, is_on: bool, personas: Vec<String>, document_
 #[tauri::command]
 async fn live_review(app: tauri::AppHandle, editor: State<'_, Editor>, document_text: String) -> Result<LiveOutcome, String> {
     let session = editor.session()?;
-    let settings = read_settings(&app);
+    let settings = settings_here(&app, Some(&session));
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
     let outcome = noting_failure("live-review", &document_text, session.live_review(backend.as_ref(), &settings.model, &document_text).await)?;
     // only a review that reached the model counts as a request
@@ -646,7 +680,7 @@ fn set_scope(editor: State<Editor>, text: String, document_text: String) -> Resu
 #[tauri::command]
 async fn check_points(app: tauri::AppHandle, editor: State<'_, Editor>, document_text: String) -> Result<CheckSummary, String> {
     let session = editor.session()?;
-    let settings = read_settings(&app);
+    let settings = settings_here(&app, Some(&session));
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
     editor.counted.lock().unwrap().request(&settings.backend, &settings.model);
     noting_failure("check-points", &document_text, session.check_points(backend.as_ref(), &settings.model, &document_text).await)
@@ -778,6 +812,7 @@ fn main() {
             get_settings,
             set_settings,
             set_preferences,
+            set_api_key,
             show_settings_folder,
             test_connection,
             open_document,

@@ -200,6 +200,7 @@ export const settings = {
   calmHint: 'The editor looks cleaner; everything still works the same. Warnings stay.',
   onlyThisDocument: (name: string) => `Only for ${name}`,
   ownLanguagesHint: 'The three languages below then hold for this document alone; the editor’s own language is the same everywhere.',
+  ownAiHint: 'This document is then asked with the provider and model below, whatever the general settings say. A key is kept in this computer’s key store, one for each provider.',
   ownPaceHint: 'The pace below then holds for this document alone.',
   whereSettings: 'These settings',
   showFolder: 'Show the folder',

@@ -20,9 +20,12 @@ const isLocalAddress = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[:
 const FEWEST_TOKENS = 500
 
 /** The AI's settings while they are edited, and the connection test. */
+const kindOf = (settings: Settings): Kind => (settings.backend === 'claude-code' ? 'claudeCode' : settings.backend !== 'openai-compatible' ? 'anthropic' : isLocalAddress(settings.baseUrl) ? 'local' : 'other')
+const AI_FIELDS = ['backend', 'model', 'baseUrl', 'maxTokens'] as const
+
 function useAi(api: Api, settings: SettingsView) {
   const isScripted = settings.backend.startsWith('fake:')
-  const [kind, setKind] = useState<Kind>(settings.backend === 'claude-code' ? 'claudeCode' : settings.backend !== 'openai-compatible' ? 'anthropic' : isLocalAddress(settings.baseUrl) ? 'local' : 'other')
+  const [kind, setKind] = useState<Kind>(kindOf(settings))
   const [model, setModel] = useState(isScripted ? KINDS.anthropic.model : settings.model)
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
   const [key, setKey] = useState('')
@@ -35,7 +38,17 @@ function useAi(api: Api, settings: SettingsView) {
   const isLimitFine = limit.trim() === '' || (Number.isFinite(tokens) && tokens >= FEWEST_TOKENS)
   const next: Settings = { backend: chosen.backend, model: model.trim(), baseUrl: baseUrl.trim(), maxTokens: kind === 'claudeCode' || limit.trim() === '' || !isLimitFine ? 0 : tokens }
   const typedKey = key.trim() === '' ? null : key.trim()
-  const isChanged = settings.isFirstRun || typedKey !== null || (['backend', 'model', 'baseUrl', 'maxTokens'] as const).some(field => next[field] !== settings[field])
+  /** Whether what is set here differs from these settings, or a key was typed. */
+  const differsFrom = (from: Settings) => settings.isFirstRun || typedKey !== null || AI_FIELDS.some(field => next[field] !== from[field])
+  /** Shows other settings: the general ones, when a document gives up its own. */
+  const reset = (to: Settings) => {
+    setKind(kindOf(to))
+    setModel(to.model)
+    setBaseUrl(to.baseUrl)
+    setLimit(to.maxTokens > 0 ? String(to.maxTokens) : '')
+    setChoices(null)
+    setError('')
+  }
 
   const choose = (to: Kind) => {
     setKind(to)
@@ -61,7 +74,7 @@ function useAi(api: Api, settings: SettingsView) {
     }
   }
   const canSave = model.trim() !== '' && isLimitFine
-  return { isScripted, kind, choose, model, setModel, baseUrl, setBaseUrl, key, setKey, limit, setLimit, isLimitFine, choices, setChoices, isTesting, test, error, next, typedKey, isChanged, canSave, chosen, hasStoredKey: settings.hasKey && settings.backend === chosen.backend }
+  return { isScripted, kind, choose, model, setModel, baseUrl, setBaseUrl, key, setKey, limit, setLimit, isLimitFine, choices, setChoices, isTesting, test, error, next, typedKey, differsFrom, reset, canSave, chosen, hasStoredKey: settings.hasKey && settings.backend === chosen.backend }
 }
 
 function AiPane({ ai }: { ai: ReturnType<typeof useAi> }) {
@@ -198,7 +211,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
   // what the open project sets for itself is shown as it holds there; the ticks say which pages are the project's own
   const overrides = project?.overrides ?? {}
   const start: Preferences = { ...settings.preferences, ...Object.fromEntries([...LANGUAGES_OF_A_PROJECT, ...PACE_OF_A_PROJECT].filter(key => overrides[key] != null).map(key => [key, overrides[key]])) }
-  const startOwn = { languages: LANGUAGES_OF_A_PROJECT.some(key => overrides[key] != null), pace: PACE_OF_A_PROJECT.some(key => overrides[key] != null) }
+  const startOwn = { languages: LANGUAGES_OF_A_PROJECT.some(key => overrides[key] != null), pace: PACE_OF_A_PROJECT.some(key => overrides[key] != null), ai: project !== null && settings.isAiOwn }
   const [own, setOwn] = useState(startOwn)
   const [draft, setDraft] = useState<Preferences>(start)
   const [error, setError] = useState('')
@@ -215,13 +228,18 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
   }
 
   const isChanged = JSON.stringify(draft) !== JSON.stringify(start) || own.languages !== startOwn.languages || own.pace !== startOwn.pace
+  // the AI page is the document's own or the general one; it is compared with whichever it shows
+  const isAiOwn = project !== null && own.ai
+  const isAiChanged = own.ai !== startOwn.ai || ai.differsFrom(isAiOwn ? settings : settings.general)
   const save = async () => {
     try {
-      if (ai.isChanged) await api.setSettings(ai.next, ai.typedKey)
-      if (isChanged) {
+      if (!isAiOwn && ai.differsFrom(settings.general)) await api.setSettings(ai.next, ai.typedKey)
+      // a document's own AI is kept with the document; a key typed for it still goes to the key store
+      if (isAiOwn && ai.typedKey !== null && ai.next.backend !== 'claude-code') await api.setApiKey(ai.next.backend, ai.typedKey)
+      if (isChanged || (project !== null && isAiChanged)) {
         // a page that is the project's own is saved with the project, and the general settings keep what they had there
         const general = { ...draft }
-        const mine: ProjectOverrides = {}
+        const mine: ProjectOverrides = isAiOwn ? { ai: ai.next } : {}
         const keep = <K extends keyof ProjectOverrides & keyof Preferences>(key: K) => {
           mine[key] = draft[key]
           general[key] = settings.preferences[key]
@@ -229,7 +247,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
         if (project !== null && own.languages) LANGUAGES_OF_A_PROJECT.forEach(keep)
         if (project !== null && own.pace) PACE_OF_A_PROJECT.forEach(keep)
         if (project !== null) await api.setProject(mine)
-        await api.setPreferences(general)
+        if (isChanged) await api.setPreferences(general)
       }
       close(await api.getSettings())
     } catch (e) {
@@ -295,6 +313,14 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
         </nav>
         <div className="pane" role="tabpanel" aria-label={now.name}>
           {now.about !== '' && <p className="about">{now.about}</p>}
+          {section === 'ai' && project !== null && !ai.isScripted && (
+            <>
+              <label className="check own">
+                <input type="checkbox" checked={own.ai} onChange={e => (setOwn({ ...own, ai: e.target.checked }), !e.target.checked && ai.reset(settings.general))} /> {m.settings.onlyThisDocument(documentName)}
+              </label>
+              {own.ai && <p className="hint">{m.settings.ownAiHint}</p>}
+            </>
+          )}
           {section === 'ai' && <AiPane ai={ai} />}
 
           {section === 'live' && (
@@ -554,10 +580,10 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
       </div>
       {error !== '' && <p className="error" role="alert">{error}</p>}
       <div className="row end">
-        <button className="link" onClick={() => (setDraft({ ...STANDARD }), setOwn({ languages: false, pace: false }), setComplaint(''))} disabled={JSON.stringify(draft) === JSON.stringify(STANDARD) && !own.languages && !own.pace} title={m.settings.backToStandardTitle}>{m.settings.backToStandard}</button>
+        <button className="link" onClick={() => (setDraft({ ...STANDARD }), setOwn({ ...own, languages: false, pace: false }), setComplaint(''))} disabled={JSON.stringify(draft) === JSON.stringify(STANDARD) && !own.languages && !own.pace} title={m.settings.backToStandardTitle}>{m.settings.backToStandard}</button>
         <span className="spacer" />
         <button onClick={() => close(null)}>{m.settings.cancel}</button>
-        <button className="primary" onClick={() => void save()} disabled={!ai.canSave || (!ai.isChanged && !isChanged)}>{m.settings.save}</button>
+        <button className="primary" onClick={() => void save()} disabled={!ai.canSave || (!isAiChanged && !isChanged)}>{m.settings.save}</button>
       </div>
     </Dialog>
     {/* beside the settings, not inside them: a dialog in a dialog would be drawn at twice the chosen size */}

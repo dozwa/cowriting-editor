@@ -293,6 +293,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setLog(await api.logView(opened.text))
       setParty(await api.party())
       setProject(await api.project())
+      // a document can have an AI of its own: what holds now is asked for again
+      setSettings(await api.getSettings())
       setWatching(await api.liveView())
       setScope(await api.scope(opened.text))
       setSources(await api.sources(opened.text))

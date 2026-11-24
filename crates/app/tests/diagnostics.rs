@@ -46,8 +46,26 @@ fn what_is_private_or_secret_never_reaches_the_file() {
 
     let written = on_disk(&log);
     for gone in [
-        "marta", "keller", "Promotion", "Kapitel", "Methoden", "thesis", "draft", "notes.txt", "Jo", "uni-example", "8443", "10.0.3.7", "gateway", "sk-ant", "abcdefghij", "eyJhbGci", "mueller", "Befragten",
-        "zweiten", "secret words",
+        "marta",
+        "keller",
+        "Promotion",
+        "Kapitel",
+        "Methoden",
+        "thesis",
+        "draft",
+        "notes.txt",
+        "Jo",
+        "uni-example",
+        "8443",
+        "10.0.3.7",
+        "gateway",
+        "sk-ant",
+        "abcdefghij",
+        "eyJhbGci",
+        "mueller",
+        "Befragten",
+        "zweiten",
+        "secret words",
     ] {
         assert!(!written.contains(gone), "'{gone}' is in the log:\n{written}");
     }

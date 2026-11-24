@@ -67,6 +67,7 @@ function Files({ files, experts, onLink, onFor, onUnlink }: { files: LinkedFile[
                 <strong title={file.path}>{file.name}</strong>
                 {file.isMissing && <span className="flag">{m.experts.fileMissing}</span>}
                 {file.isCut && <span className="flag">{m.experts.fileCut}</span>}
+                {file.isConverted && !file.isMissing && <span className="muted">{m.experts.fileConverted}</span>}
                 <span className="spacer" />
                 <button className="link" aria-expanded={open === file.path} aria-label={m.experts.fileFor(file.name)} onClick={() => setOpen(open === file.path ? null : file.path)}>
                   {file.personas.length === 0 ? m.experts.forEveryone : m.experts.forThese(file.personas.map(nameOf).join(', '))}

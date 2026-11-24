@@ -73,7 +73,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     external: external.map(row => ({ ...row })),
     words: 7,
   })
-  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
     sendFeedback: async (way, title, text) => void calls.feedback.push([way, title, text]),
     usageAnswered: async (ping, figures) => {
@@ -101,7 +101,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     linkFile: async (path, personas) => {
       calls.project.push(['link', path, personas])
       if (path.endsWith('.pdf')) throw `${path} cannot be read as text.`
-      const file = { path, name: path.split('/').pop()!, personas, isMissing: false, chars: 120, isCut: false }
+      const file = { path, name: path.split('/').pop()!, personas, isMissing: false, chars: 120, isCut: false, isConverted: false }
       project = { ...project, files: [...project.files.filter(f => f.path !== path), file] }
       return project
     },
@@ -113,6 +113,8 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     setProject: async overrides => {
       calls.project.push(['set', overrides])
       project = { ...project, overrides }
+      // as the app does: the document's own AI is what holds from now on
+      settings = { ...settings, ...(overrides.ai ?? settings.general), isAiOwn: overrides.ai !== undefined }
       return project
     },
     setPrompt: async (id, prompt) => {
@@ -123,9 +125,10 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     supportAnswered: async what => void calls.support.push(what),
     tourSeen: async () => void calls.support.push('tour'),
     getSettings: async () => settings,
+    setApiKey: async (backend, apiKey) => void calls.project.push(['key', backend, apiKey]),
     setSettings: async (next, apiKey) => {
       calls.settings.push([next, apiKey])
-      settings = { ...settings, ...next, isReady: true, isFirstRun: false, modelStatus: 'untested' }
+      settings = { ...settings, ...next, general: next, isReady: true, isFirstRun: false, modelStatus: 'untested' }
     },
     testConnection: async next => {
       calls.tested.push(next)
@@ -1490,4 +1493,37 @@ test('closing the question about usage figures is a no, and without a server nob
   await user.click(settings.getByRole('tab', { name: 'About' }))
   expect(settings.queryByText('Usage figures')).toBeNull()
   expect(quiet.calls.usage).toEqual([])
+})
+
+test('a document can have an AI of its own: it is kept with the document, and the general settings stay', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  let dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  const own = dialog.getByRole('checkbox', { name: 'Only for thesis.md' }) as HTMLInputElement
+  expect(own.checked).toBe(false)
+  await user.click(own)
+  const model = dialog.getByLabelText(/^Model/) as HTMLInputElement
+  await user.clear(model)
+  await user.type(model, 'claude-haiku-5-5')
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['set', { ai: { backend: 'anthropic', model: 'claude-haiku-5-5', baseUrl: '', maxTokens: 0 } }]))
+  expect(calls.settings).toEqual([])
+  // the window says which model this document is asked with
+  await waitFor(() => expect(within(screen.getByRole('contentinfo')).getByText(/claude-haiku-5-5/)).toBeTruthy())
+
+  // giving it up shows the general settings again, and saving takes the document's own away
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  const again = dialog.getByRole('checkbox', { name: 'Only for thesis.md' }) as HTMLInputElement
+  expect(again.checked).toBe(true)
+  expect((dialog.getByLabelText(/^Model/) as HTMLInputElement).value).toBe('claude-haiku-5-5')
+  await user.click(again)
+  expect((dialog.getByLabelText(/^Model/) as HTMLInputElement).value).toBe('claude-opus-5-5')
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['set', {}]))
+  expect(calls.settings).toEqual([])
+  await waitFor(() => expect(within(screen.getByRole('contentinfo')).getByText(/claude-opus-5-5/)).toBeTruthy())
 })

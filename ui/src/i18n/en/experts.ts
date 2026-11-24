@@ -33,7 +33,7 @@ export const experts = {
   cancel: 'Cancel',
   // background files
   files: 'Background files',
-  filesHint: 'Files of yours the AI should know: wording rules, a glossary, the methods, a style sheet. They are sent along with every question to those they are for, and the log names them.',
+  filesHint: 'Files of yours the AI should know: wording rules, a glossary, the methods, a style sheet. Text files, Word files and PDFs with text in them. They are sent along with every question to those they are for, and the log names them.',
   linkFile: 'Link a file…',
   noFiles: 'None linked.',
   fileFor: (name: string) => `Who gets ${name}`,
@@ -41,6 +41,7 @@ export const experts = {
   forThese: (names: string) => `For ${names}`,
   forEveryoneHint: 'Nobody ticked: everyone gets it, the assistant included.',
   fileMissing: 'cannot be read',
+  fileConverted: 'its text, as the editor read it',
   fileCut: 'long: only its beginning is sent',
   unlink: 'Unlink',
   unlinkFile: (name: string) => `Unlink ${name}`,

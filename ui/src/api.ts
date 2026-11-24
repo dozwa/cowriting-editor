@@ -66,9 +66,9 @@ export type Expert = {
 }
 
 /** A file of the author's that the AI is given as background knowledge. `personas` empty: for everyone. */
-export type LinkedFile = { path: string; name: string; personas: string[]; isMissing: boolean; chars: number; isCut: boolean }
+export type LinkedFile = { path: string; name: string; personas: string[]; isMissing: boolean; chars: number; isCut: boolean; isConverted: boolean }
 /** What a project sets differently from the general settings; what is absent is as there. */
-export type ProjectOverrides = Partial<Pick<Preferences, 'writingLanguage' | 'aiLanguage' | 'disclosureLanguage' | 'livePauseSeconds' | 'liveGapSeconds' | 'livePerHour'>>
+export type ProjectOverrides = Partial<Pick<Preferences, 'writingLanguage' | 'aiLanguage' | 'disclosureLanguage' | 'livePauseSeconds' | 'liveGapSeconds' | 'livePerHour'>> & { /** The document's own provider and model. */ ai?: Settings }
 export type ProjectView = { files: LinkedFile[]; overrides: ProjectOverrides; folder: string }
 
 export type PartyView = { experts: Expert[]; everyone: string; sharedPalette: Record<string, string> }
@@ -160,7 +160,7 @@ export type AskResult = { id: string; answer: string; isAiText: boolean; refused
 export type Settings = { backend: string; model: string; baseUrl: string; maxTokens: number }
 /** Whether a model kept to the assist-only rules in the behaviour suite. */
 export type ModelStatus = 'tested' | 'failed' | 'untested'
-export type SettingsView = Settings & { hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null } }
+export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null } }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean }
@@ -197,6 +197,8 @@ export type Page = Guide | 'repository' | 'coffee'
 export const api = {
   getSettings: () => invoke<SettingsView>('get_settings'),
   setSettings: (settings: Settings, apiKey: string | null) => invoke<void>('set_settings', { settings, apiKey }),
+  /** Puts a key for one provider into the system's key store, without changing the general settings. */
+  setApiKey: (backend: string, apiKey: string) => invoke<void>('set_api_key', { backend, apiKey }),
   /** Asks the provider for its models with settings that are not saved yet. */
   testConnection: (settings: Settings, apiKey: string | null) => invoke<ModelChoice[]>('test_connection', { settings, apiKey }),
   /** Saves the preferences; returns them as the app keeps them, within their limits. */

@@ -202,6 +202,7 @@ export const settings: typeof pattern = {
   calmHint: 'Der Editor wirkt aufgeräumter; alles funktioniert wie zuvor. Warnungen bleiben.',
   onlyThisDocument: name => `Nur für ${name}`,
   ownLanguagesHint: 'Die drei Sprachen unten gelten dann nur für dieses Dokument; die Sprache des Editors selbst ist überall dieselbe.',
+  ownAiHint: 'Dieses Dokument wird dann mit dem Anbieter und dem Modell unten gefragt, was auch immer die allgemeinen Einstellungen sagen. Ein Schlüssel liegt im Schlüsselbund dieses Computers, je Anbieter einer.',
   ownPaceHint: 'Das Tempo unten gilt dann nur für dieses Dokument.',
   whereSettings: 'Diese Einstellungen',
   showFolder: 'Ordner zeigen',

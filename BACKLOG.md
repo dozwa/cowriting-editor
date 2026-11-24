@@ -8,6 +8,6 @@ Asked for, not built, in no order.
   whatever the window was set to.
 - **More languages.** A language is a folder in `ui/src/i18n` and one line in its `index.ts`; the
   writing language, the AI's language and the disclosure know English and German only.
-- **Projects, what is left.** A document moved outside the editor loses its project settings (they
-  are keyed by where the file lies). Linked files are plain text only: no PDF or Word. The AI
-  provider and model, the look and the shortcuts are the same for all projects.
+- **Projects, what is left.** A document moved outside the editor without its `.cowriting` folder
+  loses its log and its project settings; the editor cannot tell it from a new file. A scanned PDF
+  cannot be linked (no text recognition). The look and the shortcuts are the same for all projects.

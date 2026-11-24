@@ -20,6 +20,10 @@ pub struct LinkedFile {
     /// The experts that get it, by id; empty for everyone, the assistant included.
     #[serde(default)]
     pub personas: Vec<String>,
+    /// For a file that is not plain text (Word, PDF): the name of the copy of its text that the
+    /// editor keeps in the project's folder (`linked/`) and passes on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 impl LinkedFile {
@@ -27,10 +31,30 @@ impl LinkedFile {
         self.path.rsplit(['/', '\\']).next().unwrap_or(&self.path)
     }
 
+    /// Where its text is read from: the file itself, or the editor's copy of what a Word file or PDF says.
+    pub fn readable(&self, sidecar: &Sidecar) -> String {
+        match &self.text {
+            Some(copy) => format!("{}/linked/{copy}", sidecar.settings_dir()),
+            None => self.path.clone(),
+        }
+    }
+
     /// Whoever answers gets this file: `None` is the assistant.
     pub fn is_for(&self, persona: Option<&str>) -> bool {
         self.personas.is_empty() || persona.is_some_and(|id| self.personas.iter().any(|p| p == id))
     }
+}
+
+/// The AI a project is written with, when that is not the one in the general settings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectAi {
+    pub backend: String,
+    pub model: String,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub max_tokens: u32,
 }
 
 /// `project.json`. Whatever is `None` is as the general settings say.
@@ -52,6 +76,9 @@ pub struct Project {
     pub live_gap_seconds: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub live_per_hour: Option<u32>,
+    /// This project's own provider and model. A key is never kept here: it is in the system's key store, by provider.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai: Option<ProjectAi>,
 }
 
 impl Project {
@@ -85,7 +112,7 @@ pub fn knowledge_for(host: &dyn Host, sidecar: &Sidecar, personas: Option<&[&str
     let mut knowledge = Knowledge::default();
     let mut left = LONGEST_KNOWLEDGE;
     for file in project.files.iter().filter(wanted) {
-        let Ok(text) = host.read(&file.path) else { continue };
+        let Ok(text) = host.read(&file.readable(sidecar)) else { continue };
         let text = text.trim();
         if text.is_empty() || left == 0 {
             continue;

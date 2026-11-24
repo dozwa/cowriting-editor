@@ -53,6 +53,10 @@ impl Bridge {
         view["contact"] = json!(cowriting_app::feedback::MAIL);
         view["repository"] = json!(cowriting_app::feedback::REPOSITORY);
         view["showTour"] = json!(false);
+        // the bridge keeps general settings only, and sends no usage figures
+        view["general"] = json!(settings);
+        view["isAiOwn"] = json!(false);
+        view["usage"] = json!({ "isAvailable": false, "isAsked": false, "installation": null });
         view["asking"] = json!(cowriting_app::support::Asking::default());
         view["feedbackByMail"] = json!(cowriting_app::feedback::has_mail());
         view["settingsFolder"] = json!("(the bridge keeps its settings in memory)");

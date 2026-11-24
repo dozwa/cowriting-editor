@@ -101,15 +101,22 @@ the experts and what you told them, the plan, the bibliography files, live revie
 - **Background files** (Experts tab): files of yours the AI should know, such as wording rules, a
   glossary or the methods. Each is for everyone or for the experts you tick. Only the path is
   kept; the file is read when the AI is asked, sent along (at most 24,000 characters of a file),
-  and named in the log. Plain text only.
+  and named in the log. Text files as they are; of a Word file (.docx, .odt, .rtf) or a PDF the
+  editor reads the text once, keeps that copy in the project's folder and reads the file again
+  when it has changed. A PDF without text in it (a scan) cannot be linked.
 - **An expert's prompt** (Experts tab, "Prompt"): the whole description of an expert can be
   reworded for the project, and put back. The assist-only rules are added to it and cannot be edited.
-- **Languages and the pace of live review** for this document alone: tick "Only for …" on those
-  pages of the settings. Everything else in the settings is the same for all projects.
+- **The AI, the languages and the pace of live review** for this document alone: tick "Only for …"
+  on those pages of the settings. A document's own provider and model are kept with the project;
+  a key is in the system's key store, one for each provider. Everything else in the settings is
+  the same for all projects.
 
 Settings an earlier version kept beside the document are moved over when it is opened. Moving or
-renaming a document inside the editor takes its settings along; a file moved outside the editor
-starts with fresh settings (its log is offered as before).
+renaming a document inside the editor takes its settings along. So does moving it outside the
+editor together with its `.cowriting` folder (a whole folder renamed or moved, say): the log's
+folder notes where its document was, and the settings follow when the document is opened at the
+new place and is gone from the old one. A file moved without that folder starts with fresh
+settings (a log left in the same folder is offered as before).
 
 ## AI use outside the editor
 

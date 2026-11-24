@@ -5,6 +5,7 @@
 pub mod diagnostics;
 pub mod export;
 pub mod feedback;
+pub mod linked;
 pub mod preferences;
 pub mod support;
 pub mod usage;
@@ -307,6 +308,8 @@ pub struct LinkedFileView {
     /// Its length in characters, and whether only its beginning is passed on.
     pub chars: usize,
     pub is_cut: bool,
+    /// A Word file or PDF: what is passed on is the text the editor found in it.
+    pub is_converted: bool,
 }
 
 /// What belongs to the open project besides text and log.
@@ -452,6 +455,24 @@ fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+fn place_json(sidecar: &cowriting_core::sidecar::Sidecar) -> String {
+    format!("{}/place.json", sidecar.dir())
+}
+
+/// A document that was moved or renamed outside the editor, together with its log: the project's
+/// settings, which the editor keeps by where the document lies, come along. Only when the document
+/// is gone from the old place, and nothing is there yet for the new one.
+fn follow_move(host: &dyn Host, path: &str, projects: &str) {
+    use cowriting_core::sidecar::Sidecar;
+    let at = |document: &str| Sidecar::for_document(document).with_project(&format!("{}/{}", projects.trim_end_matches(['/', '\\']), Sidecar::project_key(document)));
+    let here = at(path);
+    let was =
+        host.read(&place_json(&here)).ok().and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok()).and_then(|place| place["document"].as_str().map(String::from));
+    if let Some(was) = was.filter(|was| was != path && !host.exists(was)) {
+        here.take_settings(host, &at(&was));
+    }
+}
+
 impl Session {
     /// Opens a markdown file. Nothing is created beside it until the AI is first asked.
     pub fn open(host: Arc<dyn Host>, path: &str) -> Result<(Session, Opened), String> {
@@ -461,13 +482,32 @@ impl Session {
     /// Opens a markdown file whose project settings are kept in `projects`, the editor's own folder for them.
     pub fn open_in(host: Arc<dyn Host>, path: &str, projects: Option<&str>) -> Result<(Session, Opened), String> {
         let text = host.read(path).map_err(|e| format!("{path} could not be opened: {e}"))?;
+        if let Some(projects) = projects {
+            follow_move(host.as_ref(), path, projects);
+        }
         let workspace = Workspace::open_in(host, path, EDITOR_VERSION, projects);
         let orphans = if workspace.sidecar.info(workspace.host.as_ref()).is_some() { Vec::new() } else { orphans_of(&workspace, &text) };
         let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone(), orphans };
         // live review left on: what is in the document now is the baseline, as when it is turned on
         let baseline = LiveSettings::load(&workspace).is_on.then(|| opened.text.clone());
         let live = Mutex::new(LiveState { baseline, ..Default::default() });
-        Ok((Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false), projects: projects.map(String::from) }, opened))
+        let session = Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false), projects: projects.map(String::from) };
+        session.remember_place();
+        session.refresh_linked();
+        Ok((session, opened))
+    }
+
+    /// The log's folder notes where its document lies. When document and log are moved together
+    /// outside the editor, that is how the project's settings find their way after them.
+    fn remember_place(&self) {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        if self.projects.is_none() || !host.exists(&sidecar.doc_json()) {
+            return;
+        }
+        let place = format!("{}\n", serde_json::json!({ "document": sidecar.document }));
+        if host.read(&place_json(sidecar)).ok().as_deref() != Some(place.as_str()) {
+            let _ = host.write(&place_json(sidecar), &place);
+        }
     }
 
     /// The only code that writes the document: the author's own save.
@@ -481,6 +521,7 @@ impl Session {
             return Ok(Vec::new());
         }
         self.workspace.sidecar.ensure(host, text).map_err(error)?;
+        self.remember_place();
         let changed = changed_paragraphs(&before, text, Format::Markdown);
         self.log_ai_text(changed.iter().map(|p| (p.text.as_str(), p.start)), "typed", text)
     }
@@ -782,7 +823,7 @@ impl Session {
             .files
             .iter()
             .map(|file| {
-                let text = host.read(&file.path).ok();
+                let text = host.read(&file.readable(sidecar)).ok().filter(|_| host.exists(&file.path));
                 let chars = text.as_deref().map_or(0, |t| t.trim().chars().count());
                 LinkedFileView {
                     path: file.path.clone(),
@@ -791,6 +832,7 @@ impl Session {
                     is_missing: text.is_none(),
                     chars,
                     is_cut: chars > LONGEST_FILE,
+                    is_converted: file.text.is_some(),
                 }
             })
             .collect();
@@ -811,30 +853,78 @@ impl Session {
         if path == self.workspace.sidecar.document {
             return Err("That is the document itself; the AI reads it anyway.".into());
         }
-        host.read(path).map_err(|_| {
-            format!("{path} cannot be read as text. Linked files are plain text: markdown, .txt, .csv, .bib and the like; a PDF or Word file has to be saved as text first.")
-        })?;
+        // a Word file or a PDF is read once now; the editor keeps what it says and passes that on
+        let kind = linked::kind_of(path);
+        let copy = if kind == linked::Kind::Text {
+            host.read(path).map_err(|_| {
+                format!(
+                    "{path} cannot be read as text. Linked files are text: markdown, .txt, .csv, .bib and the like, or a Word file (.docx, .odt, .rtf) or a PDF with text in it."
+                )
+            })?;
+            None
+        } else {
+            let text = linked::text_of(path, kind)?;
+            let copy = Session::copy_name(path);
+            host.write(&format!("{}/linked/{copy}", self.workspace.sidecar.settings_dir()), &text).map_err(|e| format!("The text of {path} could not be kept: {e}"))?;
+            Some(copy)
+        };
         let party = self.workspace.party();
         if let Some(unknown) = personas.iter().find(|id| party.by_id(id).is_none()) {
             return Err(format!("This document's party has no expert “{unknown}”."));
         }
         self.change_project(|project| {
             match project.files.iter_mut().find(|file| file.path == path) {
-                Some(file) => file.personas = personas.to_vec(),
-                None => project.files.push(LinkedFile { path: path.to_string(), personas: personas.to_vec() }),
+                Some(file) => (file.personas, file.text) = (personas.to_vec(), copy),
+                None => project.files.push(LinkedFile { path: path.to_string(), personas: personas.to_vec(), text: copy }),
             }
             Ok(())
         })
     }
 
+    /// Where the editor keeps the text of a linked Word file or PDF: in the project's folder, under the file's name.
+    fn copy_name(path: &str) -> String {
+        let name: String =
+            path.rsplit(['/', '\\']).next().unwrap_or("file").chars().map(|c| if c.is_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).take(60).collect();
+        format!("{name}-{}.txt", cowriting_core::sidecar::content_hash(path))
+    }
+
+    /// Linked Word files and PDFs that changed since the editor read them are read again. One that
+    /// cannot be read now keeps the text it had. Returns how many were read again.
+    pub fn refresh_linked(&self) -> usize {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        let changed = |path: &str| std::fs::metadata(path).and_then(|file| file.modified()).ok();
+        let mut read_again = 0;
+        for file in Project::load(host, &self.workspace.sidecar).files {
+            if file.text.is_none() {
+                continue;
+            }
+            let copy = &file.readable(sidecar);
+            let is_newer = match (changed(&file.path), changed(copy)) {
+                (Some(source), Some(kept)) => source > kept,
+                (Some(_), None) => true,
+                _ => false,
+            };
+            if is_newer {
+                if let Ok(text) = linked::text_of(&file.path, linked::kind_of(&file.path)) {
+                    read_again += usize::from(host.write(copy, &text).is_ok());
+                }
+            }
+        }
+        read_again
+    }
+
     pub fn unlink_file(&self, path: &str) -> Result<(), String> {
+        let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
+        if let Some(file) = Project::load(host, sidecar).files.iter().find(|file| file.path == path && file.text.is_some()) {
+            let _ = host.remove(&file.readable(sidecar));
+        }
         self.change_project(|project| {
             project.files.retain(|file| file.path != path);
             Ok(())
         })
     }
 
-    /// What this project sets differently from the general settings: languages and the pace of live review.
+    /// What this project sets differently from the general settings: languages, the pace of live review, and its AI.
     /// The linked files are not touched.
     pub fn set_overrides(&self, overrides: Project) -> Result<(), String> {
         let word = |value: Option<String>, allowed: &[&str]| value.filter(|v| allowed.contains(&v.as_str()));
@@ -845,8 +935,24 @@ impl Session {
             project.live_pause_seconds = overrides.live_pause_seconds;
             project.live_gap_seconds = overrides.live_gap_seconds;
             project.live_per_hour = overrides.live_per_hour;
+            project.ai = match overrides.ai {
+                Some(ai) if !["anthropic", "openai-compatible", "claude-code"].contains(&ai.backend.as_str()) => {
+                    return Err(format!("The editor knows no provider “{}”.", ai.backend))
+                }
+                Some(ai) if ai.model.trim().is_empty() => return Err("A project's own AI needs a model.".into()),
+                Some(ai) => Some(cowriting_core::project::ProjectAi { model: ai.model.trim().to_string(), base_url: ai.base_url.trim().to_string(), ..ai }),
+                None => None,
+            };
             Ok(())
         })
+    }
+
+    /// The AI this project is written with: its own if it has one, else the general one.
+    pub fn settings_here(&self, general: BackendSettings) -> BackendSettings {
+        match Project::load(self.workspace.host.as_ref(), &self.workspace.sidecar).ai {
+            Some(ai) => BackendSettings { backend: ai.backend, model: ai.model, base_url: ai.base_url, max_tokens: ai.max_tokens },
+            None => general,
+        }
     }
 
     /// The general preferences with what this project sets for itself.

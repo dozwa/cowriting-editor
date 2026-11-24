@@ -294,7 +294,9 @@ fn kind_of(token: &str) -> Option<&'static str> {
         return Some("<address>");
     }
     // a key or a token: long, and letters mixed with digits; or one that says what it is
-    let is_keylike = core.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '=')) && core.chars().any(|c| c.is_ascii_digit()) && core.chars().any(|c| c.is_ascii_alphabetic());
+    let is_keylike = core.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '='))
+        && core.chars().any(|c| c.is_ascii_digit())
+        && core.chars().any(|c| c.is_ascii_alphabetic());
     if (core.len() >= 20 && is_keylike) || lower.starts_with("sk-") || lower.starts_with("key-") || lower.starts_with("ghp_") {
         return Some("<secret>");
     }
