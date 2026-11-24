@@ -160,7 +160,12 @@ export function ExpertsPanel({ party, files, canAsk, onReview, onBrief, onMember
           <li key={expert.id} className={expert.isMember ? 'expert' : 'expert out'}>
             <Sprite expert={expert} shared={party.sharedPalette} />
             <div className="who">
-              <strong>{expert.name}</strong>
+              <div className="head">
+                <strong>{expert.name}</strong>
+                <label className="member">
+                  <input type="checkbox" checked={expert.isMember} onChange={e => onMember(expert.id, e.target.checked)} aria-label={m.experts.isInParty(expert.name)} /> {m.experts.inParty}
+                </label>
+              </div>
               <span className="muted">{expert.role}</span>
               <div className="row">
                 <button onClick={() => onReview(expert.id)} disabled={!canAsk} title={canAsk ? undefined : m.experts.cannotAskNow}>{m.experts.askForReview}</button>
@@ -173,9 +178,6 @@ export function ExpertsPanel({ party, files, canAsk, onReview, onBrief, onMember
                 <button className="link" aria-expanded={filing === expert.id} aria-label={m.experts.filesOf(expert.name)} onClick={() => (setFiling(filing === expert.id ? null : expert.id), setOpen(null), setPrompting(null))}>
                   {m.experts.ownFiles(files.filter(file => file.personas.includes(expert.id)).length)}
                 </button>
-                <label className="member">
-                  <input type="checkbox" checked={expert.isMember} onChange={e => onMember(expert.id, e.target.checked)} aria-label={m.experts.isInParty(expert.name)} /> {m.experts.inParty}
-                </label>
               </div>
               {open === expert.id && (
                 <Brief key={expert.brief} label={m.experts.briefingFor(expert.name)} hint={m.experts.briefingForHint(expert.name)} value={expert.brief} onSave={body => onBrief(expert.id, body)} />

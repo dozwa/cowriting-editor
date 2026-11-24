@@ -285,7 +285,8 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .expert .who { display: grid; gap: 4px; min-width: 0; flex: 1; font-size: 12.5px; }
 .expert .who strong { font-size: 14px; font-weight: 650; }
 .expert .row { margin-top: 3px; }
-.member { display: flex; gap: 5px; align-items: center; margin-left: auto; color: var(--soft); }
+.expert .head { display: flex; gap: 10px; align-items: baseline; }
+.member { display: flex; white-space: nowrap; gap: 5px; align-items: center; margin-left: auto; color: var(--soft); }
 .brief, .new-expert { display: grid; gap: 8px; }
 
 .switch { font-weight: 650; font-size: 14px; display: flex; gap: 8px; align-items: center; }
