@@ -8,7 +8,7 @@ export const sources: typeof pattern = {
   takeOffList: 'Von der Liste nehmen',
   addFile: 'Literaturdatei hinzufügen',
   cites: n => `Das Dokument zitiert ${n} ${n === 1 ? 'Literaturangabe' : 'Literaturangaben'}.`,
-  citesWithoutFile: n => `Ihr Text zitiert ${n} ${n === 1 ? 'Literaturangabe' : 'Literaturangaben'}, und es gibt keine Literaturdatei. Beim Export werden sie in Zotero nachgeschlagen, wenn es läuft; was dort nicht gefunden wird, bleibt im Text, wie Sie es getippt haben.`,
+  citesWithoutFile: n => `Ihr Text zitiert ${n} ${n === 1 ? 'Literaturangabe' : 'Literaturangaben'}, und es gibt keine Literaturdatei. Beim Export schlägt der Editor in Zotero nach, wenn es läuft; was er dort nicht findet, bleibt im Text, wie Sie es getippt haben.`,
   notInBibliography: keys => <>Nicht in Ihrem Literaturverzeichnis: {keys}</>,
   styleHeading: 'Zitierstil',
   noStyle: example => <>Keiner gewählt: Quellenangaben und Literaturverzeichnis werden im Standardstil von pandoc exportiert (Chicago, Autor und Jahr). Für APA, Vancouver oder den Stil Ihrer Zeitschrift eine Stildatei (.csl) auswählen oder im Kopfbereich des Dokuments eine nennen ({example}).</>,

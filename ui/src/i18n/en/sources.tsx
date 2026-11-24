@@ -8,7 +8,7 @@ export const sources = {
   takeOffList: 'Take off the list',
   addFile: 'Add a bibliography file',
   cites: (n: number) => `The document cites ${n} ${n === 1 ? 'reference' : 'references'}.`,
-  citesWithoutFile: (n: number) => `Your text cites ${n} ${n === 1 ? 'reference' : 'references'}, and there is no bibliography file. At export they are looked up in Zotero if it is running; what is not found there stays in the text as you typed it.`,
+  citesWithoutFile: (n: number) => `Your text cites ${n} ${n === 1 ? 'reference' : 'references'}, and there is no bibliography file. At export the editor looks in Zotero, if it is running; what it does not find there stays in the text as you typed it.`,
   notInBibliography: (keys: ReactNode) => <>Not in your bibliography: {keys}</>,
   styleHeading: 'Reference style',
   noStyle: (example: ReactNode) => <>None chosen: citations and the reference list are exported in pandoc's standard style (Chicago, author and year). Choose a style file (.csl) for APA, Vancouver or your journal's own, or name one in the document's front matter ({example}).</>,
