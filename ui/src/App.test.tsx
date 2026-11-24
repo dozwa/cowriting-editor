@@ -1572,3 +1572,14 @@ test('a file is linked for one expert from that expert’s own card, and taken a
   await waitFor(() => expect(calls.project.at(-1)).toEqual(['unlink', '/work/wording.md']))
   await screen.findByText('None linked.')
 })
+
+test('Escape closes a dialog', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  await user.click(await screen.findByLabelText('Format'))
+  await user.keyboard('{Escape}')
+  await waitFor(() => expect(screen.queryByLabelText('Format')).toBeNull())
+})

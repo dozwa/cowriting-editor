@@ -18,9 +18,18 @@ export function Dialog({ title, onClose, mayClose, children }: { title: string; 
       dialog.scrollTop = 0
     }
   }, [])
+  // Escape closes, unless the dialog says no. The key is handled here as well as by the web view's own
+  // dialog, so that it does not depend on the web view; both ways end here, and one press counts once.
+  const pressed = useRef(0)
+  const escape = (e: { preventDefault(): void; timeStamp: number }) => {
+    e.preventDefault()
+    if (e.timeStamp - pressed.current < 100) return
+    pressed.current = e.timeStamp
+    if (mayClose === undefined || mayClose()) onClose()
+  }
   // drawn at the window's own level: a dialog opened from the side panel is not styled or sized as a part of it
   return createPortal(
-    <dialog ref={ref} open={typeof HTMLDialogElement.prototype.showModal !== 'function' ? true : undefined} onClose={onClose} onCancel={e => mayClose !== undefined && !mayClose() && e.preventDefault()} aria-label={title}>
+    <dialog ref={ref} open={typeof HTMLDialogElement.prototype.showModal !== 'function' ? true : undefined} onClose={onClose} onCancel={escape} onKeyDown={e => e.key === 'Escape' && !e.defaultPrevented && escape(e)} aria-label={title}>
       <h2 tabIndex={-1}>{title}</h2>
       {children}
     </dialog>,
