@@ -7,5 +7,6 @@ import { dialogs } from './dialogs'
 import { formatbar } from './formatbar'
 import { settings } from './settings'
 import { shared } from './shared'
+import { tour } from './tour'
 
-export const en = { app, panels, plan, experts, sources, dialogs, formatbar, settings, shared }
+export const en = { app, panels, plan, experts, sources, dialogs, formatbar, settings, shared, tour }

@@ -9,6 +9,7 @@ export const app: typeof pattern = {
   newDocument: 'Neues Dokument…',
   notSetUp: (link: ReactNode) => <>Die KI ist noch nicht eingerichtet. {link}</>,
   setItUp: 'Einrichten',
+  takeTour: 'Rundgang ansehen',
 
   open: 'Öffnen…',
   new: 'Neu…',

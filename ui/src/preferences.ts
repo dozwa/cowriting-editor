@@ -33,6 +33,12 @@ export type Preferences = {
   livePerHour: number
   /** Shortcuts the author changed: what is done → the keys; empty for none. */
   shortcuts: Record<string, string>
+  /** Keep the editor's technical log (what was used, what failed; no text, no names). */
+  diagnostics: boolean
+  /** The author agreed: a sign of use goes to the editor's maker at each start. */
+  usagePing: boolean
+  /** The author agreed, separately: a session's figures go there when the editor closes. */
+  usageFigures: boolean
 }
 
 export const STANDARD: Preferences = {
@@ -57,6 +63,9 @@ export const STANDARD: Preferences = {
   liveGapSeconds: 60,
   livePerHour: 20,
   shortcuts: {},
+  diagnostics: true,
+  usagePing: false,
+  usageFigures: false,
 }
 
 export const LIMITS = {

@@ -5,18 +5,21 @@
 //! web view has no file or network access of its own, so the document, the log and the API key
 //! are only ever touched here.
 
+use cowriting_app::diagnostics::{name_only, Diagnostics, Seen};
+use cowriting_app::usage::{self, Counted, Sender};
 use cowriting_app::preferences::{in_export_folder, last_document, remember_document, Preferences, SettingsFile};
 use cowriting_app::{
     export_tools, list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, DocumentExport, ExportOptions, ExportTools, Exported, FileFormat, LiveView,
     LogView, Opened, PartyView, PdfChoice, ScopeView, Session, SourceHits, SourcesView, VerifyFile,
 };
-use cowriting_core::host::DiskHost;
+use cowriting_core::host::{DiskHost, Host};
+use cowriting_core::words::{count_words, Format};
 use cowriting_core::review::{CheckSummary, LiveOutcome};
 use cowriting_core::turn::{Ask, TurnEvent};
 use cowriting_core::types::ThreadMessage;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::ipc::Channel;
 use tauri::{Manager, State};
 
@@ -27,12 +30,92 @@ struct Editor {
     session: Mutex<Option<Arc<Session>>>,
     /// Whether this start is one at which the editor asks for support; counted once, when it starts.
     asking: Mutex<cowriting_app::support::Asking>,
+    /// What is counted while the editor is open; sent when it closes only if the author agreed to that.
+    counted: Mutex<Counted>,
+    /// The sign of use went out for this start.
+    is_ping_sent: std::sync::atomic::AtomicBool,
 }
 
 impl Editor {
     fn session(&self) -> Result<Arc<Session>, String> {
         self.session.lock().unwrap().clone().ok_or_else(|| "No document is open.".to_string())
     }
+}
+
+/// When the editor was started.
+static STARTED: OnceLock<std::time::Instant> = OnceLock::new();
+
+/// Where usage figures go, if anywhere: see `usage::server`. `COWRITING_USAGE_SERVER` names one on this computer, for tests and trials.
+fn usage_server() -> Option<String> {
+    usage::server(std::env::var("COWRITING_USAGE_SERVER").ok().as_deref())
+}
+
+/// Who sends: only while a consent stands is there an installation's number.
+fn usage_sender(app: &tauri::AppHandle) -> Option<Sender> {
+    let installation = usage::installation(&state_file(app)?)?;
+    Some(Sender { installation, version: app.package_info().version.to_string(), system: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH) })
+}
+
+/// Sends the sign of use for this start, once, if the author agreed to it. Figures of an earlier
+/// session that could not be sent when the editor closed go first, if that consent stands.
+fn send_start(app: &tauri::AppHandle) {
+    use std::sync::atomic::Ordering;
+    let preferences = read_file(app).preferences;
+    let (Some(server), Some(sender), Some(state)) = (usage_server(), usage_sender(app), state_file(app)) else { return };
+    let waiting = if preferences.usage_figures { usage::take_waiting(&state) } else { None };
+    let is_first = preferences.usage_ping && !app.state::<Editor>().is_ping_sent.swap(true, Ordering::Relaxed);
+    tauri::async_runtime::spawn(async move {
+        if let Some(figures) = waiting {
+            match usage::send(&server, &figures).await {
+                Ok(()) => note("usage", "figures of the last session sent"),
+                Err(e) => {
+                    usage::keep_waiting(&state, &figures);
+                    note("usage", &format!("figures of the last session not sent: {e}"));
+                }
+            }
+        }
+        if is_first {
+            match usage::send(&server, &usage::start_message(&sender)).await {
+                Ok(()) => note("usage", "sign of use sent"),
+                Err(e) => note("usage", &format!("sign of use not sent: {e}")),
+            }
+        }
+    });
+}
+
+/// The editor closes: a session's figures go out if the author agreed to that; if they cannot, they wait for the next start.
+fn send_session(app: &tauri::AppHandle) {
+    if !read_file(app).preferences.usage_figures {
+        return;
+    }
+    let (Some(server), Some(sender), Some(state)) = (usage_server(), usage_sender(app), state_file(app)) else { return };
+    let counted = app.state::<Editor>().counted.lock().unwrap().clone();
+    let figures = usage::session_message(&sender, &counted, STARTED.get().map(std::time::Instant::elapsed).unwrap_or_default());
+    match tauri::async_runtime::block_on(usage::send(&server, &figures)) {
+        Ok(()) => note("usage", "figures of this session sent"),
+        Err(e) => {
+            usage::keep_waiting(&state, &figures);
+            note("usage", &format!("figures of this session not sent, they wait: {e}"));
+        }
+    }
+}
+
+/// The editor's technical log, once the folder for it is known.
+static DIAGNOSTICS: OnceLock<Diagnostics> = OnceLock::new();
+
+/// A line in the technical log; the log takes out whatever is private.
+fn note(kind: &str, message: &str) {
+    if let Some(log) = DIAGNOSTICS.get() {
+        log.note(kind, message);
+    }
+}
+
+/// Something failed with the document as it was: its measures go into the technical log, never its words.
+fn noting_failure<T>(command: &str, document_text: &str, result: Result<T, String>) -> Result<T, String> {
+    if let (Err(_), Some(log)) = (&result, DIAGNOSTICS.get()) {
+        log.note_document(&format!("at-failed-{command}"), document_text);
+    }
+    result
 }
 
 /// The folder the settings are in: the system's place for them, or `COWRITING_SETTINGS` (for tests and trials).
@@ -102,6 +185,21 @@ struct SettingsView {
     repository: &'static str,
     /// This start is one at which the editor asks for a coffee, feedback or a star.
     asking: cowriting_app::support::Asking,
+    /// The tour of the editor was not seen yet: the window starts with it.
+    show_tour: bool,
+    usage: UsageView,
+}
+
+/// What the window needs to ask for consent to usage figures, and to show what stands.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageView {
+    /// There is a server and a privacy statement in force: only then is anything asked or shown.
+    is_available: bool,
+    /// The author answered once; they are not asked by a dialog again.
+    is_asked: bool,
+    /// The installation's number, while a consent stands.
+    installation: Option<String>,
 }
 
 #[tauri::command]
@@ -128,6 +226,13 @@ fn get_settings(app: tauri::AppHandle) -> SettingsView {
         contact: cowriting_app::feedback::MAIL,
         repository: cowriting_app::feedback::REPOSITORY,
         asking: *app.state::<Editor>().asking.lock().unwrap(),
+        // a scripted run (tests) is not interrupted by it
+        show_tour: std::env::var("COWRITING_BACKEND").is_err() && state_file(&app).is_some_and(|state| cowriting_app::preferences::is_tour_due(&state)),
+        usage: UsageView {
+            is_available: usage_server().is_some(),
+            is_asked: state_file(&app).is_some_and(|state| usage::was_asked(&state)),
+            installation: state_file(&app).and_then(|state| usage::installation(&state)),
+        },
     }
 }
 
@@ -146,11 +251,54 @@ fn set_settings(app: tauri::AppHandle, settings: BackendSettings, api_key: Optio
 /// Saves the preferences and returns them as saved, within their limits. An open document's live review keeps the new pace at once.
 #[tauri::command]
 fn set_preferences(app: tauri::AppHandle, editor: State<Editor>, preferences: Preferences) -> Result<Preferences, String> {
+    let before = read_file(&app).preferences;
     let saved = SettingsFile::save_preferences(&settings_file(&app)?, preferences)?;
+    if let Some(log) = DIAGNOSTICS.get() {
+        log.set_on(saved.diagnostics);
+    }
+    // a consent to usage figures given or taken back in the settings holds at once
+    if (before.usage_ping, before.usage_figures) != (saved.usage_ping, saved.usage_figures) {
+        usage_decided(&app, &saved);
+    }
     if let Ok(session) = editor.session() {
         apply_here(&session, &saved);
     }
     Ok(saved)
+}
+
+/// What the author decided about usage figures: the installation's number is made or deleted, and a sign of use they just agreed to goes out for this start.
+fn usage_decided(app: &tauri::AppHandle, preferences: &Preferences) {
+    if let Some(state) = state_file(app) {
+        usage::decided(&state, preferences, &|| (0..3).map(|_| DiskHost.new_id()).collect());
+        note("usage", &format!("decided: sign of use {}, figures {}", if preferences.usage_ping { "yes" } else { "no" }, if preferences.usage_figures { "yes" } else { "no" }));
+        send_start(app);
+    }
+}
+
+/// The author answered the question about usage figures; both parts are their own yes or no.
+#[tauri::command]
+fn usage_answered(app: tauri::AppHandle, ping: bool, figures: bool) -> Result<Preferences, String> {
+    if usage_server().is_none() {
+        return Err("There is nowhere to send usage figures to.".into());
+    }
+    let saved = SettingsFile::save_preferences(&settings_file(&app)?, Preferences { usage_ping: ping, usage_figures: figures, ..read_file(&app).preferences })?;
+    usage_decided(&app, &saved);
+    Ok(saved)
+}
+
+/// The two messages as they would be sent now, for the author to read: the sign of use, and this session's figures so far.
+#[tauri::command]
+fn usage_preview(app: tauri::AppHandle, editor: State<Editor>) -> (String, String) {
+    let sender = usage_sender(&app).unwrap_or_else(|| Sender { installation: "(a random number, made when you agree)".into(), version: app.package_info().version.to_string(), system: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH) });
+    let counted = editor.counted.lock().unwrap().clone();
+    let pretty = |message: &serde_json::Value| serde_json::to_string_pretty(message).unwrap_or_default();
+    (pretty(&usage::start_message(&sender)), pretty(&usage::session_message(&sender, &counted, STARTED.get().map(std::time::Instant::elapsed).unwrap_or_default())))
+}
+
+/// The privacy statement for usage figures, in the language shown.
+#[tauri::command]
+fn privacy_statement(language: String) -> &'static str {
+    usage::statement(&language)
 }
 
 /// The pace of live review and the languages for an open document: the general ones, with what its project sets for itself.
@@ -208,6 +356,14 @@ fn support_answered(app: tauri::AppHandle, editor: State<Editor>, what: String) 
     editor.asking.lock().unwrap().is_due = false;
 }
 
+/// The author went through the tour of the editor, or closed it: it does not start by itself again.
+#[tauri::command]
+fn tour_seen(app: tauri::AppHandle) {
+    if let Some(state) = state_file(&app) {
+        cowriting_app::preferences::tour_seen(&state);
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModelChoice {
@@ -231,6 +387,11 @@ fn open_document(app: tauri::AppHandle, editor: State<Editor>, path: String) -> 
     let (session, opened) = Session::open_in(Arc::new(DiskHost), &path, projects_folder(&app).as_deref())?;
     apply_here(&session, &read_file(&app).preferences);
     *editor.session.lock().unwrap() = Some(Arc::new(session));
+    editor.counted.lock().unwrap().opened(&opened.path, count_words(&opened.text, Format::Markdown));
+    if let Some(log) = DIAGNOSTICS.get() {
+        log.keep_document_private(&opened.path);
+        log.note_document("opened", &opened.text);
+    }
     if let Some(state) = state_file(&app) {
         remember_document(&state, &opened.path);
     }
@@ -291,6 +452,36 @@ fn send_feedback(app: tauri::AppHandle, editor: State<Editor>, way: String, titl
     show(&address).map_err(|e| format!("The report could not be opened in your {} ({e}). Copy it instead.", if way == "mail" { "mail program" } else { "browser" }))
 }
 
+/// What the window saw since it last said so: commands and how they ended, views, its own errors.
+#[tauri::command]
+fn record_seen(seen: Vec<Seen>) {
+    if let Some(log) = DIAGNOSTICS.get() {
+        log.from_window(&seen);
+    }
+}
+
+/// The technical log's last minutes, for the author to read and to add to a report if they want.
+#[tauri::command]
+fn recent_diagnostics(minutes: u64) -> String {
+    DIAGNOSTICS.get().map(|log| log.recent(minutes.clamp(1, 120))).unwrap_or_default()
+}
+
+#[tauri::command]
+fn clear_diagnostics() -> Result<(), String> {
+    DIAGNOSTICS.get().map_or(Ok(()), Diagnostics::clear)
+}
+
+/// Writes a file for the author to attach to a report, where they chose: the log's last minutes
+/// and, only when they agreed in the dialog, the text of the document as it is in the window.
+#[tauri::command]
+fn write_report_file(app: tauri::AppHandle, target: String, minutes: u64, document_text: Option<String>) -> Result<(), String> {
+    let log = DIAGNOSTICS.get().ok_or("The editor keeps no log here.")?;
+    let about = format!("CoWriting Editor {}, {} {}", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
+    std::fs::write(&target, log.report(&about, minutes.clamp(1, 120), document_text.as_deref())).map_err(|e| format!("The file could not be written: {e}"))?;
+    log.note_plain("report", &format!("file written, {}", if document_text.is_some() { "with the document's text" } else { "without the document's text" }));
+    Ok(())
+}
+
 /// The author says this document is the renamed one a log in its folder was kept for.
 #[tauri::command]
 fn adopt_log(app: tauri::AppHandle, editor: State<Editor>, name: String) -> Result<Opened, String> {
@@ -309,7 +500,9 @@ fn move_document(app: tauri::AppHandle, editor: State<Editor>, target: String, t
 
 #[tauri::command]
 fn save_document(editor: State<Editor>, text: String) -> Result<Vec<AiTextRow>, String> {
-    editor.session()?.save(&text)
+    let found = noting_failure("save", &text, editor.session()?.save(&text))?;
+    editor.counted.lock().unwrap().saved(count_words(&text, Format::Markdown));
+    Ok(found)
 }
 
 #[tauri::command]
@@ -373,6 +566,16 @@ async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, 
     let settings = read_settings(&app);
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
     let command = input.persona.as_ref().map(|_| "ask".to_string()).or(input.command);
+    let about = format!(
+        "{} {}, {}, question of {} characters, document of {} characters",
+        if settings.backend.starts_with("fake:") { "scripted" } else { settings.backend.as_str() },
+        name_only(&settings.model),
+        if input.persona.is_some() { "to an expert" } else { "to the assistant" },
+        input.text.chars().count(),
+        input.document_text.chars().count()
+    );
+    let document_text = input.document_text.clone();
+    editor.counted.lock().unwrap().request(&settings.backend, &settings.model);
     let ask = Ask { text: input.text, reply_to: input.reply_to, persona: input.persona, document_text: input.document_text, model: settings.model, command };
     let outcome = session
         .ask(backend.as_ref(), ask, &mut |event| {
@@ -383,7 +586,20 @@ async fn ask(app: tauri::AppHandle, editor: State<'_, Editor>, input: AskInput, 
                 TurnEvent::Refused { tool, input } => AskEvent::Refused { tool, input },
             });
         })
-        .await?;
+        .await;
+    let outcome = noting_failure("ask", &document_text, outcome)?;
+    if let Some(log) = DIAGNOSTICS.get() {
+        log.note_plain(
+            "ask",
+            &format!(
+                "{about}: answer of {} characters, {} tool calls refused{}{}",
+                outcome.answer.chars().count(),
+                outcome.refused,
+                if outcome.cut_off.is_some() { ", cut off" } else { "" },
+                if outcome.without_tools { ", without tools" } else { "" }
+            ),
+        );
+    }
     Ok(AskResult {
         id: outcome.id,
         answer: outcome.answer,
@@ -409,7 +625,12 @@ async fn live_review(app: tauri::AppHandle, editor: State<'_, Editor>, document_
     let session = editor.session()?;
     let settings = read_settings(&app);
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
-    session.live_review(backend.as_ref(), &settings.model, &document_text).await
+    let outcome = noting_failure("live-review", &document_text, session.live_review(backend.as_ref(), &settings.model, &document_text).await)?;
+    // only a review that reached the model counts as a request
+    if !matches!(outcome, LiveOutcome::Off | LiveOutcome::Unchanged | LiveOutcome::Wait { .. } | LiveOutcome::Paused) {
+        editor.counted.lock().unwrap().request(&settings.backend, &settings.model);
+    }
+    Ok(outcome)
 }
 
 #[tauri::command]
@@ -427,7 +648,8 @@ async fn check_points(app: tauri::AppHandle, editor: State<'_, Editor>, document
     let session = editor.session()?;
     let settings = read_settings(&app);
     let backend = make_backend(&settings, api_key(&settings.backend).as_deref())?;
-    session.check_points(backend.as_ref(), &settings.model, &document_text).await
+    editor.counted.lock().unwrap().request(&settings.backend, &settings.model);
+    noting_failure("check-points", &document_text, session.check_points(backend.as_ref(), &settings.model, &document_text).await)
 }
 
 #[tauri::command]
@@ -481,7 +703,7 @@ async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Resul
 #[tauri::command]
 async fn export_document(editor: State<'_, Editor>, format: FileFormat, target: String, document_text: String, pdf: PdfChoice) -> Result<DocumentExport, String> {
     let session = editor.session()?;
-    session.export_document_online(format, &target, &document_text, &pdf).await
+    noting_failure("export", &document_text, session.export_document_online(format, &target, &document_text, &pdf).await)
 }
 
 #[tauri::command]
@@ -533,6 +755,20 @@ fn main() {
             if let Ok(resources) = tauri::Manager::path(app).resource_dir() {
                 cowriting_app::export::set_tools_dir(resources.join("tools"));
             }
+            if let Ok(folder) = settings_folder(app.handle()) {
+                let log = DIAGNOSTICS.get_or_init(|| Diagnostics::at(folder.join("diagnostics.log"), read_file(app.handle()).preferences.diagnostics));
+                log.note_plain("start", &format!("CoWriting Editor {}, {} {}", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH));
+                // a crash on the Rust side says where it was before the editor goes down
+                let before = std::panic::take_hook();
+                std::panic::set_hook(Box::new(move |panic| {
+                    let said = panic.payload().downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.payload().downcast_ref::<String>().cloned()).unwrap_or_default();
+                    let place = panic.location().map(|at| format!("{}:{}", at.file().rsplit(['/', '\\']).next().unwrap_or(""), at.line())).unwrap_or_default();
+                    note("panic", &format!("{said} (in {})", name_only(&place)));
+                    before(panic);
+                }));
+            }
+            let _ = STARTED.set(std::time::Instant::now());
+            send_start(app.handle());
             if let Some(state) = state_file(app.handle()) {
                 *app.state::<Editor>().asking.lock().unwrap() = cowriting_app::support::started(&state);
             }
@@ -555,7 +791,15 @@ fn main() {
             set_project,
             set_prompt,
             support_answered,
+            tour_seen,
             send_feedback,
+            record_seen,
+            recent_diagnostics,
+            clear_diagnostics,
+            write_report_file,
+            usage_answered,
+            usage_preview,
+            privacy_statement,
             move_document,
             ask,
             log_view,
@@ -586,6 +830,11 @@ fn main() {
             export_setup,
             export_document
         ])
-        .run(tauri::generate_context!())
-        .expect("the editor's window could not be opened");
+        .build(tauri::generate_context!())
+        .expect("the editor's window could not be opened")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                send_session(app);
+            }
+        });
 }

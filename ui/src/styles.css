@@ -2,7 +2,11 @@
  * Two inks. What the author writes and does is in ink (near black). What comes from the AI is
  * in proof blue, the pencil an editor uses in the margin because it never reaches the print.
  * Blue is used for nothing else, so the colour alone says who is speaking. Red pencil is for
- * what waits for the author or went wrong; highlighter yellow marks AI text in the document.
+ * what waits for the author or went wrong; highlighter yellow marks AI text in the document, and
+ * the line the tour draws around the part it speaks about.
+ *
+ * One shape as well: controls and boxes have --radius, dialogs and the tour's card --radius-card and
+ * --lift; only chips (a choice among a few) are fully round. Labels and names are weight 650.
  */
 :root {
   color-scheme: light dark;
@@ -18,6 +22,11 @@
   --marker: #6b4e00;
   --marker-wash: #fff1b8;
   --ok: #23694a;
+  --highlight: #c99700;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c6370' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --radius: 7px;
+  --radius-card: 12px;
+  --lift: 0 24px 64px -16px rgb(10 20 40 / 0.35);
   --ui: 'Hanken Grotesk Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --serif: 'Literata Variable', Georgia, 'Times New Roman', serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -38,6 +47,8 @@
     --marker: #f3d98a;
     --marker-wash: #3d3414;
     --ok: #7fcba4;
+    --highlight: #f3d98a;
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23959ca8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
 }
 :root[data-theme='light'] { color-scheme: light; }
@@ -55,20 +66,24 @@
   --marker: #f3d98a;
   --marker-wash: #3d3414;
   --ok: #7fcba4;
+  --highlight: #f3d98a;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23959ca8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--page); color: var(--ink); -webkit-font-smoothing: antialiased; }
 h1, h2, h3, p { margin: 0; }
 button, input, select, textarea { font: inherit; color: inherit; }
-button { background: var(--page); border: 1px solid var(--rule); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
+button { background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); padding: 5px 11px; cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--soft); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; }
+button.primary { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 650; }
 button.primary:hover:not(:disabled) { opacity: 0.86; }
 button.link { border: 0; padding: 0; background: none; border-radius: 2px; color: inherit; text-decoration: underline; text-decoration-color: var(--soft); text-underline-offset: 2px; }
 button.link:hover { text-decoration-color: currentColor; }
-input, select, textarea { background: var(--page); border: 1px solid var(--rule); border-radius: 7px; padding: 7px 9px; width: 100%; }
+input, select, textarea { background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); padding: 7px 9px; width: 100%; }
+/* a list to choose from is drawn like the fields beside it, not as the system draws it */
+select { appearance: none; -webkit-appearance: none; padding-right: 28px; background-image: var(--chevron); background-repeat: no-repeat; background-position: right 10px center; background-size: 10px 6px; text-overflow: ellipsis; }
 input[type='checkbox'], input[type='radio'] { width: auto; accent-color: var(--ink); }
 ::placeholder { color: var(--soft); opacity: 0.8; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
@@ -97,7 +112,7 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .welcome .row { grid-column: 1; margin-top: 8px; }
 .welcome .row button { padding: 8px 16px; }
 .welcome > .muted, .welcome > .error { grid-column: 1; }
-.welcome > .error { border: 0; border-radius: 7px; }
+.welcome > .error { border: 0; border-radius: var(--radius); }
 @media (max-width: 760px) {
   .welcome { grid-template-columns: minmax(0, 30rem); }
 }
@@ -114,11 +129,11 @@ code { font-family: var(--mono); font-size: 0.9em; }
 /* the standard width of the side panel grows with the size chosen for buttons and panels */
 .work { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) min(var(--panel, calc(clamp(340px, 34vw, 460px) * var(--ui-zoom, 1))), calc(100% - 320px)); min-height: 0; }
 /* everything around the text as large as the author set it; the text has its own size. Never on something inside these, or it is enlarged twice */
-.bar, .formatbar, .panel, .status, .app > .notice, .app > .error, .app > .found, .welcome > *, dialog { zoom: var(--ui-zoom, 1); }
+.bar, .formatbar, .panel, .status, .app > .notice, .app > .error, .app > .found, .welcome > *, dialog, .tour { zoom: var(--ui-zoom, 1); }
 .looks { display: flex; gap: 2px; margin-right: 8px; }
 .looks button { font-size: 12px; padding: 0 7px; border-color: transparent; background: none; color: var(--soft); border-radius: 5px; }
 .looks button:hover { color: var(--ink); border-color: transparent; }
-.looks button[aria-pressed='true'] { background: var(--desk); color: var(--ink); font-weight: 600; }
+.looks button[aria-pressed='true'] { background: var(--desk); color: var(--ink); font-weight: 650; }
 .status { display: flex; gap: 8px; align-items: center; padding: 3px 14px; border-top: 1px solid var(--rule); background: var(--page); font-size: 12px; color: var(--soft); }
 
 /* the manuscript: nothing on it is blue */
@@ -178,7 +193,8 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .panel { position: relative; border-left: 1px solid var(--rule); display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--desk); font-size: 13.5px; }
 /* six tabs in a narrow panel, or in a language with longer words, take a second row before any is cut off */
 .tabs { display: flex; flex-wrap: wrap; gap: 0 2px; padding: 0 10px; border-bottom: 1px solid var(--rule); }
-.tabs button { border: 0; border-radius: 0; background: none; padding: 10px 7px 8px; border-bottom: 2px solid transparent; color: var(--soft); white-space: nowrap; }
+/* as tall as the row of markdown buttons beside it, so one line runs under both */
+.tabs button { border: 0; border-radius: 0; background: none; padding: 9px 7px 7px; line-height: 20px; border-bottom: 2px solid transparent; color: var(--soft); white-space: nowrap; }
 .tabs button:hover { color: var(--ink); }
 .tabs button[aria-selected='true'] { border-bottom-color: var(--ink); color: var(--ink); font-weight: 650; }
 .tabs button:focus-visible { outline-offset: -2px; }
@@ -215,7 +231,7 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .answer table { border-collapse: collapse; font-size: 12.5px; display: block; overflow-x: auto; }
 .answer th, .answer td { border: 1px solid var(--rule); padding: 3px 7px; text-align: left; }
 .answer code { background: var(--page); border-radius: 3px; padding: 0 3px; }
-.answer pre { background: var(--page); padding: 9px; border-radius: 6px; overflow-x: auto; }
+.answer pre { background: var(--page); padding: 9px; border-radius: var(--radius); overflow-x: auto; }
 .answer .address { text-decoration: underline dotted; }
 .answer button.link { color: var(--pencil); text-decoration-color: var(--pencil); }
 .classify { display: grid; gap: 7px; margin-top: 12px; font-size: 12.5px; }
@@ -227,7 +243,7 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .composer { border-top: 1px solid var(--rule); padding: 12px 14px; display: grid; gap: 9px; background: var(--page); }
 .composer textarea { resize: vertical; min-height: 4.6em; }
 .composer .muted { font-size: 12px; }
-.composer select { width: auto; max-width: 11rem; padding: 5px 8px; }
+.composer select { width: auto; max-width: 11rem; padding: 5px 28px 5px 8px; }
 .composer .actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .composer .actions button { font-size: 12.5px; padding: 2px 10px; border-radius: 999px; color: var(--soft); }
 .composer .actions button:hover:not(:disabled) { color: var(--ink); }
@@ -240,6 +256,8 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .log .summary { padding: 12px 16px 8px; color: var(--soft); font-size: 12.5px; }
 .log h3 { padding: 18px 16px 4px; }
 .log p.muted { padding: 4px 16px 8px; font-size: 12.5px; }
+/* a section brings its own edge */
+.log section h3, .log section p.muted { padding: 0; }
 .turn { display: grid; gap: 2px; width: 100%; text-align: left; border: 0; border-radius: 0; border-top: 1px solid var(--rule); padding: 9px 16px; background: none; }
 .turn:hover { background: var(--page); }
 .turn:focus-visible { outline-offset: -2px; }
@@ -313,7 +331,7 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .refs .verdict.error { color: var(--marker); }
 .sources .warn { color: var(--red); }
 
-dialog { border: 1px solid var(--rule); border-radius: 12px; background: var(--page); color: var(--ink); padding: 26px 28px 22px; width: min(36rem, calc(92vw / var(--ui-zoom, 1))); max-height: calc(88vh / var(--ui-zoom, 1)); box-shadow: 0 24px 64px -16px rgb(10 20 40 / 0.35); }
+dialog { border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--page); color: var(--ink); padding: 26px 28px 22px; width: min(36rem, calc(92vw / var(--ui-zoom, 1))); max-height: calc(88vh / var(--ui-zoom, 1)); box-shadow: var(--lift); }
 dialog::backdrop { background: rgb(16 20 28 / 0.4); }
 dialog h2:focus { outline: none; }
 dialog h2 { font: 600 23px/1.2 var(--serif); letter-spacing: -0.01em; margin-bottom: 12px; }
@@ -323,8 +341,8 @@ dialog label small { font-weight: 400; color: var(--soft); font-size: 12.5px; }
 dialog label.check { display: flex; gap: 8px; align-items: center; font-weight: 400; font-size: 14px; margin: 7px 0; }
 dialog .row label { flex: 1; }
 dialog > .muted, dialog [role='status'] .muted { font-size: 13px; margin-top: 10px; }
-dialog .hint { margin: 14px 0; padding: 10px 12px; max-width: none; background: var(--marker-wash); color: var(--marker); border-radius: 7px; font-size: 13px; }
-dialog .error { border: 0; border-radius: 7px; margin-top: 12px; }
+dialog .hint { margin: 14px 0; padding: 10px 12px; max-width: none; background: var(--marker-wash); color: var(--marker); border-radius: var(--radius); font-size: 13px; }
+dialog .error { border: 0; border-radius: var(--radius); margin-top: 12px; }
 dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .choice { display: grid; gap: 6px; margin: 14px 0; }
 .choice.across { grid-auto-flow: column; grid-auto-columns: 1fr; }
@@ -361,7 +379,8 @@ dialog small.over { color: var(--red); }
 .keys th { text-align: left; font-weight: 400; width: 46%; }
 .keys th, .keys td { padding: 5px 0; border-top: 1px solid var(--rule); }
 .keys td:nth-child(2) { width: 9rem; }
-.keys td:last-child { display: flex; gap: 4px 14px; flex-wrap: wrap; white-space: nowrap; font-size: 12.5px; color: var(--soft); }
+.keys td:last-child { white-space: nowrap; font-size: 12.5px; color: var(--soft); }
+.keys td:last-child button + button { margin-left: 14px; }
 .keys em { color: var(--red); font-style: normal; }
 kbd { font: 12.5px/1 var(--ui); font-variant-numeric: tabular-nums; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 5px; padding: 3px 6px; background: var(--desk); white-space: nowrap; }
 .where { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 8px 14px; margin: 16px 0 0; font-size: 13px; }
@@ -373,10 +392,10 @@ kbd { font: 12.5px/1 var(--ui); font-variant-numeric: tabular-nums; border: 1px 
   .where { grid-template-columns: 1fr; gap: 2px; }
   .where dd { margin-bottom: 8px; }
 }
-dialog .choice label { display: flex; gap: 10px; align-items: baseline; font-weight: 500; font-size: 14px; margin: 0; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; }
+dialog .choice label { display: flex; gap: 10px; align-items: baseline; font-weight: 500; font-size: 14px; margin: 0; padding: 9px 12px; border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; }
 dialog .choice label:has(input:checked) { border-color: var(--ink); background: var(--desk); }
 .paths { margin: 4px 0; padding-left: 18px; font-size: 12px; overflow-wrap: anywhere; }
-.preview { background: var(--desk); border-radius: 7px; padding: 12px; max-height: 14rem; overflow: auto; font: 12px/1.55 var(--mono); white-space: pre-wrap; }
+.preview { background: var(--desk); border-radius: var(--radius); padding: 12px; max-height: 14rem; overflow: auto; font: 12px/1.55 var(--mono); white-space: pre-wrap; }
 
 @media (max-width: 900px) {
   .work { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
@@ -386,17 +405,17 @@ dialog .choice label:has(input:checked) { border-color: var(--ink); background: 
 }
 
 /* the one place for what went wrong: seen at once, without shouting */
-button.bug { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); background: var(--red-wash); font-weight: 600; white-space: nowrap; }
+button.bug { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); background: var(--red-wash); font-weight: 650; white-space: nowrap; }
 .bar button.bug { border-color: color-mix(in srgb, var(--red) 45%, transparent); background: var(--red-wash); }
 .bar button.bug:hover:not(:disabled), button.bug:hover:not(:disabled) { border-color: var(--red); background: var(--red-wash); }
-.version { font-variant-numeric: tabular-nums; padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--rule); white-space: nowrap; }
+.status .version { font-variant-numeric: tabular-nums; padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--rule); white-space: nowrap; }
 .welcome .foot { grid-column: 1; margin-top: 18px; color: var(--soft); font-size: 12.5px; gap: 12px; }
-.welcome .foot .version { border: 0; padding: 0; margin: 0; }
+.welcome .foot .version { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* background files and what an expert is told */
 .files ul { display: grid; gap: 6px; }
-.files li { padding: 7px 10px; background: var(--page); border: 1px solid var(--rule); border-radius: 7px; }
-.files li strong { font-weight: 600; overflow-wrap: anywhere; }
+.files li { padding: 7px 10px; background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); }
+.files li strong { font-weight: 650; overflow-wrap: anywhere; }
 .files .row { gap: 4px 10px; }
 .files .for { display: grid; gap: 3px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); }
 .files .for label { display: flex; gap: 7px; align-items: center; }
@@ -407,7 +426,7 @@ button.bug { display: inline-flex; align-items: center; gap: 6px; margin-left: 6
 /* asking for support, and a page of the settings that is one document's own */
 .support { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 14px; }
 .support button { padding: 8px 16px; }
-dialog label.check.own { flex-wrap: wrap; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--desk); margin: 0 0 14px; font-weight: 600; }
+dialog label.check.own { flex-wrap: wrap; padding: 9px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--desk); margin: 0 0 14px; font-weight: 650; }
 dialog label.check.own small { flex-basis: 100%; }
 
 /* distraction-free: the explanations and hints go, the controls and the warnings stay */
@@ -422,7 +441,29 @@ dialog label.check.own small { flex-basis: 100%; }
 
 /* what the author states about other AI tools */
 .external ul { display: grid; gap: 6px; }
-.external li { padding: 8px 10px; background: var(--page); border: 1px solid var(--rule); border-radius: 7px; display: grid; gap: 3px; }
+.external li { padding: 8px 10px; background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; gap: 3px; }
 .external .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .external li p.muted { font-size: 12.5px; }
 :root[data-calm] .external li p.muted { display: block; }
+
+/* The tour: a card at the lower left, over the text, so the bar and the side panel it speaks about stay in sight. */
+.tour { position: fixed; z-index: 30; left: 24px; bottom: 52px; width: min(25rem, calc((100vw - 48px) / var(--ui-zoom, 1))); max-height: calc((100vh - 96px) / var(--ui-zoom, 1)); overflow: auto; padding: 18px 20px 16px; border: 1px solid var(--rule); border-top: 3px solid var(--highlight); border-radius: var(--radius-card); background: var(--page); color: var(--ink); box-shadow: var(--lift); font-size: 14px; line-height: 1.55; }
+.tour .count { font-size: 12.5px; color: var(--soft); font-variant-numeric: tabular-nums; }
+.tour progress { display: block; width: 100%; height: 3px; margin: 6px 0 14px; border: 0; border-radius: 2px; overflow: hidden; appearance: none; background: var(--rule); }
+.tour progress::-webkit-progress-bar { background: var(--rule); }
+.tour progress::-webkit-progress-value { background: var(--highlight); }
+.tour progress::-moz-progress-bar { background: var(--highlight); }
+.tour h2 { font: 600 21px/1.2 var(--serif); letter-spacing: -0.01em; margin-bottom: 8px; }
+.tour h2:focus { outline: none; }
+.tour p + p { margin-top: 10px; }
+.tour .missing { padding: 8px 10px; border-radius: var(--radius); background: var(--marker-wash); color: var(--marker); font-size: 13px; }
+.tour .steps { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+/* what the tour speaks about: a highlighter's line around it, drawn inside so nothing cuts it off */
+.toured { outline: 3px solid var(--highlight); outline-offset: -3px; }
+button.toured { outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .toured { animation: toured 0.9s ease-out 1; }
+  @keyframes toured { from { outline-color: transparent; } }
+}
+/* a link that stands alone under a field belongs to that field's note */
+dialog > button.link { display: block; margin-top: -6px; font-size: 13px; }

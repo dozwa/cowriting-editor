@@ -3,7 +3,9 @@ import type { ProjectView as Project, AiTextRow, Api, AskEvent, LiveView, LogVie
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
-import { DisclosureDialog, ExportDialog, FeedbackDialog, SupportDialog } from './dialogs'
+import { seeView } from './diagnostics'
+import { DisclosureDialog, ExportDialog, FeedbackDialog, SupportDialog, UsageDialog } from './dialogs'
+import { Tour, TOUR } from './tour'
 import { createEditor, type Editor, type Format } from './editor'
 import { FormatBar, MarkdownHelp } from './formatbar'
 import { AskPanel, LogPanel } from './panels'
@@ -77,6 +79,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [live, setLive] = useState<Live | null>(null)
   const [error, setError] = useState('')
   const [dialog, setDialog] = useState<'settings' | 'disclosure' | 'export' | 'markdown' | 'feedback' | 'bug' | null>(null)
+  /** The step of the tour that is shown; null when it is not running. */
+  const [tourStep, setTourStep] = useState<number | null>(null)
   /** The editor asked for support at this start, and the author answered. */
   const [isAsked, setAsked] = useState(false)
   const [project, setProject] = useState<Project | null>(null)
@@ -332,7 +336,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
       .getSettings()
       .then(async s => {
         setSettings(s)
-        if (s.isFirstRun) setDialog('settings')
+        // a new author is shown around first; setting up the AI is a step of that
+        if (s.showTour) setTourStep(0)
+        else if (s.isFirstRun) setDialog('settings')
         if (s.openAtStart !== null) await show(await api.openDocument(s.openAtStart))
       })
       .catch(fail)
@@ -480,6 +486,11 @@ export function App({ api, makeEditor = createEditor }: Props) {
   }
   const dialogRef = useRef(dialog)
   dialogRef.current = dialog
+  // which tab and which dialog were shown goes into the technical log: names of the editor's own
+  useEffect(() => seeView(`tab:${tab}`), [tab])
+  useEffect(() => {
+    if (dialog !== null) seeView(`dialog:${dialog}`)
+  }, [dialog])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (dialogRef.current !== null) return
@@ -499,19 +510,34 @@ export function App({ api, makeEditor = createEditor }: Props) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
+  const toStep = (step: number) => {
+    setTourStep(step)
+    const tab = TOUR[step]?.tab
+    if (tab !== undefined) doc === null ? setTab(tab) : showTab(tab)
+  }
+  const endTour = () => {
+    setTourStep(null)
+    void api.tourSeen().catch(() => {})
+    // who skipped the tour before setting up the AI is offered that now, as before there was a tour
+    if (settings !== null && settings.isFirstRun && !settings.isReady) setDialog('settings')
+  }
   const settingsDialog = dialog === 'settings' && settings !== null && (
-    <SettingsDialog api={api} settings={settings} project={doc === null ? null : project} documentName={doc?.name ?? ''} onPreview={setPreview} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false), doc !== null && void api.project().then(setProject, () => {}), void api.liveView().then(setWatching, () => {})))} />
+    <SettingsDialog api={api} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onTour={() => (setDialog(null), toStep(0))} settings={settings} project={doc === null ? null : project} documentName={doc?.name ?? ''} onPreview={setPreview} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false), doc !== null && void api.project().then(setProject, () => {}), void api.liveView().then(setWatching, () => {})))} />
   )
-  const isSupportDue = settings !== null && settings.asking.isDue && !isAsked && !settings.isFirstRun && dialog === null
+  // asked once, and only where there is somewhere to send to and a privacy statement in force
+  const isUsageDue = settings !== null && settings.usage.isAvailable && !settings.usage.isAsked && !settings.isFirstRun && dialog === null && tourStep === null
+  const isSupportDue = !isUsageDue && settings !== null && settings.asking.isDue && !isAsked && !settings.isFirstRun && dialog === null && tourStep === null
   const otherDialogs = settings !== null && (
     <>
-      {(dialog === 'feedback' || dialog === 'bug') && <FeedbackDialog api={api} settings={settings} kind={dialog === 'bug' ? 'bug' : 'idea'} onClose={() => setDialog(null)} />}
+      {(dialog === 'feedback' || dialog === 'bug') && <FeedbackDialog api={api} settings={settings} kind={dialog === 'bug' ? 'bug' : 'idea'} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
+      {tourStep !== null && dialog === null && <Tour step={tourStep} hasDocument={doc !== null} isReady={settings.isReady} onStep={toStep} onSettings={() => setDialog('settings')} onEnd={endTour} />}
+      {isUsageDue && <UsageDialog api={api} onAnswered={saved => (setSettings({ ...settings, preferences: saved ?? settings.preferences, usage: { ...settings.usage, isAsked: true } }), void api.getSettings().then(now => setSettings({ ...now, usage: { ...now.usage, isAsked: true } }), () => {}))} />}
       {isSupportDue && <SupportDialog api={api} withStar={settings.asking.withStar} onFeedback={() => (setAsked(true), setDialog('feedback'))} onClose={() => setAsked(true)} />}
     </>
   )
   /** Where negative feedback goes: one button everybody finds. */
   const bugButton = (
-    <button className="bug" onClick={() => setDialog('bug')} title={m.app.reportBugTitle}>
+    <button className="bug" data-tour="around" onClick={() => setDialog('bug')} title={m.app.reportBugTitle}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
         <ellipse cx="8" cy="9.2" rx="3.4" ry="4.3" />
         <path d="M5.6 4.9a2.4 2.4 0 0 1 4.8 0M8 5v8.5M4.6 8H1.8M14.2 8h-2.8M4.9 11.2l-2.3 1.6M11.1 11.2l2.3 1.6M5 6.2 3 4.4M11 6.2l2-1.8" />
@@ -535,14 +561,14 @@ export function App({ api, makeEditor = createEditor }: Props) {
         <p className="margin-note">{m.app.welcomeMargin}</p>
         <p className="promise">{m.app.welcomePromise}</p>
         <div className="row">
-          <button className="primary" onClick={open}>{m.app.openFile}</button>
-          <button onClick={create}>{m.app.newDocument}</button>
+          <button className="primary" data-tour="open" onClick={open}>{m.app.openFile}</button>
+          <button data-tour="open" onClick={create}>{m.app.newDocument}</button>
         </div>
         {settings !== null && !settings.isReady && (
           <p className="muted">{m.app.notSetUp(<button className="link" onClick={() => setDialog('settings')}>{m.app.setItUp}</button>)}</p>
         )}
         {error !== '' && <p className="error" role="alert">{error}</p>}
-        <p className="row foot">{version}{bugButton}</p>
+        <p className="row foot">{version}{bugButton}{tourStep === null && <button className="link" onClick={() => toStep(0)}>{m.app.takeTour}</button>}</p>
         {settingsDialog}
         {otherDialogs}
       </main>
@@ -553,8 +579,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
   return (
     <div className="app">
       <header className="bar">
-        <button onClick={open}>{m.app.open}</button>
-        <button onClick={create}>{m.app.new}</button>
+        <button data-tour="open" onClick={open}>{m.app.open}</button>
+        <button data-tour="open" onClick={create}>{m.app.new}</button>
         <button onClick={() => void save()} disabled={!isDirty}>{m.app.save}</button>
         <button onClick={() => void move()} title={m.app.moveTitle}>{m.app.move}</button>
         <span className="name" title={doc.path}>
@@ -563,9 +589,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
         </span>
         <span className="spacer" />
         <span className="muted">{m.app.words(log.words)}</span>
-        <button onClick={() => setDialog('export')}>{m.app.export}</button>
-        <button onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0 && log.external.length === 0} title={log.stats.turns === 0 && log.external.length === 0 ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
-        <button onClick={() => setDialog('settings')}>{m.app.settings}</button>
+        <button data-tour="finish" onClick={() => setDialog('export')}>{m.app.export}</button>
+        <button data-tour="finish" onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0 && log.external.length === 0} title={log.stats.turns === 0 && log.external.length === 0 ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
+        <button data-tour="settings around" onClick={() => setDialog('settings')}>{m.app.settings}</button>
         {bugButton}
       </header>
       {doc.orphans.length > 0 && !orphansSeen && (
@@ -592,11 +618,11 @@ export function App({ api, makeEditor = createEditor }: Props) {
         </p>
       )}
       <div className="work" ref={work} style={panelWidth === null ? undefined : ({ '--panel': `${panelWidth}px` } as CSSProperties)}>
-        <section className="page">
+        <section className="page" data-tour="write">
           {look.buttons && <FormatBar keys={shortcutsOf(preferences.shortcuts)} onFormat={kind => editor.current?.format(kind)} onHelp={() => setDialog('markdown')} />}
           <div className="sheet" ref={host} />
         </section>
-        <aside className="panel">
+        <aside className="panel" data-tour="panel">
           <div
             className="divider"
             role="separator"
@@ -708,7 +734,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
           <button aria-pressed={look.buttons} onClick={() => turn('buttons')} title={m.app.markdownButtonsTitle}>{m.app.markdownButtons}</button>
           <button aria-pressed={look.lineNumbers} onClick={() => turn('lineNumbers')} title={m.app.lineNumbersTitle}>{m.app.lineNumbers}</button>
           <button aria-pressed={look.source} onClick={() => turn('source')} title={m.app.sourceTitle}>{m.app.source}</button>
-          <button aria-pressed={preferences.calm} onClick={() => void setCalm(!preferences.calm)} title={m.app.calmTitle}>{m.app.calm}</button>
+          <button data-tour="around" aria-pressed={preferences.calm} onClick={() => void setCalm(!preferences.calm)} title={m.app.calmTitle}>{m.app.calm}</button>
         </span>
         <span>{m.app.logged(log.stats.turns, open_, log.guard.length)}</span>
         {version}

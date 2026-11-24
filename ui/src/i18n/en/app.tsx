@@ -9,6 +9,7 @@ export const app = {
   newDocument: 'New document…',
   notSetUp: (link: ReactNode) => <>The AI is not set up yet. {link}</>,
   setItUp: 'Set it up',
+  takeTour: 'Take the tour',
 
   // the top bar
   open: 'Open…',

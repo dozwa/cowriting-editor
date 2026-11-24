@@ -33,7 +33,7 @@ let lastEditor: Editor & Seen
 
 function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string } = {}) {
   const turns: TurnRow[] = []
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; project: unknown[][]; support: string[]; pages: string[] } = { feedback: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[] } = { feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -73,9 +73,21 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
     external: external.map(row => ({ ...row })),
     words: 7,
   })
-  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
     sendFeedback: async (way, title, text) => void calls.feedback.push([way, title, text]),
+    usageAnswered: async (ping, figures) => {
+      calls.usage.push([ping, figures])
+      settings = { ...settings, preferences: { ...settings.preferences, usagePing: ping, usageFigures: figures }, usage: { isAvailable: true, isAsked: true, installation: ping || figures ? 'a1b2c3' : null } }
+      return settings.preferences
+    },
+    usagePreview: async () => ['{ "kind": "start", "installation": "(a random number, made when you agree)" }', '{ "kind": "session", "aiRequests": 0 }'],
+    privacyStatement: async language => (language === 'de' ? 'Datenschutzerklärung: Nutzungszahlen' : 'Privacy statement: usage figures'),
+    recordSeen: async () => {},
+    recentDiagnostics: async () => ['2026-11-24T10:01:00.000Z start CoWriting Editor 0.1.0, macos aarch64', '2026-11-24T10:02:10.500Z call exportDocument failed 4012ms: pandoc ended with <path>', '2026-11-24T10:02:11.000Z document at-failed-export: 41 bytes, 41 characters, 4 lines'].join('\n'),
+    clearDiagnostics: async () => void calls.support.push('log deleted'),
+    pickReportFile: async () => '/work/cowriting-report.txt',
+    writeReportFile: async (target, minutes, documentText) => void calls.reportFiles.push([target, minutes, documentText]),
     stateExternal: async stated => {
       calls.project.push(['state', stated])
       external = stated.id === '' ? [...external, { ...stated, id: `x${external.length + 1}` }] : external.map(row => (row.id === stated.id ? { ...stated, id: `${stated.id}b` } : row))
@@ -109,6 +121,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       Object.assign(expert, prompt === '' ? { prompt: figure.prompt, isPromptEdited: false } : { prompt, isPromptEdited: true })
     },
     supportAnswered: async what => void calls.support.push(what),
+    tourSeen: async () => void calls.support.push('tour'),
     getSettings: async () => settings,
     setSettings: async (next, apiKey) => {
       calls.settings.push([next, apiKey])
@@ -1171,8 +1184,28 @@ test('a bug is reported from a button everybody sees, in three parts, and goes o
   expect(outgoing()).not.toContain('48 subjects')
   expect(calls.feedback).toEqual([])
 
+  // the technical log goes only when asked for, and is shown line by line before it does
+  const withLog = dialog.getByRole('checkbox', { name: /technical log of the last 10 minutes/ }) as HTMLInputElement
+  expect(withLog.checked).toBe(false)
+  await user.click(withLog)
+  await waitFor(() => expect(outgoing()).toContain('--- Technical log, last 10 minutes ---\n10:01:00 start CoWriting Editor 0.1.0, macos aarch64\n10:02:10 call exportDocument failed 4012ms: pandoc ended with <path>\n10:02:11 document at-failed-export'))
+  expect(outgoing()).not.toContain('48 subjects')
+  await user.click(withLog)
+  expect(outgoing()).not.toContain('Technical log')
+
+  // a file to attach holds the log; the document's text goes into it only after the author agreed
+  await user.click(dialog.getByRole('button', { name: 'Save a file to attach…' }))
+  await waitFor(() => expect(calls.reportFiles).toEqual([['/work/cowriting-report.txt', 10, null]]))
+  expect(dialog.getByRole('status').textContent).toContain('without any text of yours')
+  await user.click(dialog.getByRole('checkbox', { name: /Put the text of my document into this file too/ }))
+  expect(dialog.getByText(/An issue on GitHub is public/)).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Save a file to attach…' }))
+  await waitFor(() => expect(calls.reportFiles.at(-1)).toEqual(['/work/cowriting-report.txt', 10, expect.stringContaining('We recruited 48 subjects.')]))
+  expect(dialog.getByRole('status').textContent).toContain('with the text of your document')
+  expect(outgoing()).not.toContain('48 subjects')
+
   // without the details only the author's words go, and what is handed over is what was shown
-  await user.click(dialog.getByRole('checkbox'))
+  await user.click(dialog.getByRole('checkbox', { name: /editor’s version/ }))
   await user.click(mail)
   expect(calls.feedback).toEqual([['mail', 'Bug: Export stops', 'What I did:\nChose PDF.\n\nWhat happened:\nNothing arrives.\n\nWhat I expected:\nA PDF.']])
   expect(dialog.getByRole('status').textContent).toContain('sent only when you send it there')
@@ -1315,4 +1348,146 @@ test('AI use outside the editor is stated in a form with two things needed, corr
   await user.click(screen.getByRole('button', { name: 'Take back the statement about ChatGPT' }))
   await waitFor(() => expect(screen.queryByText('R code for the analysis')).toBeNull())
   expect(calls.project.at(-1)).toEqual(['withdraw', 'x1b'])
+})
+
+test('a new author is shown around: the tour goes through the window part by part, marks what it speaks about, and is told to the app once it is through', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ settings: { showTour: true } })
+  const { container } = render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const tour = within(await screen.findByRole('dialog', { name: 'You write, the AI reads' }))
+  tour.getByText('Step 1 of 12')
+  expect(tour.queryByRole('button', { name: 'Back' })).toBeNull()
+  const marked = () => [...container.querySelectorAll('.toured')].map(part => part.textContent)
+
+  // the AI is set up here, so that step offers nothing to do; Settings is marked
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  screen.getByRole('dialog', { name: 'Choose the AI' })
+  expect(tour.queryByRole('button', { name: 'Set up the AI…' })).toBeNull()
+  expect(marked()).toEqual(['Settings…'])
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  expect(marked()).toEqual(['Open…', 'New…'])
+
+  // the steps about the side panel show the tab they speak about
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  screen.getByRole('dialog', { name: 'Ask about your text' })
+  expect(screen.getByRole('tab', { name: 'Ask' }).getAttribute('aria-selected')).toBe('true')
+  for (const name of ['Experts', 'Live review', 'Plan', 'Sources', 'Log']) {
+    await user.click(tour.getByRole('button', { name: 'Next' }))
+    expect(screen.getByRole('tab', { name: new RegExp(`^${name}`) }).getAttribute('aria-selected')).toBe('true')
+    expect(container.querySelector('.panel')?.classList.contains('toured')).toBe(true)
+  }
+  // back is a step back, tab and all
+  await user.click(tour.getByRole('button', { name: 'Back' }))
+  expect(screen.getByRole('tab', { name: 'Sources' }).getAttribute('aria-selected')).toBe('true')
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  expect(marked()).toEqual(['Export…', 'Disclosure…'])
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  tour.getByText('Step 12 of 12')
+  expect(calls.support).toEqual([])
+  await user.click(tour.getByRole('button', { name: 'Done' }))
+  expect(calls.support).toEqual(['tour'])
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(marked()).toEqual([])
+})
+
+test('at the very first start the tour comes before the set-up, offers it, and skipping the tour leads to it', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ isReady: false, settings: { isFirstRun: true, hasKey: false, showTour: true, openAtStart: null } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const tour = within(await screen.findByRole('dialog', { name: 'You write, the AI reads' }))
+  expect(screen.queryByRole('dialog', { name: 'Set up the AI' })).toBeNull()
+
+  // no document is open: the tour says so where it speaks about parts that are not there
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  tour.getByRole('button', { name: 'Set up the AI…' })
+  expect(tour.queryByRole('note')).toBeNull()
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  await user.click(tour.getByRole('button', { name: 'Next' }))
+  expect(tour.getByRole('note').textContent).toBe('Open a document to see this part of the window.')
+
+  await user.click(tour.getByRole('button', { name: 'Skip the tour' }))
+  expect(calls.support).toEqual(['tour'])
+  expect(screen.queryByRole('dialog', { name: 'Write' })).toBeNull()
+  await screen.findByRole('dialog', { name: 'Set up the AI' })
+})
+
+test('the tour can be seen again: from the first page, and from About in the settings', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  expect(screen.queryByRole('dialog')).toBeNull() // seen before: it does not start by itself
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const settings = within(await screen.findByRole('dialog', { name: 'Settings' }))
+  await user.click(settings.getByRole('tab', { name: 'About' }))
+  await user.click(settings.getByRole('button', { name: 'Show the tour' }))
+  expect(screen.queryByRole('dialog', { name: 'Settings' })).toBeNull()
+  screen.getByRole('dialog', { name: 'You write, the AI reads' })
+  // Escape closes it
+  await user.keyboard('{Escape}')
+  expect(screen.queryByRole('dialog')).toBeNull()
+
+  const fresh = standIn({ settings: { openAtStart: null } })
+  render(<App api={fresh.api} makeEditor={plainEditor} />)
+  await user.click(await screen.findByRole('button', { name: 'Take the tour' }))
+  screen.getByRole('dialog', { name: 'You write, the AI reads' })
+})
+
+test('usage figures are asked for once, nothing is ticked, and only what was ticked is agreed to', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ settings: { usage: { isAvailable: true, isAsked: false, installation: null } } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'May the editor say that it is used?' }))
+  const ping = dialog.getByRole('checkbox', { name: /a sign of use at each start/ }) as HTMLInputElement
+  const figures = dialog.getByRole('checkbox', { name: /figures of each session/ }) as HTMLInputElement
+  expect([ping.checked, figures.checked]).toEqual([false, false])
+  // agreeing to nothing is not an agreement
+  expect((dialog.getByRole('button', { name: 'Agree to what is ticked' }) as HTMLButtonElement).disabled).toBe(true)
+
+  // what would go out and the statement can be read before deciding
+  await user.click(dialog.getByRole('button', { name: 'Show what would be sent' }))
+  expect(((await dialog.findByLabelText('At start')) as HTMLTextAreaElement).value).toContain('"kind": "start"')
+  await user.click(dialog.getByRole('button', { name: 'Read the privacy statement' }))
+  expect(((await dialog.findByLabelText('Privacy statement')) as HTMLTextAreaElement).value).toBe('Privacy statement: usage figures')
+
+  await user.click(ping)
+  await user.click(dialog.getByRole('button', { name: 'Agree to what is ticked' }))
+  await waitFor(() => expect(calls.usage).toEqual([[true, false]]))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'May the editor say that it is used?' })).toBeNull())
+
+  // the settings show what stands, and a tick taken away there is saved as a withdrawal
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(settings.getByRole('tab', { name: 'About' }))
+  const standing = settings.getByRole('checkbox', { name: /a sign of use at each start/ }) as HTMLInputElement
+  expect(standing.checked).toBe(true)
+  expect(settings.getByText('This installation’s number: a1b2c3')).toBeTruthy()
+  await user.click(standing)
+  await user.click(settings.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.preferences.at(-1)).toMatchObject({ usagePing: false, usageFigures: false }))
+})
+
+test('closing the question about usage figures is a no, and without a server nobody is asked or shown anything', async () => {
+  const user = userEvent.setup()
+  const asked = standIn({ settings: { usage: { isAvailable: true, isAsked: false, installation: null } } })
+  const first = render(<App api={asked.api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'May the editor say that it is used?' }))
+  await user.click(dialog.getByRole('checkbox', { name: /figures of each session/ }))
+  await user.click(dialog.getByRole('button', { name: 'Send nothing' }))
+  await waitFor(() => expect(asked.calls.usage).toEqual([[false, false]]))
+  first.unmount()
+
+  const quiet = standIn()
+  render(<App api={quiet.api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  expect(screen.queryByRole('dialog')).toBeNull()
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(settings.getByRole('tab', { name: 'About' }))
+  expect(settings.queryByText('Usage figures')).toBeNull()
+  expect(quiet.calls.usage).toEqual([])
 })

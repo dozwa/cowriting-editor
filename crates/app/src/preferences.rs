@@ -58,6 +58,12 @@ pub struct Preferences {
     pub live_per_hour: u32,
     /// Keyboard shortcuts the author changed: what is done → the keys ('Mod-b'); empty for none.
     pub shortcuts: BTreeMap<String, String>,
+    /// Keep the editor's own technical log (what was used, what failed; no text, no names) beside the settings.
+    pub diagnostics: bool,
+    /// The author agreed: a sign of use goes to the editor's maker at each start.
+    pub usage_ping: bool,
+    /// The author agreed, separately: a session's figures go to the editor's maker when the editor closes.
+    pub usage_figures: bool,
 }
 
 impl Default for Preferences {
@@ -85,6 +91,9 @@ impl Default for Preferences {
             live_gap_seconds: (pace.gap_ms / 1000) as u32,
             live_per_hour: pace.per_hour as u32,
             shortcuts: BTreeMap::new(),
+            diagnostics: true,
+            usage_ping: false,
+            usage_figures: false,
         }
     }
 }
@@ -195,6 +204,17 @@ pub fn last_document(file: &Path) -> Option<String> {
 pub fn remember_document(file: &Path, document: &str) {
     let mut json = read_json(file);
     json["lastDocument"] = json!(document);
+    let _ = write_json(file, &json);
+}
+
+/// The tour of the editor is shown by itself until the author went through it or closed it once.
+pub fn is_tour_due(file: &Path) -> bool {
+    read_json(file)["tourSeen"] != json!(true)
+}
+
+pub fn tour_seen(file: &Path) {
+    let mut json = read_json(file);
+    json["tourSeen"] = json!(true);
     let _ = write_json(file, &json);
 }
 

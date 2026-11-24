@@ -1,6 +1,6 @@
 //! The settings file on a real folder: what the author set survives, whatever else is saved.
 
-use cowriting_app::preferences::{in_export_folder, last_document, remember_document, Preferences, SettingsFile};
+use cowriting_app::preferences::{in_export_folder, is_tour_due, last_document, remember_document, tour_seen, Preferences, SettingsFile};
 use cowriting_app::BackendSettings;
 use cowriting_core::watch::Pace;
 use serde_json::{json, Value};
@@ -116,6 +116,14 @@ fn the_last_document_is_remembered_while_it_exists_and_exports_go_to_a_folder_th
     assert_eq!(last_document(&state), None, "a document that is gone is not offered");
     std::fs::write(&document, "text").unwrap();
     assert_eq!(last_document(&state), Some(document.to_string_lossy().into_owned()));
+
+    // the tour shows itself until it was seen once, and seeing it keeps what else is remembered
+    assert!(is_tour_due(&state));
+    tour_seen(&state);
+    assert!(!is_tour_due(&state));
+    assert_eq!(last_document(&state), Some(document.to_string_lossy().into_owned()));
+    remember_document(&state, &document.to_string_lossy());
+    assert!(!is_tour_due(&state), "opening a document does not bring the tour back");
 
     let beside = document.with_extension("pdf").to_string_lossy().into_owned();
     let exports = folder.0.join("exports");

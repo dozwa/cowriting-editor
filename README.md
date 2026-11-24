@@ -119,11 +119,40 @@ what came of it and how you checked it are optional. A statement can be correcte
 the log keeps every line (entries of type `external`), and the disclosure lists what holds now in
 a section of its own, marked as your own statement.
 
+## The tour
+
+At the first start a tour goes through the window in twelve short steps: the AI, opening a
+document, writing, each tab of the side panel, export and disclosure. It is a card at the lower
+left, not a dialog: the part it speaks about is marked, and everything stays usable on the way.
+"Skip the tour" or Escape ends it. It does not start by itself again; "Take the tour" on the
+first page and "Show the tour" in Settings under About bring it back.
+
 ## Alpha, bugs and support
 
 The editor is an alpha, and the footer says which. "Report a bug" in the top bar opens a form in
 three parts (what you did, what happened, what you expected) and hands it to your mail program;
-nothing is sent by the editor. Every tenth start it asks for a coffee, feedback or a star on
+nothing is sent by the editor.
+
+So that a bug can be found, the editor keeps a technical log (`diagnostics.log` in the settings
+folder, at most about 400 KB): which commands ran, how long they took, what failed, which tab or
+dialog was shown, and the measures of a document (size, line ends, counts of headings, tables,
+citations and the like). It never holds your text, your questions, the AI's answers, file names,
+paths, addresses, mail addresses or keys: every message passes one filter that takes these out,
+and anything in quotation marks with them. The log stays on your computer. In a bug report you
+can tick "add the technical log of the last 10 minutes" and see every line before it goes, or save
+a file to attach; your document's text goes into that file only if you tick that too. The log can
+be turned off and deleted in Settings under About.
+
+The editor can tell its maker that it is used, and only with your consent: a sign of use at each
+start (a random number made for the installation, the version, the kind of system) and, agreed to
+separately, a session's figures when the editor closes (minutes open, requests to an AI by kind of
+provider and model, documents worked on, words added). It asks once, with nothing ticked; Settings
+under About shows the exact messages, the privacy statement (`docs/PRIVACY.md`,
+`docs/DATENSCHUTZ.md`) and lets you withdraw. As built now this is switched off altogether: there
+is no server address (`SERVER` in `crates/app/src/usage.rs`) and the statement is a draft with
+parts to fill in, and while either is so the editor neither asks nor sends.
+
+Every tenth start it asks for a coffee, feedback or a star on
 GitHub: twenty starts of quiet after a coffee or feedback, and never again for a star once you
 followed that link. "Calm" in the status bar (distraction-free) hides the explanations and hints.
 

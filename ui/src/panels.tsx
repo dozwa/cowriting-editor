@@ -257,7 +257,7 @@ function ExternalDialog({ start, onSave, onClose }: { start: ExternalUse; onSave
   )
   return (
     <Dialog title={start.id === '' ? t.externalTitle : t.externalEditTitle} onClose={onClose}>
-      <p className="muted">{t.externalIntro}</p>
+      <p>{t.externalIntro}</p>
       <div className="row">
         {field('tool', t.externalTool, t.externalToolExample)}
         {field('model', t.externalModel)}

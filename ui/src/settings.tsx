@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { Api, ModelChoice, ProjectOverrides, ProjectView, Settings, SettingsView } from './api'
-import { Dialog, FeedbackDialog } from './dialogs'
+import { Dialog, FeedbackDialog, UsageChoice } from './dialogs'
 import { LANGUAGES, type LanguageId, languageFor, m } from './i18n'
 import { ACTIONS, type Action, LIMITS, type Preferences, STANDARD, keysOf, showKeys, shortcutsOf, whyNot } from './preferences'
 
@@ -179,15 +179,20 @@ type Props = {
   /** The open document's project, with what it sets for itself; null when no document is open. */
   project: ProjectView | null
   documentName: string
+  /** The open document's text, for a bug report whose author wants it in the file they attach. */
+  getText?: () => string
   /** How the window would look with what is being set; null when the dialog closes without saving. */
   onPreview(preferences: Preferences | null): void
   onClose(saved: SettingsView | null): void
+  /** The author wants the tour of the editor: the settings close without saving, and it starts. */
+  onTour(): void
 }
 
 const LANGUAGES_OF_A_PROJECT = ['writingLanguage', 'aiLanguage', 'disclosureLanguage'] as const
 const PACE_OF_A_PROJECT = ['livePauseSeconds', 'liveGapSeconds', 'livePerHour'] as const
 
-export function SettingsDialog({ api, settings, project, documentName, onPreview, onClose }: Props) {
+export function SettingsDialog({ api, settings, project, documentName, getText, onPreview, onClose, onTour }: Props) {
+  const [isLogDeleted, setLogDeleted] = useState(false)
   const ai = useAi(api, settings)
   const [section, setSection] = useState<Section>('ai')
   // what the open project sets for itself is shown as it holds there; the ticks say which pages are the project's own
@@ -507,9 +512,33 @@ export function SettingsDialog({ api, settings, project, documentName, onPreview
                 <dd>{m.settings.whereKeyIs}</dd>
                 <dt>{m.settings.whereLog}</dt>
                 <dd>{m.settings.whereLogIs}</dd>
+                <dt>{m.settings.whereDiagnostics}</dt>
+                <dd>{m.settings.whereDiagnosticsIs}</dd>
                 <dt>{m.settings.sent}</dt>
-                <dd>{m.settings.sentWhat}</dd>
+                <dd>{m.settings.sentWhat}{settings.usage.isAvailable && m.settings.sentUsage}</dd>
               </dl>
+              <h3>{m.settings.tourHeading}</h3>
+              <p className="muted">{m.settings.tourAbout}</p>
+              <div className="row">
+                <button onClick={() => (onPreview(null), onTour())}>{m.settings.tourAgain}</button>
+              </div>
+              {settings.usage.isAvailable && (
+                <>
+                  <h3>{m.settings.usageHeading}</h3>
+                  <p className="muted">{m.settings.usageAbout}</p>
+                  <UsageChoice api={api} ping={draft.usagePing} figures={draft.usageFigures} onChange={(ping, figures) => (set('usagePing', ping), set('usageFigures', figures))} />
+                  {settings.usage.installation !== null && <p className="muted">{m.settings.usageInstallation(settings.usage.installation)}</p>}
+                </>
+              )}
+              <h3>{m.settings.diagnosticsHeading}</h3>
+              <p className="muted">{m.settings.diagnosticsAbout}</p>
+              <label className="check">
+                <input type="checkbox" checked={draft.diagnostics} onChange={e => set('diagnostics', e.target.checked)} /> {m.settings.diagnostics}
+              </label>
+              <div className="row">
+                <button onClick={() => void api.clearDiagnostics().then(() => setLogDeleted(true), e => setError(String(e)))}>{m.settings.diagnosticsDelete}</button>
+                {isLogDeleted && <span className="ok" role="status">{m.settings.diagnosticsDeleted}</span>}
+              </div>
               <h3>{m.settings.feedbackHeading}</h3>
               <p className="muted">{m.settings.feedbackAbout}</p>
               <div className="row">
@@ -532,7 +561,7 @@ export function SettingsDialog({ api, settings, project, documentName, onPreview
       </div>
     </Dialog>
     {/* beside the settings, not inside them: a dialog in a dialog would be drawn at twice the chosen size */}
-    {feedback !== null && <FeedbackDialog api={api} settings={settings} kind={feedback} onClose={() => setFeedback(null)} />}
+    {feedback !== null && <FeedbackDialog api={api} settings={settings} kind={feedback} getText={getText} onClose={() => setFeedback(null)} />}
     </>
   )
 }

@@ -52,6 +52,7 @@ impl Bridge {
         view["system"] = json!(format!("{} {}", std::env::consts::OS, std::env::consts::ARCH));
         view["contact"] = json!(cowriting_app::feedback::MAIL);
         view["repository"] = json!(cowriting_app::feedback::REPOSITORY);
+        view["showTour"] = json!(false);
         view["asking"] = json!(cowriting_app::support::Asking::default());
         view["feedbackByMail"] = json!(cowriting_app::feedback::has_mail());
         view["settingsFolder"] = json!("(the bridge keeps its settings in memory)");

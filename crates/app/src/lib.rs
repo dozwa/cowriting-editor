@@ -2,10 +2,12 @@
 //! export the disclosure. The window (`src-tauri`) only passes these on, so everything here runs
 //! and is tested without one.
 
+pub mod diagnostics;
 pub mod export;
 pub mod feedback;
 pub mod preferences;
 pub mod support;
+pub mod usage;
 
 use cowriting_backends::anthropic::AnthropicBackend;
 use cowriting_backends::fake::FakeBackend;

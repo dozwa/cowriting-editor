@@ -3,6 +3,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { confirm, open, save } from '@tauri-apps/plugin-dialog'
 import { m } from './i18n'
+import type { Seen } from './diagnostics'
 import type { Preferences } from './preferences'
 
 /** An AI log in the document's folder whose document is gone. */
@@ -159,7 +160,7 @@ export type AskResult = { id: string; answer: string; isAiText: boolean; refused
 export type Settings = { backend: string; model: string; baseUrl: string; maxTokens: number }
 /** Whether a model kept to the assist-only rules in the behaviour suite. */
 export type ModelStatus = 'tested' | 'failed' | 'untested'
-export type SettingsView = Settings & { hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean } }
+export type SettingsView = Settings & { hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null } }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean }
@@ -220,6 +221,20 @@ export const api = {
   /** The author says this document is the renamed one that log was kept for. */
   /** Opens a report as a new issue in the browser or a new mail, filled in; the author sends it. Where it goes is fixed in the app. */
   sendFeedback: (way: 'issue' | 'mail', title: string, text: string) => invoke<void>('send_feedback', { way, title, text }),
+  /** What the window saw (commands and how they ended, views, its own errors), for the editor's technical log. */
+  recordSeen: (seen: Seen[]) => invoke<void>('record_seen', { seen }),
+  /** The technical log's last minutes, as the author can add them to a report. */
+  recentDiagnostics: (minutes: number) => invoke<string>('recent_diagnostics', { minutes }),
+  clearDiagnostics: () => invoke<void>('clear_diagnostics'),
+  /** Asks the author where a file to attach to a report goes; null when they cancel. */
+  pickReportFile: () => save({ filters: [{ name: 'Text', extensions: ['txt'] }], defaultPath: 'cowriting-report.txt' }),
+  /** Writes that file: the log's last minutes and, only if the author agreed, the text given here. */
+  writeReportFile: (target: string, minutes: number, documentText: string | null) => invoke<void>('write_report_file', { target, minutes, documentText }),
+  /** The author's answer about usage figures: a sign of use at start, and a session's figures at closing, each a yes or a no. Returns the preferences as kept. */
+  usageAnswered: (ping: boolean, figures: boolean) => invoke<Preferences>('usage_answered', { ping, figures }),
+  /** The two messages as they would be sent now: the sign of use, and this session's figures so far. */
+  usagePreview: () => invoke<[string, string]>('usage_preview'),
+  privacyStatement: (language: string) => invoke<string>('privacy_statement', { language }),
   /** Shows a guide in the author's browser. Which pages these are is fixed in the app. */
   openGuide: (which: Page) => invoke<void>('open_guide', { which }),
   /** States AI use outside the editor, or corrects a statement (its `id` given). The log only grows. */
@@ -241,6 +256,8 @@ export const api = {
   setPrompt: (id: string, prompt: string) => invoke<void>('set_prompt', { id, prompt }),
   /** The author answered the editor's asking for support: 'coffee', 'feedback', 'star' or 'later'. */
   supportAnswered: (what: 'coffee' | 'feedback' | 'star' | 'later') => invoke<void>('support_answered', { what }),
+  /** The author went through the tour or closed it: it does not start by itself again. */
+  tourSeen: () => invoke<void>('tour_seen'),
   adoptLog: (name: string) => invoke<Opened>('adopt_log', { name }),
   /** Asks the author where the document should go; null when they cancel. */
   pickMove: (current: string) => save({ filters: markdown(), defaultPath: current }),
