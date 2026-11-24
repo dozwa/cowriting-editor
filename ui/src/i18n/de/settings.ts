@@ -16,7 +16,7 @@ export const settings: typeof pattern = {
     live: { name: 'Live-Review', about: 'Wie oft die Experten beim Schreiben gefragt werden. Das Live-Review bleibt aus, bis es für ein Dokument in dessen Reiter eingeschaltet wird.' },
     look: { name: 'Text und Aussehen', about: 'Wie der Text und der Editor darum herum aussehen. Die Änderung ist sofort zu sehen; sie bleibt, wenn gespeichert wird.' },
     files: { name: 'Dateien', about: 'Wo Dokumente geöffnet werden, wohin Exporte gehen und wann der Editor speichert.' },
-    language: { name: 'Sprache', about: 'Drei Sprachen, die nicht dieselbe sein müssen: die des Editors, die des Textes und die der KI-Antworten.' },
+    language: { name: 'Sprache', about: 'Vier Sprachen, die nicht dieselbe sein müssen: die des Editors, die des Textes, die der KI-Antworten und die der Offenlegung.' },
     shortcuts: { name: 'Tastenkürzel', about: 'Tasten für das, was oft gebraucht wird. Erst „Ändern“ wählen, dann die Tasten drücken.' },
     about: { name: 'Über', about: '' },
   },

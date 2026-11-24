@@ -15,7 +15,7 @@ export const settings = {
     live: { name: 'Live review', about: 'How often the experts are asked while you write. Live review stays off until you turn it on for a document, in its tab.' },
     look: { name: 'Text and look', about: 'How your text and the editor around it look. You see the change at once; it is kept when you save.' },
     files: { name: 'Files', about: 'Where documents are opened and exports go, and when the editor saves.' },
-    language: { name: 'Language', about: 'Three languages that need not be the same: the editor’s, your text’s, and the AI’s answers.' },
+    language: { name: 'Language', about: 'Four languages that need not be the same: the editor’s, your text’s, the AI’s answers and the disclosure’s.' },
     shortcuts: { name: 'Shortcuts', about: 'Keys for what you do often. Choose “Change”, then press the keys.' },
     about: { name: 'About', about: '' },
   },

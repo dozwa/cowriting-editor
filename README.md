@@ -12,7 +12,11 @@ AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM S
 provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
 can be briefed and asked, and you can add experts of your own. References can be searched and
 checked, and the document exports to PDF and Word. The AI can also be your own installed Claude
-Code. There are no signed installers yet, and the app does not update itself (see `RELEASING.md`).
+Code. The macOS installer is signed and notarised; the Windows one is not signed yet, and the app
+does not update itself (see `RELEASING.md`).
+
+**How to use it:** the [user guide in the wiki](https://github.com/dozwa/cowriting-editor/wiki)
+explains every feature with screenshots, and how to tailor the experts, files and settings.
 
 ## Sources
 
@@ -138,8 +142,8 @@ first page and "Show the tour" in Settings under About bring it back.
 ## Alpha, bugs and support
 
 The editor is an alpha, and the footer says which. "Report a bug" in the top bar opens a form in
-three parts (what you did, what happened, what you expected) and hands it to your mail program;
-nothing is sent by the editor.
+three parts (what you did, what happened, what you expected) and opens it as a mail or a new
+GitHub issue, or copies it, for you to send; nothing is sent by the editor.
 
 So that a bug can be found, the editor keeps a technical log (`diagnostics.log` in the settings
 folder, at most about 400 KB): which commands ran, how long they took, what failed, which tab or
