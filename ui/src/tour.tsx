@@ -1,7 +1,7 @@
 // The tour of the editor: a card that goes through the window part by part and marks the part it
 // speaks about. It is not a dialog over the window: everything stays usable while it is shown, so
 // the author can open a document or try a tab on the way.
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { m } from './i18n'
 import type { Tab } from './preferences'
 
@@ -22,6 +22,21 @@ export const TOUR: { id: StepId; marks: string; tab?: Tab; inDocument?: boolean 
   { id: 'finish', marks: 'finish', inDocument: true },
   { id: 'around', marks: 'around' },
 ]
+
+type Box = { left: number; top: number; right: number; bottom: number }
+export type Corner = 'left bottom' | 'right bottom' | 'right top' | 'left top'
+const CORNERS: Corner[] = ['left bottom', 'right bottom', 'right top', 'left top']
+
+/** The corner of the window for a card of this size: the first, from bottom left, in which it lies over none of the boxes; bottom left if there is none. */
+export function cornerFor(card: { width: number; height: number }, window: { width: number; height: number }, keepFree: Box[]): Corner {
+  const at = (corner: Corner): Box => {
+    const left = corner.startsWith('left') ? 24 : window.width - 24 - card.width
+    const top = corner.endsWith('top') ? 64 : window.height - 52 - card.height
+    return { left, top, right: left + card.width, bottom: top + card.height }
+  }
+  const isOver = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+  return CORNERS.find(corner => !keepFree.some(box => isOver(at(corner), box))) ?? 'left bottom'
+}
 
 type Props = {
   step: number
@@ -48,11 +63,26 @@ export function Tour({ step, hasDocument, isReady, onStep, onSettings, onEnd }: 
     return () => marked.forEach(part => part.classList.remove('toured'))
   }, [now.marks, hasDocument])
 
+  // the card does not lie over the buttons it speaks about, nor over the two that open a document
+  const card = useRef<HTMLElement>(null)
+  const [corner, setCorner] = useState<Corner>('left bottom')
+  useLayoutEffect(() => {
+    const place = () => {
+      if (card.current === null) return
+      const { width, height } = card.current.getBoundingClientRect()
+      const free = [...document.querySelectorAll(`button[data-tour~="${now.marks}"], .welcome button[data-tour~="open"]`)].map(part => part.getBoundingClientRect())
+      setCorner(cornerFor({ width, height }, { width: window.innerWidth, height: window.innerHeight }, free.filter(box => box.width > 0)))
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [step, now.marks, hasDocument, isReady])
+
   // each step is read from its title
   useEffect(() => title.current?.focus({ preventScroll: true }), [step])
 
   return (
-    <aside className="tour" role="dialog" aria-labelledby="tour-title" onKeyDown={e => e.key === 'Escape' && (e.stopPropagation(), onEnd())}>
+    <aside ref={card} className={`tour ${corner}`} role="dialog" aria-labelledby="tour-title" onKeyDown={e => e.key === 'Escape' && (e.stopPropagation(), onEnd())}>
       <p className="count">{t.count(step + 1, TOUR.length)}</p>
       <progress value={step + 1} max={TOUR.length} aria-hidden="true" />
       <h2 id="tour-title" tabIndex={-1} ref={title}>{t.steps[now.id].title}</h2>
