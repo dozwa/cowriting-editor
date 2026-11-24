@@ -7,6 +7,7 @@ pub mod export;
 pub mod feedback;
 pub mod linked;
 pub mod preferences;
+pub mod shown;
 pub mod support;
 pub mod usage;
 

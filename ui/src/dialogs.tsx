@@ -32,7 +32,19 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
   const [options, setOptions] = useState<ExportOptions>({ language, format: 'md', withPrompts: false, withAnswers: false })
   const [exported, setExported] = useState<Exported | null>(null)
   const [error, setError] = useState('')
-  const set = (change: Partial<ExportOptions>) => (setOptions({ ...options, ...change }), setExported(null))
+  const [isCopied, setCopied] = useState(false)
+  const set = (change: Partial<ExportOptions>) => (setOptions({ ...options, ...change }), setExported(null), setCopied(false))
+  const preview = useRef<HTMLPreElement>(null)
+  const copy = async () => {
+    if (exported === null) return
+    try {
+      await navigator.clipboard.writeText(exported.register)
+      setCopied(true)
+    } catch {
+      // a web view that keeps the clipboard to itself: the text is selected, and the author copies it
+      if (preview.current !== null) window.getSelection()?.selectAllChildren(preview.current)
+    }
+  }
 
   const write = async () => {
     try {
@@ -79,7 +91,13 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
               <li key={path}><code>{path}</code></li>
             ))}
           </ul>
-          <pre className="preview">{exported.register}</pre>
+          <div className="row written">
+            <button onClick={() => void api.showWritten(exported.paths[0]!, 'folder').catch(e => setError(String(e)))}>{t.showInFolder}</button>
+            <button onClick={() => void copy()}>{t.copyText}</button>
+            {isCopied && <span className="muted" role="status">{t.copied}</span>}
+          </div>
+          <p className="muted">{t.hiddenFolder}</p>
+          <pre className="preview" ref={preview}>{exported.register}</pre>
         </>
       )}
       <div className="row end">
@@ -187,6 +205,10 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       {made !== null && (
         <div role="status">
           <p>{t.exportedTo(<code>{made.path}</code>)}</p>
+          <div className="row written">
+            <button onClick={() => void api.showWritten(made.path, 'open').catch(e => setError(String(e)))}>{t.openFile}</button>
+            <button onClick={() => void api.showWritten(made.path, 'folder').catch(e => setError(String(e)))}>{t.showInFolder}</button>
+          </div>
           <p className="muted">
             {made.cited === 0 ? t.citedNothing : t.citedSummary(made.cited, made.fromZotero)}
             {made.missing.length > 0 && ` ${t.notFound(made.missing.map(key => `@${key}`).join(', '))}`}

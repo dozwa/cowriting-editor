@@ -17,6 +17,11 @@ export const dialogs: typeof pattern = {
   withPrompts: 'Auch den Anhang mit allen Prompts schreiben',
   withAnswers: 'Die Antworten der KI in den Anhang aufnehmen',
   writtenTo: 'Geschrieben nach:',
+  showInFolder: 'Im Ordner zeigen',
+  openFile: 'Öffnen',
+  copyText: 'Text kopieren',
+  copied: 'Kopiert.',
+  hiddenFolder: 'Der Ordner liegt versteckt neben Ihrem Dokument; Ihr Dateimanager führt ihn womöglich nicht auf. „Im Ordner zeigen“ bringt Sie dorthin.',
   writeDisclosure: 'Offenlegung schreiben',
   writeAgain: 'Erneut schreiben',
 

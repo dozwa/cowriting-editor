@@ -34,6 +34,8 @@ struct Editor {
     counted: Mutex<Counted>,
     /// The sign of use went out for this start.
     is_ping_sent: std::sync::atomic::AtomicBool,
+    /// What was written for the author since the start; only these can be shown from the window.
+    written: cowriting_app::shown::Written,
 }
 
 impl Editor {
@@ -512,6 +514,7 @@ fn write_report_file(app: tauri::AppHandle, target: String, minutes: u64, docume
     let log = DIAGNOSTICS.get().ok_or("The editor keeps no log here.")?;
     let about = format!("CoWriting Editor {}, {} {}", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
     std::fs::write(&target, log.report(&about, minutes.clamp(1, 120), document_text.as_deref())).map_err(|e| format!("The file could not be written: {e}"))?;
+    app.state::<Editor>().written.add(&target);
     log.note_plain("report", &format!("file written, {}", if document_text.is_some() { "with the document's text" } else { "without the document's text" }));
     Ok(())
 }
@@ -737,7 +740,16 @@ async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Resul
 #[tauri::command]
 async fn export_document(editor: State<'_, Editor>, format: FileFormat, target: String, document_text: String, pdf: PdfChoice) -> Result<DocumentExport, String> {
     let session = editor.session()?;
-    noting_failure("export", &document_text, session.export_document_online(format, &target, &document_text, &pdf).await)
+    let made = noting_failure("export", &document_text, session.export_document_online(format, &target, &document_text, &pdf).await)?;
+    editor.written.add(&made.path);
+    Ok(made)
+}
+
+/// Shows a file the editor wrote since it started: marked in its folder, or opened with the system's program for it.
+#[tauri::command]
+fn show_written(editor: State<Editor>, path: String, how: cowriting_app::shown::How) -> Result<(), String> {
+    let (program, args) = editor.written.command(&path, how)?;
+    std::process::Command::new(program).args(args).spawn().map(|_| ()).map_err(|e| format!("The file could not be shown ({e}). It is {path}"))
 }
 
 #[tauri::command]
@@ -777,7 +789,9 @@ fn add_expert(editor: State<Editor>, name: String, role: String, looks_at: Strin
 
 #[tauri::command]
 fn export_disclosure(editor: State<Editor>, options: ExportOptions) -> Result<Exported, String> {
-    editor.session()?.export(&options)
+    let exported = editor.session()?.export(&options)?;
+    exported.paths.iter().for_each(|path| editor.written.add(path));
+    Ok(exported)
 }
 
 fn main() {
@@ -863,7 +877,8 @@ fn main() {
             search_sources,
             check_references,
             export_setup,
-            export_document
+            export_document,
+            show_written
         ])
         .build(tauri::generate_context!())
         .expect("the editor's window could not be opened")

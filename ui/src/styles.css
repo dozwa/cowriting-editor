@@ -472,3 +472,6 @@ dialog > button.link { display: block; margin-top: -6px; font-size: 13px; }
 .own-files ul { display: grid; gap: 4px; }
 .own-files li { display: flex; gap: 8px; align-items: baseline; }
 .own-files li span:first-child { font-weight: 650; overflow-wrap: anywhere; }
+
+/* what can be done with a file just written */
+dialog .row.written { margin: 10px 0 2px; gap: 8px; align-items: center; }

@@ -143,6 +143,7 @@ function standIn(options: { isReady?: boolean; answer?: string; refuse?: boolean
       return kept
     },
     showSettingsFolder: async () => void calls.picked.push('shown'),
+    showWritten: async (path, how) => void calls.picked.push(`${how}:${path}`),
     pickFolder: async () => '/work/exports',
     pickDocument: async folder => (calls.picked.push(`open in ${folder}`), null),
     pickNewDocument: async folder => (calls.picked.push(`new in ${folder}`), null),
@@ -319,6 +320,14 @@ test('the author asks, reads the answer, classifies it, and the log shows the ch
   await user.click(screen.getByRole('button', { name: 'Write the disclosure' }))
   await screen.findByText('/work/.cowriting/thesis.md/disclosure/ai-register.en.md')
   expect(calls.exported).toEqual([{ language: 'en', format: 'md', withPrompts: false, withAnswers: false }])
+  // it lies in a hidden folder: it can be shown there, and its text copied
+  const copied: string[] = []
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => void copied.push(text) } })
+  await user.click(screen.getByRole('button', { name: 'Show in its folder' }))
+  expect(calls.picked).toEqual(['folder:/work/.cowriting/thesis.md/disclosure/ai-register.en.md'])
+  await user.click(screen.getByRole('button', { name: 'Copy the text' }))
+  await screen.findByText('Copied.')
+  expect(copied).toEqual(['# AI register (disclosure of AI use)'])
 })
 
 test('saving sends the text as typed, and a refused write is shown in the log', async () => {
@@ -687,6 +696,10 @@ test('the author exports the document as it is in the editor, and is told which 
   const status = await screen.findByRole('status')
   expect(status.textContent).toContain('/work/thesis.docx')
   expect(status.textContent).toContain('Not found anywhere, and left as they are in the text: @ghost1999.')
+  // the file just written can be opened and found from here
+  await user.click(within(status).getByRole('button', { name: 'Open' }))
+  await user.click(within(status).getByRole('button', { name: 'Show in its folder' }))
+  expect(calls.picked).toEqual(['open:/work/thesis.docx', 'folder:/work/thesis.docx'])
   expect(calls.exports.length).toBe(1)
   const [format, target, exportedText] = calls.exports[0]!
   expect([format, target]).toEqual(['docx', '/work/thesis.docx'])

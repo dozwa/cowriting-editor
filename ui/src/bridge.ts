@@ -15,6 +15,7 @@ export const bridgeApi: Api = {
   setApiKey: () => Promise.reject('The bridge keeps no keys.'),
   testConnection: (settings, apiKey) => call('test_connection', { settings, apiKey }),
   setPreferences: preferences => call('set_preferences', { preferences }),
+  showWritten: () => Promise.reject('The bridge shows no files.'),
   showSettingsFolder: () => Promise.reject('The bridge has no settings folder.'),
   pickFolder: async () => null,
   pickDocument: () => call('pick_document'),

@@ -18,6 +18,11 @@ export const dialogs = {
   withPrompts: 'Also write the appendix with every prompt',
   withAnswers: 'Include the AI’s answers in the appendix',
   writtenTo: 'Written to:',
+  showInFolder: 'Show in its folder',
+  openFile: 'Open',
+  copyText: 'Copy the text',
+  copied: 'Copied.',
+  hiddenFolder: 'The folder is a hidden one beside your document, so your file manager may not list it; “Show in its folder” takes you there.',
   writeDisclosure: 'Write the disclosure',
   writeAgain: 'Write again',
 

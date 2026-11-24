@@ -309,6 +309,8 @@ export const api = {
   logView: (documentText: string) => invoke<LogView>('log_view', { documentText }),
   thread: (id: string) => invoke<ThreadMessage[]>('thread', { id }),
   annotate: (reference: string, use: Use, note: string) => invoke<void>('annotate', { reference, use, note }),
+  /** Shows a file the editor has just written: marked in its folder, or opened with the system's program. */
+  showWritten: (path: string, how: 'folder' | 'open') => invoke<void>('show_written', { path, how }),
   exportDisclosure: (options: ExportOptions) => invoke<Exported>('export_disclosure', { options }),
   party: () => invoke<PartyView>('party'),
   setBrief: (key: string, body: string) => invoke<void>('set_brief', { key, body }),
