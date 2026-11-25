@@ -302,3 +302,9 @@ To try it without a model: `COWRITING_BACKEND=fake:/path/to/script.json COWRITIN
 - `suites`: the behaviour rules and the runner that asks real models.
 - `fixtures/goldens`: the plugin's own output over `fixtures/`, which the core must reproduce
   byte for byte. `scripts/make-goldens.py --plugin <plugin repo> [--check]` regenerates or checks them.
+
+## Licence
+
+CoWriting Editor is free software under the MIT licence: see [LICENSE](LICENSE).
+
+pandoc and Typst, which the installer brings along, keep their own licences: `src-tauri/tools/`.
