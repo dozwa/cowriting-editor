@@ -852,6 +852,15 @@ async fn export_document(editor: State<'_, Editor>, format: FileFormat, target: 
     Ok(made)
 }
 
+/// Makes the export in a temporary file, for the author to look at; nothing is written beside the document.
+#[tauri::command]
+async fn preview_document(editor: State<'_, Editor>, format: FileFormat, document_text: String, pdf: PdfChoice) -> Result<DocumentExport, String> {
+    let session = editor.session()?;
+    let made = noting_failure("preview", &document_text, session.preview_document_online(format, &document_text, &pdf).await)?;
+    editor.written.add(&made.path);
+    Ok(made)
+}
+
 /// Shows a file the editor wrote since it started: marked in its folder, or opened with the system's program for it.
 #[tauri::command]
 fn show_written(editor: State<Editor>, path: String, how: cowriting_app::shown::How) -> Result<(), String> {
@@ -1038,6 +1047,7 @@ fn main() {
             import_layout,
             export_layout,
             export_document,
+            preview_document,
             show_written
         ])
         .build(tauri::generate_context!())

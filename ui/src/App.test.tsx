@@ -40,7 +40,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
   let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -227,6 +227,10 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     exportLayout: async name => `/shared/${name}.json`,
     pickExport: async (_format, suggested) => suggested,
     pickWordTemplate: async () => '/templates/faculty.docx',
+    previewDocument: async (format, documentText, pdf) => {
+      calls.previews.push([format, documentText, pdf])
+      return { path: `/tmp/cowriting-preview/thesis.${format}`, cited: 2, fromZotero: 0, missing: [], warnings: [], missingFonts: [] }
+    },
     exportDocument: async (format, target, documentText, pdf) => {
       calls.exports.push([format, target, documentText])
       calls.pdf.push(pdf)
@@ -1038,6 +1042,30 @@ test('a layout is kept under a name, used again, passed on as a file and taken i
   await user.click(screen.getByRole('button', { name: 'Export' }))
   await screen.findByText(/Written to/)
   expect(calls.pdf[0]).toMatchObject({ paper: 'letter', layout: { marginCm: 3.5, twoColumns: true } })
+})
+
+test('a preview sets the document with the layout as it is now and opens it, without writing an export', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  await user.click(await screen.findByText('Type and layout'))
+  await user.selectOptions(screen.getByLabelText('Margins'), '3')
+  await user.click(screen.getByRole('button', { name: 'Preview' }))
+  expect((await screen.findByRole('status')).textContent).toContain('nothing was written beside your document')
+  // the temporary file is opened; no export was made and no place was asked for
+  expect(calls.previews.map(([format, , pdf]) => [format, pdf.layout.marginCm])).toEqual([['pdf', 3]])
+  expect(calls.picked).toEqual(['open:/tmp/cowriting-preview/thesis.pdf'])
+  expect(calls.exports).toEqual([])
+  // a change makes the preview old: its note goes
+  await user.selectOptions(screen.getByLabelText('Margins'), '2')
+  expect(screen.queryByRole('status')).toBeNull()
+  // a Word file can be looked at the same way
+  await user.selectOptions(screen.getByLabelText('Format'), 'docx')
+  await user.click(screen.getByRole('button', { name: 'Preview' }))
+  await waitFor(() => expect(calls.picked[1]).toBe('open:/tmp/cowriting-preview/thesis.docx'))
 })
 
 test('the layout a document sets in its front matter is named', () => {

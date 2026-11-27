@@ -826,6 +826,24 @@ impl Session {
         self.export_document(format, target, document_text, zotero.as_ref().map(|(csl, _)| csl.as_str()), pdf)
     }
 
+    /// Where a preview is made: in the system's folder for temporary files, never beside the document.
+    /// One file per document and kind, so a viewer that has it open shows the next preview in its place.
+    pub fn preview_target(&self, format: FileFormat) -> String {
+        let sidecar = &self.workspace.sidecar;
+        let stem = sidecar.name.rsplit_once('.').map_or(sidecar.name.as_str(), |(stem, _)| stem);
+        let folder = std::env::temp_dir().join("cowriting-preview").join(cowriting_core::sidecar::Sidecar::project_key(&sidecar.document));
+        folder.join(format!("{stem}.{}", format.extension())).to_string_lossy().into_owned()
+    }
+
+    /// The document as the export would make it, in a temporary file: to look at a layout before anything is written beside the document.
+    pub async fn preview_document_online(&self, format: FileFormat, document_text: &str, pdf: &PdfChoice) -> Result<DocumentExport, String> {
+        let target = self.preview_target(format);
+        if let Some(folder) = std::path::Path::new(&target).parent() {
+            std::fs::create_dir_all(folder).map_err(|e| format!("The preview could not be made: {e}"))?;
+        }
+        self.export_document_online(format, &target, document_text, pdf).await
+    }
+
     /// Where an export goes when the author does not choose: beside the document, under its name.
     pub fn export_target(&self, format: FileFormat) -> String {
         let sidecar = &self.workspace.sidecar;

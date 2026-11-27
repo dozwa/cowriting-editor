@@ -98,6 +98,8 @@ export const dialogs: typeof pattern = {
   zoteroNotRunning: 'Zotero mit Better BibTeX läuft nicht: Literaturangaben kommen nur aus Ihren Literaturdateien.',
   noPandoc: 'pandoc wurde nicht gefunden: Es wird mit dem Installationsprogramm des Editors geliefert, diese Kopie ist also unvollständig. pandoc von pandoc.org zu installieren, funktioniert auch.',
   noPdfEngine: 'Ein PDF braucht ein Programm, das es setzt (Typst oder ein LaTeX wie TeX Live, MacTeX oder MiKTeX), und keines wurde gefunden. Der Word-Export funktioniert ohne.',
+  previewButton: 'Vorschau',
+  previewShown: 'Die Vorschau ist im Programm Ihres Systems für solche Dateien geöffnet. Sie ist eine temporäre Datei: Neben Ihrem Dokument wurde nichts geschrieben.',
   exportedTo: path => <>Geschrieben nach {path}.</>,
   citedNothing: 'Das Dokument zitiert nichts.',
   citedSummary: (cited, fromZotero) => `${cited} zitiert, davon ${fromZotero} aus Zotero.`,

@@ -369,6 +369,8 @@ export const api = {
   },
   /** Asks the author where the export goes; null when they cancel. */
   pickExport: (format: FileFormat, suggested: string) => save({ filters: [{ name: format === 'pdf' ? 'PDF' : 'Word', extensions: [format] }], defaultPath: suggested }),
+  /** Makes the export in a temporary file, to look at; nothing is written beside the document. */
+  previewDocument: (format: FileFormat, documentText: string, pdf: PdfChoice) => invoke<DocumentExport>('preview_document', { format, documentText, pdf }),
   exportDocument: (format: FileFormat, target: string, documentText: string, pdf: PdfChoice) => invoke<DocumentExport>('export_document', { format, target, documentText, pdf }),
   sources: (documentText: string) => invoke<SourcesView>('sources', { documentText }),
   /** Asks the author for a bibliography file; null when they cancel. */

@@ -102,6 +102,8 @@ export const dialogs = {
   zoteroNotRunning: 'Zotero with Better BibTeX is not running: references come from your bibliography files only.',
   noPandoc: 'pandoc was not found: it comes with the editor’s installer, so this copy is incomplete. Installing pandoc from pandoc.org also works.',
   noPdfEngine: 'A PDF needs a program that typesets it (Typst, or a LaTeX such as TeX Live, MacTeX or MiKTeX), and none was found. Word export works without.',
+  previewButton: 'Preview',
+  previewShown: 'The preview is open in your system’s program for such files. It is a temporary file: nothing was written beside your document.',
   exportedTo: (path: ReactNode) => <>Written to {path}.</>,
   citedNothing: 'The document cites nothing.',
   citedSummary: (cited: number, fromZotero: number) => `${cited} cited, ${fromZotero} of them from Zotero.`,

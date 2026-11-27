@@ -72,6 +72,7 @@ export const bridgeApi: Api = {
   importLayout: async () => null,
   exportLayout: async () => null,
   pickExport: (_format, suggested) => call('pick_export', { suggested }),
+  previewDocument: (format, documentText, pdf) => call('preview_document', { format, documentText, pdf }),
   exportDocument: (format, target, documentText, pdf) => call('export_document', { format, target, documentText, pdf }),
   sources: documentText => call('sources', { documentText }),
   pickBibliography: () => call('pick_bibliography'),

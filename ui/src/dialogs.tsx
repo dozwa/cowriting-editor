@@ -253,6 +253,8 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   /** The name being typed for a layout to keep; null while none is asked for. */
   const [naming, setNaming] = useState<string | null>(null)
   const [savedTo, setSavedTo] = useState('')
+  /** The last preview, while nothing was changed or exported since. */
+  const [previewed, setPreviewed] = useState<DocumentExport | null>(null)
   const [isWorking, setWorking] = useState(false)
   const [error, setError] = useState('')
 
@@ -279,8 +281,27 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       if (target === null) return
       setWorking(true)
       setMade(null)
+      setPreviewed(null)
       keep(pdf)
       setMade(await api.exportDocument(format, target, getText(), { ...pdf, engine }))
+      setError('')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  /** Sets the document as the export would, in a temporary file, and opens that with the system's program for it. */
+  const preview = async () => {
+    try {
+      setWorking(true)
+      setMade(null)
+      setPreviewed(null)
+      const shown = await api.previewDocument(format, getText(), { ...pdf, engine })
+      await api.showWritten(shown.path, 'open')
+      // said only once it is open: a preview nobody sees is none
+      setPreviewed(shown)
       setError('')
     } catch (e) {
       setError(String(e))
@@ -306,6 +327,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
     const next = { ...pdf, ...change }
     setPdf(next)
     setMade(null)
+    setPreviewed(null)
     keep(next)
   }
   const layout = pdf.layout
@@ -509,8 +531,15 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
           </p>
         </div>
       )}
+      {previewed !== null && (
+        <div role="status">
+          <p className="muted">{t.previewShown}</p>
+          {previewed.missingFonts.length > 0 && <p className="hint">{t.fontsNotHere(previewed.missingFonts.map(font => `“${font}”`).join(', '))}</p>}
+        </div>
+      )}
       <div className="actions">
         <button onClick={onClose}>{t.close}</button>
+        <button disabled={setup === null || cannot !== '' || isWorking} onClick={() => void preview()}>{t.previewButton}</button>
         <button className="primary" disabled={setup === null || cannot !== '' || isWorking} onClick={() => void write()}>{isWorking ? t.exporting : t.exportButton}</button>
       </div>
     </Dialog>

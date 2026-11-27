@@ -309,3 +309,33 @@ fn a_pdf_with_latex_has_page_numbers_where_asked_a_size_of_its_own_and_the_headi
     // (that the headings are in their typeface is not read from the PDF here: XeLaTeX packs the fonts' names)
     assert!(pages("book.pdf").len() > standard.len());
 }
+
+#[tokio::test]
+async fn a_preview_is_made_among_the_temporary_files_and_leaves_nothing_beside_the_document() {
+    let folder = Folder::new("preview");
+    std::fs::write(folder.path("thesis.md"), TEXT).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    if find_program("pandoc").is_none() {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "pandoc is not there: run scripts/fetch-tools.py");
+        return;
+    }
+    let choice = PdfChoice { layout: Layout { numbered: true, ..Layout::default() }, ..PdfChoice::default() };
+    let made = session.preview_document_online(FileFormat::Docx, TEXT, &choice).await.unwrap();
+    assert!(std::path::Path::new(&made.path).starts_with(std::env::temp_dir()) && made.path.ends_with("thesis.docx"), "{}", made.path);
+    assert!(std::fs::metadata(&made.path).unwrap().len() > 1000);
+    // the next preview of the same document takes its place; another document's is another file
+    assert_eq!(session.preview_document_online(FileFormat::Docx, TEXT, &choice).await.unwrap().path, made.path);
+    std::fs::create_dir_all(folder.path("elsewhere")).unwrap();
+    std::fs::write(folder.path("elsewhere/thesis.md"), TEXT).unwrap();
+    let (other, _) = Session::open(Arc::new(DiskHost), &folder.path("elsewhere/thesis.md")).unwrap();
+    assert_ne!(other.preview_target(FileFormat::Docx), made.path);
+    if local_tools().pdf_engines.first().map(String::as_str) == Some("typst") {
+        let pdf = session.preview_document_online(FileFormat::Pdf, TEXT, &choice).await.unwrap();
+        assert!(text_of(&pdf.path, Kind::Pdf).unwrap().contains("1.1 Sample"), "the preview has the layout");
+        let _ = std::fs::remove_file(&pdf.path);
+    }
+    let _ = std::fs::remove_file(&made.path);
+    let mut beside: Vec<String> = std::fs::read_dir(&folder.0).unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    beside.sort();
+    assert_eq!(beside, ["elsewhere", "thesis.md"], "nothing was written beside the document");
+}

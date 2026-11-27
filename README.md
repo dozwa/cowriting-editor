@@ -89,6 +89,11 @@ starts with what you chose last. If your document sets one of these itself in it
 comes first, and the dialog says which. The export also tells the typesetter your document's
 language, so that words are hyphenated by its rules.
 
+**Preview.** "Preview" in the export dialog sets the document as the export would, PDF or Word,
+with the layout as it is at that moment, and opens it in your system's program for such files.
+It is a temporary file: nothing is written beside your document, and the next preview takes its
+place.
+
 **Kept layouts.** "Keep this layout…" keeps the paper and the layout under a name of your choice
 ("Thesis, faculty of medicine"), and "Kept layouts" sets them again in any project. Each is one
 small file in the editor's own folder (`layouts/<name>.json`). To pass one on, save it as a file
