@@ -31,6 +31,7 @@ to a new heading with its version and date; the release workflow does that (see 
   the document (the picture itself is never moved or changed), or name it where it is. Not yet
   looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
+- The lock file of the interface's packages fits a clean install again; adding the search package had dropped two entries, and every check on `dev` failed at `npm ci`.
 - **Pictures by drop and from the clipboard.** A picture file dropped on the text is placed
   where it is dropped, with the same question as the button for a picture outside the
   document's folder. A picture pasted from the clipboard is saved into the pictures folder as
