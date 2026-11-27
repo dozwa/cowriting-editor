@@ -195,8 +195,13 @@ impl Bridge {
                 Ok(json!([
                     runtime.block_on(cowriting_app::export_tools()),
                     session.export_target(cowriting_app::FileFormat::Pdf),
-                    session.export_target(cowriting_app::FileFormat::Docx)
+                    session.export_target(cowriting_app::FileFormat::Docx),
+                    session.export_choice()
                 ]))
+            }
+            "keep_export_choice" => {
+                let pdf = serde_json::from_value(args["pdf"].clone()).map_err(|e| e.to_string())?;
+                self.session()?.keep_export_choice(&pdf).map(|_| Value::Null)
             }
             "pick_export" => Ok(args["suggested"].clone()),
             "export_document" => {

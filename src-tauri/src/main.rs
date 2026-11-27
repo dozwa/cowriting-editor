@@ -793,12 +793,18 @@ async fn check_references(editor: State<'_, Editor>, document_text: String) -> R
 
 /// What there is to export with, and where the export would go.
 #[tauri::command]
-async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Result<(ExportTools, String, String), String> {
+async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Result<(ExportTools, String, String, Option<PdfChoice>), String> {
     let session = editor.session()?;
     // beside the document, or in the folder the author chose for exports
     let folder = read_file(&app).preferences.export_folder;
     let target = |format| in_export_folder(&session.export_target(format), &folder);
-    Ok((export_tools().await, target(FileFormat::Pdf), target(FileFormat::Docx)))
+    Ok((export_tools().await, target(FileFormat::Pdf), target(FileFormat::Docx), session.export_choice()))
+}
+
+/// Keeps how the open project's exports are set.
+#[tauri::command]
+fn keep_export_choice(editor: State<Editor>, pdf: PdfChoice) -> Result<(), String> {
+    editor.session()?.keep_export_choice(&pdf)
 }
 
 #[tauri::command]
@@ -988,6 +994,7 @@ fn main() {
             search_sources,
             check_references,
             export_setup,
+            keep_export_choice,
             export_document,
             show_written
         ])

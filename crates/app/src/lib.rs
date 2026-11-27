@@ -773,6 +773,22 @@ impl Session {
         Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
     }
 
+    /// How this project's exports are set, when that was ever chosen here: a call for papers asks for a
+    /// layout per document, not per computer. What cannot be read counts as never chosen.
+    pub fn export_choice(&self) -> Option<PdfChoice> {
+        let project = Project::load(self.workspace.host.as_ref(), &self.workspace.sidecar);
+        project.export.and_then(|kept| serde_json::from_value(kept).ok())
+    }
+
+    /// Keeps how this project's exports are set, with the project's settings.
+    pub fn keep_export_choice(&self, choice: &PdfChoice) -> Result<(), String> {
+        let kept = PdfChoice { layout: choice.layout.within_limits(), ..choice.clone() };
+        self.change_project(|project| {
+            project.export = Some(serde_json::to_value(&kept).map_err(error)?);
+            Ok(())
+        })
+    }
+
     /// The export with the references looked up in the author's Zotero, when it is running.
     pub async fn export_document_online(&self, format: FileFormat, target: &str, document_text: &str, pdf: &PdfChoice) -> Result<DocumentExport, String> {
         let cited: Vec<String> = cited_keys(document_text).into_iter().collect();

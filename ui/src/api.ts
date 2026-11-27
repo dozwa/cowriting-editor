@@ -319,8 +319,10 @@ export const api = {
   setScope: (text: string, documentText: string) => invoke<void>('set_scope', { text, documentText }),
   /** Sends the plan's points and the document to the model; logged. */
   checkPoints: (documentText: string) => invoke<CheckSummary>('check_points', { documentText }),
-  /** What there is to export with, and where a PDF and a Word file would go. */
-  exportSetup: () => invoke<[ExportTools, string, string]>('export_setup'),
+  /** What there is to export with, where a PDF and a Word file would go, and how this project's exports were last set (null: never). */
+  exportSetup: () => invoke<[ExportTools, string, string, PdfChoice | null]>('export_setup'),
+  /** Keeps how this project's exports are set, with the project's settings. */
+  keepExportChoice: (pdf: PdfChoice) => invoke<void>('keep_export_choice', { pdf }),
   /** Asks the author where the export goes; null when they cancel. */
   pickExport: (format: FileFormat, suggested: string) => save({ filters: [{ name: format === 'pdf' ? 'PDF' : 'Word', extensions: [format] }], defaultPath: suggested }),
   exportDocument: (format: FileFormat, target: string, documentText: string, pdf: PdfChoice) => invoke<DocumentExport>('export_document', { format, target, documentText, pdf }),

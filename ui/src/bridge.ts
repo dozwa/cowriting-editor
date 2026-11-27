@@ -65,6 +65,7 @@ export const bridgeApi: Api = {
   setScope: (text, documentText) => call('set_scope', { text, documentText }),
   checkPoints: documentText => call('check_points', { documentText }),
   exportSetup: () => call('export_setup'),
+  keepExportChoice: pdf => call('keep_export_choice', { pdf }),
   pickExport: (_format, suggested) => call('pick_export', { suggested }),
   exportDocument: (format, target, documentText, pdf) => call('export_document', { format, target, documentText, pdf }),
   sources: documentText => call('sources', { documentText }),

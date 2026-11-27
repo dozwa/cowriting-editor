@@ -162,20 +162,27 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
 /** The typesetting programs by the names authors know; read when drawn, for the language shown now. */
 const engineNames = (): Record<string, string> => ({ typst: m.dialogs.typstEngine, xelatex: 'LaTeX (XeLaTeX)', lualatex: 'LaTeX (LuaLaTeX)', pdflatex: 'LaTeX (pdfLaTeX)', tectonic: 'LaTeX (Tectonic)' })
 
-/** What the author chose last time, kept in this window's storage; a guess from the system's language the first time. */
-function rememberedPdf(): PdfChoice {
-  const fallback: PdfChoice = { engine: null, paper: /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4', layout: STANDARD_LAYOUT }
+/** A kept choice, read with care: whatever is missing or of the wrong kind is the standard. The paper is a guess from the system's language when none is kept. */
+export function pdfChoiceFrom(kept: unknown): PdfChoice {
+  const choice = (typeof kept === 'object' && kept !== null ? kept : {}) as Partial<PdfChoice>
+  const layout = (typeof choice.layout === 'object' && choice.layout !== null ? choice.layout : {}) as Partial<PdfLayout>
+  const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+  return {
+    engine: typeof choice.engine === 'string' ? choice.engine : null,
+    paper: choice.paper === 'letter' || choice.paper === 'a4' ? choice.paper : /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4',
+    layout: { font: typeof layout.font === 'string' ? layout.font : '', fontSize: number(layout.fontSize), marginCm: number(layout.marginCm), lineSpacing: number(layout.lineSpacing), indent: layout.indent === true, ragged: layout.ragged === true, numbered: layout.numbered === true },
+  }
+}
+
+/**
+ * What was chosen last on this computer, in whatever project: where a project starts from that has
+ * no choice of its own yet. Kept in this window's storage.
+ */
+function lastPdfChoice(): PdfChoice {
   try {
-    const kept = JSON.parse(localStorage.getItem('cowriting.pdf') ?? 'null') as Partial<PdfChoice> | null
-    const layout = (kept?.layout ?? {}) as Partial<PdfLayout>
-    const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
-    return {
-      engine: typeof kept?.engine === 'string' ? kept.engine : null,
-      paper: kept?.paper === 'letter' || kept?.paper === 'a4' ? kept.paper : fallback.paper,
-      layout: { font: typeof layout.font === 'string' ? layout.font : '', fontSize: number(layout.fontSize), marginCm: number(layout.marginCm), lineSpacing: number(layout.lineSpacing), indent: layout.indent === true, ragged: layout.ragged === true, numbered: layout.numbered === true },
-    }
+    return pdfChoiceFrom(JSON.parse(localStorage.getItem('cowriting.pdf') ?? 'null'))
   } catch {
-    return fallback
+    return pdfChoiceFrom(null)
   }
 }
 
@@ -195,13 +202,17 @@ export function layoutInFrontMatter(text: string): string[] {
 export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): string; onClose(): void }) {
   const [setup, setSetup] = useState<{ tools: ExportTools; targets: Record<FileFormat, string> } | null>(null)
   const [format, setFormat] = useState<FileFormat>('pdf')
-  const [pdf, setPdf] = useState<PdfChoice>(rememberedPdf)
+  const [pdf, setPdf] = useState<PdfChoice>(lastPdfChoice)
   const [made, setMade] = useState<DocumentExport | null>(null)
   const [isWorking, setWorking] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.exportSetup().then(([tools, pdf, docx]) => setSetup({ tools, targets: { pdf, docx } }), e => setError(String(e)))
+    api.exportSetup().then(([tools, pdf, docx, kept]) => {
+      setSetup({ tools, targets: { pdf, docx } })
+      // the project's own choice comes before what was chosen last on this computer
+      if (kept !== null) setPdf(pdfChoiceFrom(kept))
+    }, e => setError(String(e)))
   }, [api])
 
   const write = async () => {
@@ -211,6 +222,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       if (target === null) return
       setWorking(true)
       setMade(null)
+      keep(pdf)
       setMade(await api.exportDocument(format, target, getText(), { ...pdf, engine }))
       setError('')
     } catch (e) {
@@ -224,15 +236,20 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   const engines = tools?.pdfEngines ?? []
   // a remembered engine that is gone falls back to the standard one
   const engine = pdf.engine !== null && engines.includes(pdf.engine) ? pdf.engine : (engines[0] ?? null)
+  /** Keeps a choice with the project, and as the one a new project starts from. A choice that cannot be kept still holds for this export. */
+  const keep = (choice: PdfChoice) => {
+    void api.keepExportChoice(choice).catch(() => {})
+    try {
+      localStorage.setItem('cowriting.pdf', JSON.stringify(choice))
+    } catch {
+      // not remembered, then
+    }
+  }
   const choose = (change: Partial<PdfChoice>) => {
     const next = { ...pdf, ...change }
     setPdf(next)
     setMade(null)
-    try {
-      localStorage.setItem('cowriting.pdf', JSON.stringify(next))
-    } catch {
-      // not remembered, then
-    }
+    keep(next)
   }
   const layout = pdf.layout
   const lay = (change: Partial<PdfLayout>) => choose({ layout: { ...layout, ...change } })

@@ -35,7 +35,8 @@ let lastEditor: Editor & Seen
 /** What the app's window calls when files are dropped on it; set by the stand-in. */
 let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]> } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice } = {}) {
+  let exportChoice: PdfChoice | null = options.exportChoice ?? null
   const turns: TurnRow[] = []
   let release = () => {}
   const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
@@ -209,7 +210,8 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       watch.hints.unshift({ turn: `t${turns.length}`, persona: 'reviewer-2', who: 'Reviewer #2', line: 4, text: 'Why should a reader believe this?', ts: '2026-11-23T10:06:00.000Z' })
       return { kind: 'reviewed', hints: 1, ts: '2026-11-23T10:06:00.000Z' }
     },
-    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx'],
+    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx', exportChoice],
+    keepExportChoice: async pdf => void (exportChoice = pdf),
     pickExport: async (_format, suggested) => suggested,
     exportDocument: async (format, target, documentText, pdf) => {
       calls.exports.push([format, target, documentText])
@@ -878,6 +880,31 @@ test('the type and layout of a PDF can be set as a call for papers asks, are rem
   await user.click(screen.getByRole('button', { name: 'Back to the standard' }))
   expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('')
   expect((screen.getByLabelText(/Indent the first line/) as HTMLInputElement).checked).toBe(false)
+})
+
+test('a project keeps its own layout, and a project without one starts from what was chosen last on this computer', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  // chosen in some other project on this computer
+  localStorage.setItem('cowriting.pdf', JSON.stringify({ engine: null, paper: 'letter', layout: { ...STANDARD_LAYOUT, marginCm: 4 } }))
+  const first = standIn()
+  const { unmount } = render(<App api={first.api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  expect(((await screen.findByLabelText('Margins')) as HTMLSelectElement).value).toBe('4')
+  // what is set now is kept with the project, not only in the window
+  await user.selectOptions(screen.getByLabelText('Margins'), '2.5')
+  expect((await first.api.exportSetup())[3]?.layout.marginCm).toBe(2.5)
+  unmount()
+
+  // a project with a layout of its own shows that one, whatever this computer chose last
+  const own = standIn({ exportChoice: { engine: null, paper: 'a4', layout: { ...STANDARD_LAYOUT, marginCm: 3, numbered: true } } })
+  render(<App api={own.api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  await waitFor(() => expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('3'))
+  expect((screen.getByLabelText('Paper') as HTMLSelectElement).value).toBe('a4')
+  expect((screen.getByLabelText(/Number the headings/) as HTMLInputElement).checked).toBe(true)
 })
 
 test('the layout a document sets in its front matter is named', () => {

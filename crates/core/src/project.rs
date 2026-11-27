@@ -82,6 +82,10 @@ pub struct Project {
     /// The folder beside the document that copies of pictures go into, when it is not `images`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pictures_folder: Option<String>,
+    /// How this project's PDF and Word files are set: paper, typesetter, layout. The export keeps it
+    /// here in its own form (`PdfChoice` in the app), which this crate does not need to know.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub export: Option<serde_json::Value>,
     /// What a newer version of the editor wrote here and this one does not know: kept as it is.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,

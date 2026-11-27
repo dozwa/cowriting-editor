@@ -75,8 +75,9 @@ Word file are set in Word.
 papers or a faculty usually prescribes: the typeface of the text (one of those on your computer),
 its size (10, 11 or 12 pt), the margins, the line spacing, paragraphs with an indent instead of a
 space between them, ragged right instead of justified, and numbered headings. What you leave at
-"Standard" is as pandoc's template has it. The choice is remembered for the next export, on this
-computer. If your document sets one of these itself in its front matter (`fontsize: 11pt`,
+"Standard" is as pandoc's template has it. The choice is kept with the
+project (see Projects), so every document has its own; a document you export for the first time
+starts with what you chose last. If your document sets one of these itself in its front matter (`fontsize: 11pt`,
 `geometry: margin=3cm`, `linestretch`, `mainfont`, …), that comes first, and the dialog says which.
 The export also tells the typesetter your document's language, so that words are hyphenated by its
 rules. pdfLaTeX cannot use the typefaces of your system; XeLaTeX, LuaLaTeX and Typst can.

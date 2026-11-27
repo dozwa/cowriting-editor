@@ -140,3 +140,31 @@ fn a_pdf_follows_the_layout_with_a_latex_that_is_installed() {
     let (plain, _) = exported(&session, &folder, "standard.pdf", TEXT, &PdfChoice { engine: Some(engine.into()), ..PdfChoice::default() });
     assert!(!plain.contains("1 Method"), "{plain}");
 }
+
+#[test]
+fn a_projects_layout_is_kept_with_the_project_and_not_with_the_document() {
+    let folder = Folder::new("kept");
+    std::fs::write(folder.path("thesis.md"), TEXT).unwrap();
+    let projects = folder.path("config/projects");
+    let (session, _) = Session::open_in(Arc::new(DiskHost), &folder.path("thesis.md"), Some(&projects)).unwrap();
+    assert_eq!(session.export_choice(), None, "nothing was ever chosen here");
+
+    let choice = PdfChoice { engine: Some("xelatex".into()), paper: Paper::Letter, layout: Layout { font_size: Some(48), ..thesis_layout() } };
+    session.keep_export_choice(&choice).unwrap();
+    // what the export could not set is not kept either
+    let kept = PdfChoice { layout: Layout { font_size: None, ..thesis_layout() }, ..choice.clone() };
+    assert_eq!(session.export_choice(), Some(kept.clone()));
+    // it is in the project's settings, in the editor's own folder: nothing appears beside the document
+    assert!(!std::path::Path::new(&folder.path(".cowriting")).exists());
+    assert!(std::fs::read_to_string(session.project_view().folder + "/project.json").unwrap().contains("\"lineSpacing\": 1.5"));
+
+    // opened again, the project still has it; the other settings of the project are not touched by it
+    session.set_pictures_folder("figures").unwrap();
+    let (again, _) = Session::open_in(Arc::new(DiskHost), &folder.path("thesis.md"), Some(&projects)).unwrap();
+    assert_eq!(again.export_choice(), Some(kept));
+    assert_eq!(again.pictures_folder(), "figures");
+    // another document has none
+    std::fs::write(folder.path("other.md"), TEXT).unwrap();
+    let (other, _) = Session::open_in(Arc::new(DiskHost), &folder.path("other.md"), Some(&projects)).unwrap();
+    assert_eq!(other.export_choice(), None);
+}
