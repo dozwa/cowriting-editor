@@ -46,6 +46,7 @@ its version and date (see `RELEASING.md`). Numbers like #7 are issues on GitHub.
   An alpha is built by its tag, `v0.1.1-alpha`, as before under the name CoWriting Editor. The
   footer shows such a version as it is. See `RELEASING.md`.
 - One script sets the version in every file, and CI checks that they agree.
+- `DEVELOPING.md` says how to work with the dev app and how to make an alpha.
 - CI checks and tests every push and builds the dev app only when it is started by hand.
 - The Windows `.msi` and the Linux `.rpm`, which were never published, are no longer built.
 - The release build leaves out signing secrets that are not set.

@@ -18,6 +18,8 @@ store and its own defaults; a document's `.cowriting` folder is the same for bot
 `tauri build` and CI all make the dev app. Only the release workflow lays
 `src-tauri/tauri.release.conf.json` over it, which gives the released name and identifier.
 
+The commands for both, day to day, are in `DEVELOPING.md`.
+
 ## Versions
 
 `main` holds a dev version: the next alpha's number with `-dev` behind it. After `0.1.1-alpha`
