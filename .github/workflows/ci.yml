@@ -1,9 +1,13 @@
 name: CI
 
+# A push or a pull request is checked and tested. The app itself is built only when the workflow is
+# started by hand (Actions → CI → Run workflow, or `gh workflow run ci.yml`): a version is out already,
+# and installers are made when someone asks for them. A release is built by its tag (release.yml).
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check:
@@ -43,8 +47,10 @@ jobs:
         env:
           COWRITING_NEED_TOOLS: 1
       - name: Unsigned build
+        if: github.event_name == 'workflow_dispatch'
         run: ui/node_modules/.bin/tauri build
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: cowriting-editor-${{ matrix.os }}
           path: |
