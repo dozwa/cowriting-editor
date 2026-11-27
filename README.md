@@ -66,6 +66,10 @@ place. The line between text and side panel can be dragged; a double-click puts 
 sentence you are not sure about, a note to yourself. It stays in the file, is not counted as words
 and is in no export. The AI still reads it.
 
+The top bar counts the **words and characters** of your text (with spaces; the count without them
+is shown when the pointer rests on it). Front matter, code, comments, citation keys and markdown's
+marks are not counted, and of a link only its text is a character.
+
 "How markdown works", at the end of the row, shows the marks worth knowing. Its two links open
 commonmark.org/help and pandoc's manual in your browser. With zotero.org/styles (from the Sources
 tab) these are the only web pages the editor ever opens, and their addresses are fixed in the app.

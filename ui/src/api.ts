@@ -136,6 +136,8 @@ export type AiTextRow = {
 export type ExternalUse = { id: string; tool: string; model: string; date: string; purpose: string; material: string; result: string; checked: string }
 
 export type LogView = {
+  /** the document's characters, counted as the words are: a run of spaces is one, marks and addresses are left out */
+  chars: { withSpaces: number; withoutSpaces: number }
   /** what the author stated about other AI tools, the first statement first */
   external: ExternalUse[]
   stats: { turns: number; today: number; unannotated: number; aiText: number; annotations: number; rejected: number; guardEvents: number }

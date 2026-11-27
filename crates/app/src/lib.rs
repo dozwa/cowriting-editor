@@ -36,7 +36,7 @@ use cowriting_core::types::{AiTextEntry, AnnotationEntry};
 use cowriting_core::types::{LogEntry, Stats, ThreadMessage};
 use cowriting_core::watch::Pace;
 use cowriting_core::words::{changed_paragraphs, paragraphs};
-use cowriting_core::words::{count_words, Format};
+use cowriting_core::words::{count_chars, count_words, Chars, Format};
 pub use export::{DocumentExport, ExportTools, FileFormat, Paper, PdfChoice};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -122,6 +122,8 @@ pub struct LogView {
     /// AI use outside the editor, as the author stated it; the first statement first.
     pub external: Vec<ExternalUse>,
     pub words: usize,
+    /// The document's characters, counted as the words are, with and without spaces.
+    pub chars: Chars,
 }
 
 /// AI use outside the editor as the author states it. `id` is empty for a new statement, and names the one a correction replaces.
@@ -1181,7 +1183,15 @@ impl Session {
             .into_iter()
             .map(|e| ExternalUse { id: e.id, tool: e.tool, model: e.model, date: e.date, purpose: e.purpose, material: e.material, result: e.result, checked: e.checked })
             .collect();
-        Ok(LogView { stats: compute_stats(&entries, &today, &party), turns: rows, guard, ai_text, external, words: count_words(document_text, Format::Markdown) })
+        Ok(LogView {
+            stats: compute_stats(&entries, &today, &party),
+            turns: rows,
+            guard,
+            ai_text,
+            external,
+            words: count_words(document_text, Format::Markdown),
+            chars: count_chars(document_text, Format::Markdown),
+        })
     }
 
     /// Writes the AI register, and the prompts appendix if asked for, into the sidecar's `disclosure/`.

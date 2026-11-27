@@ -59,7 +59,7 @@ export type Live = {
   steps: string[]
 }
 
-const EMPTY_LOG: LogView = { stats: { turns: 0, today: 0, unannotated: 0, aiText: 0, annotations: 0, rejected: 0, guardEvents: 0 }, turns: [], guard: [], aiText: [], external: [], words: 0 }
+const EMPTY_LOG: LogView = { stats: { turns: 0, today: 0, unannotated: 0, aiText: 0, annotations: 0, rejected: 0, guardEvents: 0 }, turns: [], guard: [], aiText: [], external: [], words: 0, chars: { withSpaces: 0, withoutSpaces: 0 } }
 
 /** What the author is told when text from an AI answer entered the document. */
 function foundNotice(rows: AiTextRow[]): string {
@@ -590,7 +590,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
           <span className={isDirty ? 'state dirty' : 'state'}>{isDirty ? m.app.notSaved : m.app.saved}</span>
         </span>
         <span className="spacer" />
-        <span className="muted">{m.app.words(log.words)}</span>
+        <span className="muted" title={m.app.charsDetail(log.chars.withSpaces, log.chars.withoutSpaces)}>{m.app.words(log.words)} · {m.app.chars(log.chars.withSpaces)}</span>
         <button data-tour="finish" onClick={() => setDialog('export')}>{m.app.export}</button>
         <button data-tour="finish" onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0 && log.external.length === 0} title={log.stats.turns === 0 && log.external.length === 0 ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
         <button data-tour="settings around" onClick={() => setDialog('settings')}>{m.app.settings}</button>

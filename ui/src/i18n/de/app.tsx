@@ -18,7 +18,10 @@ export const app: typeof pattern = {
   moveTitle: 'Dieses Dokument umbenennen oder verschieben. Sein KI-Protokoll geht mit.',
   saved: 'gespeichert',
   notSaved: 'nicht gespeichert',
-  words: (n: number) => `${n} ${n === 1 ? 'Wort' : 'Wörter'}`,
+  words: (n: number) => `${n.toLocaleString('de')} ${n === 1 ? 'Wort' : 'Wörter'}`,
+  chars: (n: number) => `${n.toLocaleString('de')} Zeichen`,
+  charsDetail: (withSpaces: number, withoutSpaces: number) =>
+    `${withSpaces.toLocaleString('de')} Zeichen mit Leerzeichen, ${withoutSpaces.toLocaleString('de')} ohne. Nicht gezählt: Kopfdaten, Code, Kommentare, Zitierschlüssel, Markdown-Zeichen, die Adressen von Links und Bilder.`,
   export: 'Exportieren…',
   disclosure: 'Offenlegung…',
   nothingToDisclose: 'Noch nichts offenzulegen: Die KI wurde nicht gefragt',

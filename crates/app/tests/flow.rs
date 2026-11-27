@@ -101,6 +101,8 @@ async fn open_ask_classify_export_and_everything_is_on_disk() {
     assert_eq!(view.guard.len(), 1);
     assert!(view.guard[0].refused);
     assert_eq!(view.words, 15);
+    // the heading's hash is no character of the text, and the empty lines are one space each
+    assert_eq!((view.chars.with_spaces, view.chars.without_spaces), (84, 70));
 
     // a first choice the author then thinks better of: the log keeps both, the later one counts
     session.annotate(&outcome.id, "rejected", "").unwrap();

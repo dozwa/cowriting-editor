@@ -18,6 +18,11 @@ to a new heading with its version and date; the release workflow does that (see 
 - **Comment out.** A button in the markdown bar (Cmd or Ctrl with Shift and C) puts `<!-- -->`
   around what is selected, or around the line the cursor is in, and takes it off again. Text in a
   comment stays in the file and is in no PDF or Word export; the AI still reads it. (#6)
+- **Characters beside the words.** The top bar shows the number of characters with spaces, and
+  the number without them when the pointer rests on it. Counted is what a reader reads: front
+  matter, code, comments, citation keys, markdown's marks, the addresses of links, and pictures
+  are left out; a run of spaces or line ends is one space. The words are counted as before, so
+  a link's address is still a word there. (#8)
 
 ### Fixed
 

@@ -73,6 +73,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     aiText: aiText.map(row => ({ ...row, stillInText: text.includes(row.excerpt) })),
     external: external.map(row => ({ ...row })),
     words: 7,
+    chars: { withSpaces: 12345, withoutSpaces: 10321 },
   })
   let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
@@ -1146,6 +1147,9 @@ test('the editor speaks German as soon as it is chosen, and the three languages 
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
+  // words and characters, with the other count of characters behind it
+  const counts = await screen.findByText('7 words · 12,345 characters')
+  expect(counts.title).toContain('12,345 characters with spaces, 10,321 without.')
   await user.click(screen.getByRole('button', { name: 'Settings…' }))
   let dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
   await user.click(dialog.getByRole('tab', { name: 'Language' }))
@@ -1154,6 +1158,7 @@ test('the editor speaks German as soon as it is chosen, and the three languages 
   await user.selectOptions(dialog.getByLabelText(/^Language of the editor/), 'de')
   dialog = within(screen.getByRole('dialog', { name: 'Einstellungen' }))
   expect(document.documentElement.lang).toBe('de')
+  expect(screen.getByText('7 Wörter · 12.345 Zeichen').title).toContain('12.345 Zeichen mit Leerzeichen, 10.321 ohne.')
   await user.selectOptions(dialog.getByLabelText(/^Sprache, in der Sie schreiben/), 'en')
   await user.selectOptions(dialog.getByLabelText(/^Sprache, in der die KI antwortet/), 'de')
   await user.click(dialog.getByRole('button', { name: 'Speichern' }))

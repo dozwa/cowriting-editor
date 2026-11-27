@@ -19,7 +19,10 @@ export const app = {
   moveTitle: 'Rename or move this document. Its AI log goes with it.',
   saved: 'saved',
   notSaved: 'not saved',
-  words: (n: number) => `${n} ${n === 1 ? 'word' : 'words'}`,
+  words: (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'word' : 'words'}`,
+  chars: (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'character' : 'characters'}`,
+  charsDetail: (withSpaces: number, withoutSpaces: number) =>
+    `${withSpaces.toLocaleString('en')} characters with spaces, ${withoutSpaces.toLocaleString('en')} without. Not counted: front matter, code, comments, citation keys, markdown's marks, the addresses of links, and pictures.`,
   export: 'Export…',
   disclosure: 'Disclosure…',
   nothingToDisclose: 'Nothing to disclose yet: the AI has not been asked',
