@@ -76,3 +76,24 @@ fn a_latex_file_says_first_which_fonts_pdflatex_needs() {
         assert!(register(lang, DocFormat::Md).starts_with("# "));
     }
 }
+
+#[test]
+fn a_model_on_the_authors_computer_is_named_by_its_program_not_by_its_address() {
+    let log = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/logs/full.jsonl")).unwrap();
+    let served_by = |provider: &str, lang: Lang| {
+        let log = log.replace("\"plugin\": \"0.1.0\", \"claude_code\": \"2.1.300\"", &format!("\"editor\": \"0.1.0\", \"provider\": \"{provider}\""));
+        let text = disclosure(&parse_log(&log), "thesis.md", lang, DocFormat::Md, Profile::Editor);
+        let row = text.lines().find(|line| line.contains("CoWriting Editor 0.1.0; ") && line.contains("(claude-opus-5-5) |")).unwrap_or_else(|| panic!("{text}"));
+        row.split(" | ").nth(1).unwrap().to_string()
+    };
+    // what the log holds for a local server, with the address it was reached at
+    assert_eq!(served_by("a local model server (localhost:11434)", Lang::En), "CoWriting Editor 0.1.0; Ollama (local) (claude-opus-5-5)");
+    assert_eq!(served_by("a local model server (127.0.0.1:11434)", Lang::De), "CoWriting Editor 0.1.0; Ollama (lokal) (claude-opus-5-5)");
+    assert_eq!(served_by("a local model server (localhost:1234)", Lang::En), "CoWriting Editor 0.1.0; LM Studio (local) (claude-opus-5-5)");
+    // another port, or none: local, and no address
+    assert_eq!(served_by("a local model server (localhost:8080)", Lang::En), "CoWriting Editor 0.1.0; a local model server (claude-opus-5-5)");
+    assert_eq!(served_by("a local model server (localhost)", Lang::De), "CoWriting Editor 0.1.0; ein lokaler Modellserver (claude-opus-5-5)");
+    // every other provider stands as the log names it
+    assert_eq!(served_by("OpenAI-compatible API at llm.uni-example.de", Lang::De), "CoWriting Editor 0.1.0; OpenAI-compatible API at llm.uni-example.de (claude-opus-5-5)");
+    assert_eq!(served_by("Anthropic", Lang::En), "CoWriting Editor 0.1.0; Anthropic (claude-opus-5-5)");
+}

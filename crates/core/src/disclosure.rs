@@ -150,8 +150,24 @@ fn sorted_set<'a>(items: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
     items.collect::<BTreeSet<_>>().into_iter().collect()
 }
 
+/// A provider as the register names it. The log says where a model on the author's own computer was reached
+/// ("a local model server (localhost:11434)"); a reader of the register is told which program that is, by its
+/// usual port, and that it is local. The address means nothing outside that computer.
+fn provider_label(logged: &str, lang: Lang) -> String {
+    let Some(host) = logged.strip_prefix("a local model server (").and_then(|rest| rest.strip_suffix(')')) else {
+        return logged.to_string();
+    };
+    let de = lang == Lang::De;
+    let program = match host.rsplit_once(':').map(|(_, port)| port) {
+        Some("11434") => "Ollama",
+        Some("1234") => "LM Studio",
+        _ => return if de { "ein lokaler Modellserver" } else { "a local model server" }.to_string(),
+    };
+    format!("{program} ({})", if de { "lokal" } else { "local" })
+}
+
 /// What made the turns, as the log recorded it.
-fn tool_label(items: &[&Turn], profile: Profile) -> String {
+fn tool_label(items: &[&Turn], profile: Profile, lang: Lang) -> String {
     let models = sorted_set(items.iter().map(|t| t.response.model.as_deref().unwrap_or("unknown")));
     let models = if models.is_empty() { String::new() } else { format!(" ({})", models.join(", ")) };
     let versions = |of: fn(&ResponseEntry) -> Option<&str>| sorted_set(items.iter().filter_map(|t| of(t.response)).filter(|v| !v.is_empty()));
@@ -169,9 +185,9 @@ fn tool_label(items: &[&Turn], profile: Profile) -> String {
         // 'CoWriting Editor 0.1.0; Anthropic (claude-opus-5-5)'
         Profile::Editor => {
             let mut parts = vec![named("CoWriting Editor", versions(|r| r.editor.as_deref()))];
-            let providers = versions(|r| r.provider.as_deref());
+            let providers: BTreeSet<String> = versions(|r| r.provider.as_deref()).into_iter().map(|logged| provider_label(logged, lang)).collect();
             if !providers.is_empty() {
-                parts.push(providers.join(", "));
+                parts.push(providers.into_iter().collect::<Vec<_>>().join(", "));
             }
             format!("{}{models}", parts.join("; "))
         }
@@ -328,7 +344,7 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         let chapters = sorted_set(items.iter().filter_map(|t| t.annotation).filter_map(|a| a.chapter.as_deref()).filter(|c| !c.is_empty()));
         rows.push(Row {
             purpose: category_label(lang, category).to_string(),
-            tool: tool_label(items, profile),
+            tool: tool_label(items, profile, lang),
             extent: {
                 let (first, last) = (dates[0], dates[dates.len() - 1]);
                 // one day is a date, not a range; the plugin's register writes the range either way
