@@ -6,6 +6,9 @@ installers for macOS, Windows and Linux, with pandoc and Typst inside, and puts 
 
 Set the version in `Cargo.toml` (`[workspace.package]`) and `src-tauri/tauri.conf.json` first.
 
+In `CHANGELOG.md`, move what the release takes from "In the repository, in no release" to a new
+heading under "Releases", with the version and the date. What stays behind is in no release.
+
 ## What is not done yet
 
 - **The release workflow ran once, for v0.1.0.** Windows and Linux built; the macOS job failed on
