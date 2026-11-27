@@ -183,6 +183,13 @@ mod turns {
         let (_, _, outcome, _) = turn("CRASH").await;
         let error = outcome.err().unwrap().to_string();
         assert!(error.contains("stopped without an answer: something broke inside"), "{error}");
+        // a Claude Code that does not know the editor's options: the author is told to update it, and which version it is
+        let (_, workspace, outcome, _) = turn("TOO-OLD").await;
+        let error = outcome.err().unwrap().to_string();
+        assert!(error.contains("Claude Code on this computer is too old for the editor (version 1.0.123). Update it: run “claude update”"), "{error}");
+        assert!(error.contains("npm install -g @anthropic-ai/claude-code@latest") && error.ends_with("(Claude Code said: error: unknown option '--tools')"), "{error}");
+        assert!(!workspace.log.read().unwrap().iter().any(|e| matches!(e, LogEntry::Response(_))), "nothing was answered");
+        assert!(cowriting_backends::claude_code::too_old(None, "error: unknown option '--tools'").starts_with("Claude Code on this computer is too old for the editor. Update it"));
         let host = Arc::new(MemoryHost::default());
         host.write(DOCUMENT, TEXT).unwrap();
         let workspace = Workspace::open(host.clone(), DOCUMENT, "0.1.0");

@@ -8,6 +8,9 @@ import sys
 import urllib.request
 
 args = sys.argv[1:]
+if args == ["--version"]:
+    print("1.0.123 (Claude Code)")
+    sys.exit(0)
 after = lambda flag: args[args.index(flag) + 1] if flag in args else None
 question = sys.stdin.read()
 system = open(after("--system-prompt-file"), encoding="utf-8").read()
@@ -33,6 +36,10 @@ def say(text):
 
 if "NOT-SIGNED-IN" in question:
     emit({"type": "result", "subtype": "success", "is_error": True, "result": "Not logged in · Please run /login"})
+    sys.exit(1)
+if "TOO-OLD" in question:
+    # a Claude Code from before the options the editor starts it with: its option parser stops it
+    print("error: unknown option '--tools'", file=sys.stderr)
     sys.exit(1)
 if "CRASH" in question:
     print("something broke inside", file=sys.stderr)

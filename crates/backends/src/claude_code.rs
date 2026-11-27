@@ -24,6 +24,8 @@ const MAX_CALLS: usize = 40;
 
 pub const NOT_INSTALLED: &str =
     "Claude Code was not found on this computer. Install it from claude.com/claude-code and sign in once in a terminal, or choose another AI in the settings.";
+/// What an option parser says about an option it does not know: a Claude Code from before the options the editor starts it with.
+const UNKNOWN_OPTION: &str = "unknown option";
 const NOT_SIGNED_IN: &str = "Claude Code is not signed in. Open a terminal, run “claude”, sign in, and ask again.";
 
 /// The models Claude Code can be asked for, by the names it understands: (id, display name).
@@ -341,6 +343,8 @@ impl ClaudeCodeBackend {
                 let said = said.trim();
                 return Err(if said.contains("/login") {
                     NOT_SIGNED_IN.to_string()
+                } else if said.contains(UNKNOWN_OPTION) {
+                    too_old(self.version().await.as_deref(), said.lines().last().unwrap_or(""))
                 } else {
                     format!("Claude Code stopped without an answer{}", if said.is_empty() { ".".to_string() } else { format!(": {}", said.lines().last().unwrap_or("")) })
                 });
@@ -348,6 +352,28 @@ impl ClaudeCodeBackend {
         }
         Ok(ModelReply { blocks: vec![Block::Text { text: heard.texts.join("\n\n") }], stop: Stop::End, model: heard.model })
     }
+}
+
+impl ClaudeCodeBackend {
+    /// The installed program's version, as `claude --version` gives it ("1.0.123 (Claude Code)"): its first word.
+    async fn version(&self) -> Option<String> {
+        let mut command = Command::new(&self.program);
+        command.arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
+        #[cfg(windows)]
+        command.creation_flags(0x0800_0000); // no console window
+        let output = tokio::time::timeout(Duration::from_secs(5), command.output()).await.ok()?.ok()?;
+        String::from_utf8_lossy(&output.stdout).split_whitespace().next().map(String::from)
+    }
+}
+
+/// What the author is told when the installed Claude Code does not know an option the editor starts it with.
+/// `complaint` is the program's own last line, e.g. "error: unknown option '--tools'".
+pub fn too_old(version: Option<&str>, complaint: &str) -> String {
+    let version = version.map(|version| format!(" (version {version})")).unwrap_or_default();
+    format!(
+        "Claude Code on this computer is too old for the editor{version}. Update it: run “claude update” in a terminal, \
+         or “npm install -g @anthropic-ai/claude-code@latest”, and ask again. (Claude Code said: {complaint})"
+    )
 }
 
 #[async_trait]
