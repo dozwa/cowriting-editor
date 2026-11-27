@@ -17,8 +17,8 @@ function editing(marked: string) {
   const view = EditorView.findFromDOM(parent.querySelector<HTMLElement>('.cm-editor')!)!
   view.dispatch({ selection: { anchor: from, head: to } })
   /** The text after a button, with the selection marked the same way. */
-  const after = (kind: Format) => {
-    editor.format(kind)
+  const after = (kind: Format, picture?: string) => {
+    editor.format(kind, picture)
     const { from, to } = view.state.selection.main
     const text = editor.getText()
     return `${text.slice(0, from)}[${text.slice(from, to)}]${text.slice(to)}`
@@ -48,6 +48,12 @@ test('with nothing selected a button writes an example to type over', () => {
   expect(editing('[]').after('image')).toBe('![description]([picture.png])')
   expect(editing('As shown[].').after('citation')).toBe('As shown[@[]].')
   expect(editing('A claim[].').after('footnote')).toBe('A claim^[[note]].')
+})
+
+test('a picture the author chose is written with its path, and the description is what is left to type', () => {
+  expect(editing('See: []').after('image', 'figures/plot.png')).toBe('See: ![[description]](figures/plot.png)')
+  // what was selected is the description; the author goes on after the picture
+  expect(editing('[The plot] shows it.').after('image', '<images/my plot.png>')).toBe('![The plot](<images/my plot.png>)[] shows it.')
 })
 
 test('a heading, list or quotation marks every selected line, replaces the mark that was there, and comes off again', () => {

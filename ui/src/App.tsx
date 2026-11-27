@@ -1,10 +1,10 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectView as Project, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { ProjectView as Project, Picture, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
 import { seeView } from './diagnostics'
-import { DisclosureDialog, ExportDialog, FeedbackDialog, SupportDialog, UsageDialog } from './dialogs'
+import { DisclosureDialog, ExportDialog, FeedbackDialog, PictureDialog, SupportDialog, UsageDialog } from './dialogs'
 import { Tour, TOUR } from './tour'
 import { createEditor, type Editor, type Format } from './editor'
 import { FormatBar, MarkdownHelp } from './formatbar'
@@ -469,6 +469,31 @@ export function App({ api, makeEditor = createEditor }: Props) {
     if (to === 'sources') void refreshLog()
   }
 
+  // the picture button: the author chooses the file, and the editor writes its path as seen from the document
+  const [chosenPicture, setChosenPicture] = useState<{ file: string; seen: Picture } | null>(null)
+  const insertPicture = async () => {
+    if (doc === null) return
+    try {
+      const file = await api.pickPicture(doc.path.slice(0, Math.max(0, doc.path.length - doc.name.length - 1)))
+      if (file === null) return
+      const seen = await api.picture(file)
+      // outside the document's folder the author says whether it is copied
+      if (seen.isInside) editor.current?.format('image', seen.path)
+      else setChosenPicture({ file, seen })
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const copyPicture = async (file: string) => {
+    setChosenPicture(null)
+    try {
+      editor.current?.format('image', (await api.copyPicture(file)).path)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const format = (kind: Format) => (kind === 'image' ? void insertPicture() : editor.current?.format(kind))
+
   // the shortcuts, as the author set them; they rest while a dialog is open
   const act = useRef<(action: Action) => void>(() => {})
   act.current = action => {
@@ -484,7 +509,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setTab('ask')
       window.setTimeout(() => document.querySelector<HTMLElement>('.composer textarea')?.focus())
     } else if (action in TAB_OF) showTab(TAB_OF[action as TabAction])
-    else editor.current?.format(action as Format)
+    else format(action as Format)
   }
   const dialogRef = useRef(dialog)
   dialogRef.current = dialog
@@ -621,7 +646,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       )}
       <div className="work" ref={work} style={panelWidth === null ? undefined : ({ '--panel': `${panelWidth}px` } as CSSProperties)}>
         <section className="page" data-tour="write">
-          {look.buttons && <FormatBar keys={shortcutsOf(preferences.shortcuts)} onFormat={kind => editor.current?.format(kind)} onHelp={() => setDialog('markdown')} />}
+          {look.buttons && <FormatBar keys={shortcutsOf(preferences.shortcuts)} onFormat={format} onHelp={() => setDialog('markdown')} />}
           <div className="sheet" ref={host} />
         </section>
         <aside className="panel" data-tour="panel">
@@ -751,6 +776,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       </footer>
       {settingsDialog}
       {otherDialogs}
+      {chosenPicture !== null && <PictureDialog name={chosenPicture.seen.name} linkedAs={chosenPicture.seen.path} onCopy={() => void copyPicture(chosenPicture.file)} onLink={() => (editor.current?.format('image', chosenPicture.seen.path), setChosenPicture(null))} onClose={() => setChosenPicture(null)} />}
       {dialog === 'markdown' && <MarkdownHelp onOpen={which => void api.openGuide(which).catch(fail)} onClose={() => setDialog(null)} />}
       {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
       {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} onClose={() => setDialog(null)} />}

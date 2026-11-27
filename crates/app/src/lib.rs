@@ -6,6 +6,7 @@ pub mod diagnostics;
 pub mod export;
 pub mod feedback;
 pub mod linked;
+pub mod picture;
 pub mod preferences;
 pub mod shown;
 pub mod support;
@@ -868,6 +869,17 @@ impl Session {
             }
             Ok(())
         })
+    }
+
+    /// How this document would name a picture of the author's: by its way from the document's folder.
+    pub fn picture(&self, path: &str) -> Result<picture::Picture, String> {
+        picture::check(path)?;
+        Ok(picture::seen_from(&self.workspace.sidecar.folder, path))
+    }
+
+    /// Copies a picture into `images/` beside the document; the picture itself stays where and as it is.
+    pub fn copy_picture(&self, path: &str) -> Result<picture::Picture, String> {
+        picture::copy_beside(&self.workspace.sidecar.folder, path)
     }
 
     /// Where the editor keeps the text of a linked Word file or PDF: in the project's folder, under the file's name.

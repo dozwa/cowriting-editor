@@ -62,6 +62,11 @@ the bottom of the window you can hide the buttons, turn on **line numbers** (the
 lines), and switch to **Source**, which shows the text exactly as it is saved, every mark in
 place. The line between text and side panel can be dragged; a double-click puts it back.
 
+The **Picture** button lets you choose the file (PNG, JPEG, GIF, SVG, WebP or PDF) and writes its
+path as it lies from your document. A picture that is not in the document's folder can be copied
+into a folder `images` beside the document, so that both move together, or named where it is;
+the picture itself is never moved or changed.
+
 **Comment out** puts `<!-- -->` around what you selected, or around the line the cursor is in: a
 sentence you are not sure about, a note to yourself. It stays in the file, is not counted as words
 and is in no export. The AI still reads it.
@@ -216,6 +221,10 @@ For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the
 (`verify.json`) and the references an export took from Zotero (`export/references.json`). What you tell the
 experts is in `party.md`, experts you made in `party/<id>.md`, both in the project's folder (see Projects): plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.
+
+The one other folder the editor makes is `images/` beside the document, and only when you have a
+picture copied there. "Move…" does not take pictures along: after moving a document to another
+folder, move its pictures too.
 
 ## Renaming and moving
 

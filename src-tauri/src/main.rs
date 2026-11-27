@@ -368,6 +368,18 @@ fn link_file(editor: State<Editor>, path: String, personas: Vec<String>) -> Resu
     Ok(session.project_view())
 }
 
+/// How the open document would name a picture the author chose.
+#[tauri::command]
+fn picture(editor: State<Editor>, path: String) -> Result<cowriting_app::picture::Picture, String> {
+    editor.session()?.picture(&path)
+}
+
+/// Copies a picture the author chose into `images/` beside the open document.
+#[tauri::command]
+fn copy_picture(editor: State<Editor>, path: String) -> Result<cowriting_app::picture::Picture, String> {
+    editor.session()?.copy_picture(&path)
+}
+
 #[tauri::command]
 fn unlink_file(editor: State<Editor>, path: String) -> Result<cowriting_app::ProjectView, String> {
     let session = editor.session()?;
@@ -873,6 +885,8 @@ fn main() {
             open_guide,
             project,
             link_file,
+            picture,
+            copy_picture,
             unlink_file,
             set_project,
             set_prompt,

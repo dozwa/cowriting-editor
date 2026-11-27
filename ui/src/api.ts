@@ -19,6 +19,9 @@ export type Style = { path: string; name: string; title: string; isFromDocument:
 export type RefHit = { citekey: string | null; title: string; authors: string; year: string; doi: string; file?: string }
 export type SourceHits = { from: 'zotero' | 'bibliography'; hits: RefHit[] }
 
+/** A picture as the open document would name it: `path` goes between the brackets, `isInside` when it lies in the document's folder or below. */
+export type Picture = { path: string; name: string; isInside: boolean }
+
 export type FileFormat = 'pdf' | 'docx'
 export type ExportTools = { hasPandoc: boolean; pdfEngines: string[]; isOwn: boolean; hasZotero: boolean }
 export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter' }
@@ -247,6 +250,15 @@ export const api = {
   withdrawExternal: (id: string) => invoke<void>('withdraw_external', { id }),
   /** What belongs to the open project besides text and log: linked files, and its own settings. */
   project: () => invoke<ProjectView>('project'),
+  /** Asks the author for a picture, starting in the document's folder; null when they cancel. */
+  pickPicture: async (folder = ''): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false, filters: [{ name: m.dialogs.filePicture, extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'pdf'] }], ...(folder === '' ? {} : { defaultPath: folder }) })
+    return typeof path === 'string' ? path : null
+  },
+  /** How the open document would name that picture. */
+  picture: (path: string) => invoke<Picture>('picture', { path }),
+  /** Copies the picture into `images/` beside the document; the picture itself stays as it is. */
+  copyPicture: (path: string) => invoke<Picture>('copy_picture', { path }),
   /** Asks the author for a file to link; null when they cancel. */
   pickLinkedFile: async (): Promise<string | null> => {
     const path = await open({ multiple: false, directory: false })

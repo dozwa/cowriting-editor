@@ -4,6 +4,22 @@ import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, Export
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
+/** A chosen picture lies outside the document's folder: copy it beside the document, or name it where it is. */
+export function PictureDialog({ name, linkedAs, onCopy, onLink, onClose }: { name: string; linkedAs: string; onCopy(): void; onLink(): void; onClose(): void }) {
+  const t = m.dialogs
+  return (
+    <Dialog title={t.pictureTitle} onClose={onClose}>
+      <p>{t.pictureOutside(name)}</p>
+      <p className="muted">{t.pictureChoice(linkedAs)}</p>
+      <div className="actions">
+        <button onClick={onClose}>{t.pictureCancel}</button>
+        <button onClick={onLink}>{t.pictureLink}</button>
+        <button className="primary" onClick={onCopy}>{t.pictureCopy}</button>
+      </div>
+    </Dialog>
+  )
+}
+
 /** `mayClose` is asked when Escape is pressed; saying no keeps the dialog open. */
 export function Dialog({ title, onClose, mayClose, children }: { title: string; onClose(): void; mayClose?: () => boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)

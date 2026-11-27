@@ -4,6 +4,13 @@ export const dialogs: typeof pattern = {
   fileMarkdown: 'Markdown',
   fileBibliography: 'Literaturverzeichnis',
   fileStyle: 'Zitierstil (CSL)',
+  filePicture: 'Bilder',
+  pictureTitle: 'Wo das Bild liegt',
+  pictureOutside: (name: string) => `${name} liegt nicht im Ordner Ihres Dokuments. Wenn Sie das Dokument verschieben oder weitergeben, bliebe das Bild zurück.`,
+  pictureChoice: (linkedAs: string) => `Eine Kopie kommt in den Ordner „images“ neben Ihrem Dokument; das Bild selbst bleibt, wo und wie es ist. Ohne Kopie nennt das Dokument es dort, wo es liegt: ${linkedAs}`,
+  pictureCopy: 'Neben das Dokument kopieren',
+  pictureLink: 'Dort nennen, wo es liegt',
+  pictureCancel: 'Abbrechen',
   leaveQuestion: 'Dieses Dokument hat Änderungen, die nicht gespeichert sind. Trotzdem verlassen?',
   leaveTitle: 'Nicht gespeicherte Änderungen',
 

@@ -179,7 +179,8 @@ function comment(view: EditorView) {
   dispatch(from, to, `${COMMENT_OPEN} ${inner} ${COMMENT_CLOSE}`, from + COMMENT_OPEN.length + 1, from + COMMENT_OPEN.length + 1 + inner.length)
 }
 
-function format(view: EditorView, kind: Format) {
+/** `picture` is the path of a picture the author chose, as the document names it. */
+function format(view: EditorView, kind: Format, picture?: string) {
   const { state } = view
   const { from, to, empty } = state.selection.main
   const chosen = state.sliceDoc(from, to)
@@ -187,7 +188,12 @@ function format(view: EditorView, kind: Format) {
   if (inline !== undefined) wrap(view, inline[0], inline[1])
   else if (block !== undefined) prefix(view, block)
   else if (kind === 'link') put(view, `[${empty ? 'link text' : chosen}](https://)`, 'https://')
-  else if (kind === 'image') put(view, `![${empty ? 'description' : chosen}](picture.png)`, 'picture.png')
+  else if (kind === 'image' && picture === undefined) put(view, `![${empty ? 'description' : chosen}](picture.png)`, 'picture.png')
+  else if (kind === 'image') {
+    // the path is there already: what is left to write is the description, and with one selected the author goes on after the picture
+    const text = `![${empty ? 'description' : chosen}](${picture})`
+    view.dispatch({ changes: { from, to, insert: text }, selection: empty ? { anchor: from + 2, head: from + 2 + 'description'.length } : { anchor: from + text.length }, userEvent: 'input.format', scrollIntoView: true })
+  }
   else if (kind === 'footnote') put(view, `^[${empty ? 'note' : chosen}]`, empty ? 'note' : chosen)
   else if (kind === 'comment') comment(view)
   else if (kind === 'citation') {
@@ -209,8 +215,8 @@ export type Editor = {
   insert(text: string): void
   /** Puts the cursor on a 1-based line and scrolls it into view. */
   jumpToLine(line: number): void
-  /** Writes a markdown element at the cursor or around what is selected. */
-  format(kind: Format): void
+  /** Writes a markdown element at the cursor or around what is selected. `picture` is the path of a chosen picture, for 'image'. */
+  format(kind: Format, picture?: string): void
   setView(view: View): void
   focus(): void
   destroy(): void
@@ -268,7 +274,7 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
       view.dispatch({ selection: { anchor: target.from }, effects: EditorView.scrollIntoView(target.from, { y: 'center' }) })
       view.focus()
     },
-    format: kind => format(view, kind),
+    format: (kind, picture) => format(view, kind, picture),
     setView: ({ lineNumbers: isNumbered, source, spellcheck, language }) =>
       view.dispatch({
         effects: [numbering.reconfigure(isNumbered ? lineNumbers() : []), styling.reconfigure(source ? EditorView.editorAttributes.of({ class: 'cm-source' }) : livePreview), spelling.reconfigure(attributes(spellcheck, language))],

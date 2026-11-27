@@ -23,6 +23,11 @@ to a new heading with its version and date; the release workflow does that (see 
   matter, code, comments, citation keys, markdown's marks, the addresses of links, and pictures
   are left out; a run of spaces or line ends is one space. The words are counted as before, so
   a link's address is still a word there. (#8)
+- **Choose a picture.** The Picture button opens a file dialog and writes the picture's path as
+  it lies from the document, so the two can move together and the export finds it. For a
+  picture outside the document's folder the editor asks: copy it into a folder `images` beside
+  the document (the picture itself is never moved or changed), or name it where it is. Not yet
+  looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
 ### Fixed
 

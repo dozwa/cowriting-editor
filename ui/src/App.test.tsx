@@ -10,7 +10,7 @@ import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
 
 /** What the stand-in editor was told, for the tests to read. */
-type Seen = { jumps: number[]; formats: Format[]; view: View | null }
+type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; view: View | null }
 
 /** A text field in place of the real editor, which needs a browser's layout. */
 const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Seen => {
@@ -26,15 +26,16 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
   parent.append(field)
   const jumps: number[] = []
   const formats: Format[] = []
-  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: kind => void formats.push(kind), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), jumps, formats, view: null }
+  const pictures: string[] = []
+  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), jumps, formats, pictures, view: null }
   return lastEditor
 }
 let lastEditor: Editor & Seen
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null } = {}) {
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[] } = { feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[] } = { pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -100,6 +101,13 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     },
     project: async () => project,
     pickLinkedFile: async () => '/work/wording.md',
+    pickPicture: async folder => (calls.pictures.push(`from ${folder}`), options.picturePicked === undefined ? '/work/figures/plot.png' : options.picturePicked),
+    picture: async path => {
+      if (!path.endsWith('.png')) throw `${path} is not a picture the export can use.`
+      const name = path.slice(path.lastIndexOf('/') + 1)
+      return path.startsWith('/work/') ? { path: path.slice('/work/'.length), name, isInside: true } : { path: `..${path}`, name, isInside: false }
+    },
+    copyPicture: async path => (calls.pictures.push(`copied ${path}`), { path: `images/${path.slice(path.lastIndexOf('/') + 1)}`, name: path.slice(path.lastIndexOf('/') + 1), isInside: true }),
     linkFile: async (path, personas) => {
       calls.project.push(['link', path, personas])
       if (path.endsWith('.pdf')) throw `${path} cannot be read as text.`
@@ -895,6 +903,53 @@ test('the side panel is as wide as the author made it, also the next time', asyn
   render(<App api={standIn().api} makeEditor={plainEditor} />)
   expect((await screen.findByRole('separator', { name: 'Width of the side panel' })).getAttribute('aria-valuenow')).toBe('424')
   vi.unstubAllGlobals()
+})
+
+test('the picture button lets the author choose the file, and asks before a picture outside the folder is copied', async () => {
+  const user = userEvent.setup()
+  // in the document's folder: written as it lies, nothing asked
+  const inside = standIn()
+  const first = render(<App api={inside.api} makeEditor={plainEditor} />)
+  await user.click(within(await screen.findByRole('toolbar', { name: 'Markdown' })).getByRole('button', { name: 'Picture' }))
+  await waitFor(() => expect(lastEditor.pictures).toEqual(['figures/plot.png']))
+  expect(inside.calls.pictures).toEqual(['from /work'])
+  expect(screen.queryByRole('dialog')).toBeNull()
+  first.unmount()
+
+  // the author cancels the choice: nothing is written
+  const second = render(<App api={standIn({ picturePicked: null }).api} makeEditor={plainEditor} />)
+  await user.click(within(await screen.findByRole('toolbar', { name: 'Markdown' })).getByRole('button', { name: 'Picture' }))
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect([lastEditor.pictures, lastEditor.formats]).toEqual([[], []])
+  second.unmount()
+
+  // somewhere else: copied beside the document, named where it is, or left
+  const outside = standIn({ picturePicked: '/home/me/plot.png' })
+  const third = render(<App api={outside.api} makeEditor={plainEditor} />)
+  const button = within(await screen.findByRole('toolbar', { name: 'Markdown' })).getByRole('button', { name: 'Picture' })
+  await user.click(button)
+  let dialog = within(await screen.findByRole('dialog', { name: 'Where the picture lies' }))
+  expect(dialog.getByText(/plot\.png is not in your document's folder/)).toBeTruthy()
+  expect(dialog.getByText(/\.\.\/home\/me\/plot\.png/)).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+  expect(lastEditor.pictures).toEqual([])
+  await user.click(button)
+  dialog = within(await screen.findByRole('dialog', { name: 'Where the picture lies' }))
+  await user.click(dialog.getByRole('button', { name: 'Name it where it is' }))
+  expect(lastEditor.pictures).toEqual(['../home/me/plot.png'])
+  await user.click(button)
+  dialog = within(await screen.findByRole('dialog', { name: 'Where the picture lies' }))
+  await user.click(dialog.getByRole('button', { name: 'Copy it beside the document' }))
+  await waitFor(() => expect(lastEditor.pictures).toEqual(['../home/me/plot.png', 'images/plot.png']))
+  expect(outside.calls.pictures.filter(call => call.startsWith('copied'))).toEqual(['copied /home/me/plot.png'])
+  expect(screen.queryByRole('dialog')).toBeNull()
+  third.unmount()
+
+  // a file that is no picture: said, and nothing written
+  render(<App api={standIn({ picturePicked: '/work/notes.txt' }).api} makeEditor={plainEditor} />)
+  await user.click(within(await screen.findByRole('toolbar', { name: 'Markdown' })).getByRole('button', { name: 'Picture' }))
+  expect(await screen.findByText(/notes\.txt is not a picture the export can use/)).toBeTruthy()
+  expect(lastEditor.pictures).toEqual([])
 })
 
 test('markdown buttons, line numbers and the source view are the author\'s choice, and stay chosen', async () => {
