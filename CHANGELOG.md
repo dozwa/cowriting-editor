@@ -105,8 +105,9 @@ to a new heading with its version and date; the release workflow does that (see 
 - The MIT licence has its own file.
 - The README points to the user wiki.
 - The README says what the editor is for, and what it is not for or not yet. (#24)
-- `tested-models.json` has its first entry: `mistral:7b` through Ollama, which did not keep to
-  the rules and is shown as such. Every other model is still "untested". (#22, open)
+- `tested-models.json` has its first two entries, both local models through Ollama:
+  `qwen3.8:27b` kept to the rules in every case and is shown as tested; `mistral:7b` did not and
+  is shown as such. Every other model is still "untested". (#22, open)
 
 ### For those who build it
 

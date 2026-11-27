@@ -332,11 +332,10 @@ your credentials, but the question is not settled; with an Anthropic API key the
 
 No model can write to your text, and every answer is logged: that holds for any model. Whether a
 model also *behaves* (declines to ghostwrite, marks AI text, invents no references) is tested per
-model by `suites/behaviour`. Results ship in `tested-models.json`. **So far it holds one model,
-and that one failed** (`mistral:7b` through Ollama: it invented DOIs and gave feedback without
-naming lines); no model has passed yet, so every other model is shown as "untested". A second
-run, of a larger local model, was not recorded: the suite counted that model's refusals to
-ghostwrite as unmarked prose (#36), and a verdict from that would have been wrong. A model that cannot call tools is sent the document with each
+model by `suites/behaviour`. Results ship in `tested-models.json`. **So far it holds two models,
+both local through Ollama:** `qwen3.8:27b` passed every case, and `mistral:7b` failed (it invented
+DOIs and gave feedback without naming lines). Every other model is shown as "untested", which
+says nothing against it: nobody has run the suite on it yet. A model that cannot call tools is sent the document with each
 question and cannot write notes; the editor says so.
 
 ```
