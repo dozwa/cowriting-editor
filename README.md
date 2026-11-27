@@ -90,6 +90,10 @@ starts with what you chose last. If your document sets one of these itself in it
 comes first, and the dialog says which. The export also tells the typesetter your document's
 language, so that words are hyphenated by its rules.
 
+A typeface this computer does not have is named in the dialog, and again after the export: Typst
+then sets the text in another one, a LaTeX stops and says so. That matters for a layout that came
+from another computer.
+
 It works with Typst and with an installed LaTeX. With LaTeX, a typeface by its name needs XeLaTeX
 or LuaLaTeX (pdfLaTeX cannot use the typefaces of your system), and a size other than 10, 11 or
 12 pt needs KOMA-Script, which most LaTeX installations bring along.

@@ -58,7 +58,7 @@ export type PdfLayout = {
   numbered: boolean
 }
 export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout }
-export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[] }
+export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[]; /** Typefaces the layout names that this computer does not have: the PDF has another one in their place. */ missingFonts: string[] }
 
 export type Use = 'adopted' | 'adapted' | 'rejected' | 'info'
 

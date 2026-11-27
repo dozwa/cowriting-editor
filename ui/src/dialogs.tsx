@@ -422,6 +422,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
             <button onClick={() => void api.showWritten(made.path, 'open').catch(e => setError(String(e)))}>{t.openFile}</button>
             <button onClick={() => void api.showWritten(made.path, 'folder').catch(e => setError(String(e)))}>{t.showInFolder}</button>
           </div>
+          {made.missingFonts.length > 0 && <p className="hint">{t.fontsNotHere(made.missingFonts.map(font => `“${font}”`).join(', '))}</p>}
           <p className="muted">
             {made.cited === 0 ? t.citedNothing : t.citedSummary(made.cited, made.fromZotero)}
             {made.missing.length > 0 && ` ${t.notFound(made.missing.map(key => `@${key}`).join(', '))}`}

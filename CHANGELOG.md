@@ -47,7 +47,9 @@ to a new heading with its version and date; the release workflow does that (see 
   It works with Typst and with an installed LaTeX. The choice is kept with the project, so every
   document has its own, and a new document starts with the one chosen last. What the document's
   front matter sets comes first. The export now also passes the document's language on, for
-  hyphenation, to PDF and Word. (#13, #34)
+  hyphenation, to PDF and Word. A typeface the layout names and the computer does not have is
+  named before the export and again after it, when Typst has set the text in another one.
+  (#13, #34)
 - **Hints can be ticked off.** Every list item and table row of an answer has a box to mark it
   as done, with "Mark all" and "Unmark all" for the whole answer and a count of what is left.
   The ticks are kept beside the log (`marks.json`) and survive closing the document; they are a

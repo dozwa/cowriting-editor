@@ -340,6 +340,12 @@ pub struct ExportTools {
     pub fonts: Vec<String>,
 }
 
+/// Those of `wanted` that Typst does not find on this computer. None when it cannot be asked.
+pub fn fonts_not_here(wanted: &[String]) -> Vec<String> {
+    let here = fonts();
+    wanted.iter().filter(|name| !here.is_empty() && !here.iter().any(|other| other.eq_ignore_ascii_case(name))).cloned().collect()
+}
+
 /// The typefaces Typst finds on this computer (`typst fonts`), sorted.
 fn fonts() -> Vec<String> {
     let Some(typst) = find_program("typst") else { return Vec::new() };
@@ -386,6 +392,8 @@ pub struct DocumentExport {
     pub missing: Vec<String>,
     /// What pandoc remarked.
     pub warnings: Vec<String>,
+    /// Typefaces the layout names and this computer does not have: Typst set those parts in another one, without saying so.
+    pub missing_fonts: Vec<String>,
 }
 
 /// The references an export uses and the keys nobody holds.

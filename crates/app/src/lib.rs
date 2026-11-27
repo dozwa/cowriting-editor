@@ -770,7 +770,9 @@ impl Session {
         let _ = std::fs::remove_file(&metadata);
         let _ = std::fs::remove_file(&kept);
         let warnings = made?;
-        Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
+        // Typst sets what it has no typeface for in another one and says nothing; a LaTeX stops, and its words were passed on above
+        let missing_fonts = if matches!((format, &engine), (FileFormat::Pdf, Some(("typst", _)))) { export::fonts_not_here(&layout.fonts()) } else { Vec::new() };
+        Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings, missing_fonts })
     }
 
     /// How this project's exports are set, when that was ever chosen here: a call for papers asks for a

@@ -216,7 +216,10 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     exportDocument: async (format, target, documentText, pdf) => {
       calls.exports.push([format, target, documentText])
       calls.pdf.push(pdf)
-      return { path: target, cited: 2, fromZotero: 0, missing: ['ghost1999'], warnings: [] }
+      // the stand-in computer has the typefaces `exportSetup` lists, and no others
+      const here = ['arial', 'libertinus serif', 'times new roman']
+      const missingFonts = [...new Set([pdf.layout.font, pdf.layout.headingFont, pdf.layout.codeFont].map(font => font.trim()).filter(font => font !== '' && !here.includes(font.toLowerCase())))]
+      return { path: target, cited: 2, fromZotero: 0, missing: ['ghost1999'], warnings: [], missingFonts }
     },
     sources: async () => ({ files: bibFiles, entries: bibFiles.reduce((n, f) => n + f.entries, 0), cited: 2, missing: bibFiles.length > 0 ? ['ghost1999'] : [], checked: refsChecked, style }),
     pickBibliography: async () => '/work/refs.bib',
@@ -940,6 +943,8 @@ test('headings, code, single sides, columns and page numbers can be set, and wha
 
   await user.click(screen.getByRole('button', { name: 'Export' }))
   await screen.findByRole('status')
+  // after the export, too: this PDF does not have the typeface it was meant to have
+  expect(within(screen.getByRole('status')).getByText(/This computer does not have “Fira Code”/)).toBeTruthy()
   expect(calls.pdf[0]?.layout).toEqual({ ...STANDARD_LAYOUT, headingFont: 'Arial', codeFont: 'Fira Code', fontSize: 14, pageNumbers: 'top-outer', noNumberOnFirstPage: true, twoColumns: true, marginLeftCm: 3.5, twoSided: true })
 })
 

@@ -256,6 +256,19 @@ fn a_pdf_with_typst_has_the_headings_type_two_columns_and_page_numbers_where_ask
     let (_, bytes) = exported(&session, &folder, "headings.pdf", &text, &with(Layout { heading_font: "DejaVu Sans Mono".into(), ..Layout::default() }));
     let fonts = String::from_utf8_lossy(&bytes).into_owned();
     assert!(fonts.contains("DejaVuSansMono-Bold") && fonts.contains("Libertinus"), "the headings in theirs, the text in the standard");
+    // a typeface this computer does not have: Typst sets the text in another one, and the export names what is missing
+    let made = session
+        .export_document(
+            FileFormat::Pdf,
+            &folder.path("lacking.pdf"),
+            &text,
+            None,
+            &with(Layout { font: "No Such Typeface 4711".into(), code_font: "DejaVu Sans Mono".into(), ..Layout::default() }),
+        )
+        .unwrap();
+    assert_eq!(made.missing_fonts, ["No Such Typeface 4711"]);
+    assert!(session.export_document(FileFormat::Pdf, &folder.path("standard.pdf"), &text, None, &PdfChoice::default()).unwrap().missing_fonts.is_empty());
+
     // two columns, 14 pt and a wide inner margin: more pages for the same text, and it still is a PDF
     let (_, wide) = exported(&session, &folder, "book.pdf", &text, &with(book_layout()));
     assert!(wide.starts_with(b"%PDF-"));
