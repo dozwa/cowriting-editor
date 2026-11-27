@@ -166,10 +166,24 @@ fn provider_label(logged: &str, lang: Lang) -> String {
     format!("{program} ({})", if de { "lokal" } else { "local" })
 }
 
+/// The models that answered the turns, as the log names them.
+fn models_of(items: &[&Turn]) -> String {
+    sorted_set(items.iter().map(|t| t.response.model.as_deref().unwrap_or("unknown"))).join(", ")
+}
+
+/// The editor the turns went through ('CoWriting Editor 0.1.0') and who served the models ('Anthropic'; empty when the log does not say).
+fn served_by(items: &[&Turn], lang: Lang) -> (String, String) {
+    let versions = |of: fn(&ResponseEntry) -> Option<&str>| sorted_set(items.iter().filter_map(|t| of(t.response)).filter(|v| !v.is_empty()));
+    let editors = versions(|r| r.editor.as_deref());
+    let editor = if editors.is_empty() { "CoWriting Editor".to_string() } else { format!("CoWriting Editor {}", editors.join(", ")) };
+    let providers: BTreeSet<String> = versions(|r| r.provider.as_deref()).into_iter().map(|logged| provider_label(logged, lang)).collect();
+    (editor, providers.into_iter().collect::<Vec<_>>().join(", "))
+}
+
 /// What made the turns, as the log recorded it.
 fn tool_label(items: &[&Turn], profile: Profile, lang: Lang) -> String {
-    let models = sorted_set(items.iter().map(|t| t.response.model.as_deref().unwrap_or("unknown")));
-    let models = if models.is_empty() { String::new() } else { format!(" ({})", models.join(", ")) };
+    let models = models_of(items);
+    let models = if models.is_empty() { String::new() } else { format!(" ({models})") };
     let versions = |of: fn(&ResponseEntry) -> Option<&str>| sorted_set(items.iter().filter_map(|t| of(t.response)).filter(|v| !v.is_empty()));
     let named = |name: &str, list: Vec<&str>| if list.is_empty() { name.to_string() } else { format!("{name} {}", list.join(", ")) };
     match profile {
@@ -184,12 +198,8 @@ fn tool_label(items: &[&Turn], profile: Profile, lang: Lang) -> String {
         }
         // 'CoWriting Editor 0.1.0; Anthropic (claude-opus-5-5)'
         Profile::Editor => {
-            let mut parts = vec![named("CoWriting Editor", versions(|r| r.editor.as_deref()))];
-            let providers: BTreeSet<String> = versions(|r| r.provider.as_deref()).into_iter().map(|logged| provider_label(logged, lang)).collect();
-            if !providers.is_empty() {
-                parts.push(providers.into_iter().collect::<Vec<_>>().join(", "));
-            }
-            format!("{}{models}", parts.join("; "))
+            let (editor, providers) = served_by(items, lang);
+            format!("{editor}{}{models}", if providers.is_empty() { String::new() } else { format!("; {providers}") })
         }
     }
 }
@@ -364,6 +374,22 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         });
     }
 
+    // The editor's register: when every row went through the same editor and provider, that is said
+    // once, in the sentence before the table, and the column names the model only. Repeated in every row it made the
+    // column unreadable. The plugin's register stays as it is.
+    let served = match profile {
+        Profile::Editor => {
+            let all_served: BTreeSet<(String, String)> = groups.iter().map(|(_, items)| served_by(items, lang)).collect();
+            (all_served.len() == 1).then(|| all_served.into_iter().next().unwrap())
+        }
+        Profile::Plugin => None,
+    };
+    if served.is_some() {
+        for (row, (_, items)) in rows.iter_mut().zip(&groups) {
+            row.tool = models_of(items);
+        }
+    }
+
     let mut ai_text: Vec<String> = all.iter().filter(|t| t.response.ai_text_flag).map(|t| format!("{}: {}", day(&t.prompt.ts), py_squash(&t.prompt.text, Some(120)))).collect();
     // what the editor saw enter the document from a logged answer; grammar corrections are listed apart
     let mut corrections: Vec<String> = Vec::new();
@@ -422,6 +448,15 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
     let refused_lines: Vec<String> = guards.iter().filter(|g| g.refused).map(|g| format!("{}: {} – {}", day(&g.ts), g.tool, py_squash(&g.input, Some(80)))).collect();
 
     let title = pick("AI register (disclosure of AI use)", "KI-Verzeichnis");
+    // who served the models: once here when it is the same for every row, else row by row in the table
+    let served_sentence = match (&served, de) {
+        (Some((editor, providers)), false) if providers.is_empty() => format!("The version used was {editor}; the models are named in the table."),
+        (Some((editor, providers)), false) => format!("The version used was {editor}, and the models were served by {providers}; they are named in the table."),
+        (Some((editor, providers)), true) if providers.is_empty() => format!("Eingesetzt wurde {editor}; die Modelle sind in der Tabelle genannt."),
+        (Some((editor, providers)), true) => format!("Eingesetzt wurde {editor}, die Modelle stellte {providers} bereit; sie sind in der Tabelle genannt."),
+        (None, false) => "The models and who served them are named in the table.".to_string(),
+        (None, true) => "Die Modelle und ihre Anbieter sind in der Tabelle genannt.".to_string(),
+    };
     let mut intro = match (profile, de) {
         (Profile::Plugin, false) => format!(
             "For “{name}”, the generative AI model Claude (Anthropic) was used via Claude Code with the CoWriting \
@@ -440,13 +475,13 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         ),
         (Profile::Editor, false) => format!(
             "For “{name}”, generative AI was used through the CoWriting Editor in an assisting role only: for hints, questions, \
-             explanations and literature support. The models and who served them are named in the table. The manuscript text was written \
+             explanations and literature support. {served_sentence} The manuscript text was written \
              by the author. The editor gives the AI no means of writing to the manuscript, records every write the AI attempted outside \
              its own notes (listed below), and logged all AI interactions automatically."
         ),
         (Profile::Editor, true) => format!(
             "Für die Arbeit „{name}“ wurde generative KI über den CoWriting Editor ausschließlich assistierend eingesetzt: für Hinweise, \
-             Rückfragen, Erklärungen und Literaturhilfe. Die Modelle und ihre Anbieter sind in der Tabelle genannt. Der Text des Manuskripts \
+             Rückfragen, Erklärungen und Literaturhilfe. {served_sentence} Der Text des Manuskripts \
              wurde von der Autorin bzw. dem Autor verfasst. Der Editor gibt der KI keine Möglichkeit, in das Manuskript zu schreiben, \
              protokolliert jeden Schreibversuch der KI außerhalb ihrer eigenen Notizen (siehe unten) und hat alle KI-Eingaben automatisch \
              protokolliert."
@@ -460,7 +495,14 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
              vorgeschlagen; übernommen wurden sie erst nach deren Bestätigung.",
         );
     }
-    let head: [&str; 5] = if de { ["Zweck", "Werkzeug / Modell", "Umfang", "Verwendung", "Kapitel"] } else { ["Purpose", "Tool / model", "Extent", "Use", "Chapters"] };
+    let tool_head = match (served.is_some(), de) {
+        (true, true) => "Modell",
+        (true, false) => "Model",
+        (false, true) => "Werkzeug / Modell",
+        (false, false) => "Tool / model",
+    };
+    let head: [&str; 5] = if de { ["Zweck", tool_head, "Umfang", "Verwendung", "Kapitel"] } else { ["Purpose", tool_head, "Extent", "Use", "Chapters"] };
+
     let lang_note = pick(
         "Pure language corrections (grammar/spelling) need no disclosure in DFG proposals; some universities still require it.",
         "Reine Sprachkorrekturen (Grammatik/Rechtschreibung) müssen laut DFG in Anträgen nicht offengelegt werden; manche Hochschulen verlangen es dennoch.",
@@ -581,6 +623,7 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 out.extend(tex_note(lang));
             }
             out.extend([format!("\\section*{{{}}}", e(&title)), String::new(), e(&intro), String::new()]);
+
             // The plugin's table is 0.9 of the line plus the space between its columns: wider than the text block.
             // The editor's fills the line exactly, in smaller type, with ragged cells whose first word may be hyphenated.
             let (open, cell, row_end, close) = match profile {

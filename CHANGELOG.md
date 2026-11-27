@@ -66,7 +66,9 @@ to a new heading with its version and date; the release workflow does that (see 
 - **Disclosure**
   - Requests of a single day are given as a date, not as a range from that day to itself. (#17)
   - A model on your own computer is named "Ollama (local)" or "LM Studio (local)", not by its
-    address. It is still named in every row of the table. (#16, open)
+    address. The editor's version and who served the models are said once, in the sentence
+    before the table, and the table's column names the model only; when rows went through
+    different providers, each row still names its own. (#16)
   - LaTeX: the table is as wide as the text block and no longer runs past the margin. (#19)
   - LaTeX: headings no longer run past the margin, and the German heading on changes to the AI
     log is shorter. (#21)

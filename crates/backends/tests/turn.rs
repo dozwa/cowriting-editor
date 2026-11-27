@@ -242,7 +242,8 @@ async fn a_reply_continues_its_thread_and_a_classification_closes_the_turn() {
     // the disclosure names the editor, who served the model, and what the author did with the input
     let register = disclosure(&entries, "thesis.md", Lang::En, DocFormat::Md, Profile::Editor);
     assert!(
-        register.contains("| General questions | CoWriting Editor 0.1.0; a script (no model) (test-model) | 2 requests, 2026-11-23 | rejected: 1, adopted: 1 | – |"),
+        register.contains("The version used was CoWriting Editor 0.1.0, and the models were served by a script (no model); they are named in the table.")
+            && register.contains("| General questions | test-model | 2 requests, 2026-11-23 | rejected: 1, adopted: 1 | – |"),
         "{register}"
     );
     assert!(!register.contains("Claude Code"), "the editor's disclosure does not claim Claude Code was used");

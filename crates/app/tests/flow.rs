@@ -119,7 +119,11 @@ async fn open_ask_classify_export_and_everything_is_on_disk() {
     let register = std::fs::read_to_string(&exported.paths[0]).unwrap();
     assert!(exported.paths[0].ends_with(".cowriting/thesis.md/disclosure/ai-register.en.md"));
     assert!(register.contains("For “thesis.md”, generative AI was used through the CoWriting Editor in an assisting role only"));
-    assert!(register.contains(&format!("| General questions | CoWriting Editor {}; a script (no model) (scripted) | 1 request, ", cowriting_app::EDITOR_VERSION)));
+    assert!(register.contains(&format!(
+        "The version used was CoWriting Editor {}, and the models were served by a script (no model); they are named in the table.",
+        cowriting_app::EDITOR_VERSION
+    )));
+    assert!(register.contains("| General questions | scripted | 1 request, "));
     assert!(register.contains("| adapted: 1 | – |"));
     assert!(register.contains("write_note – write_note ../../../thesis.md\nThese changed nothing."));
     let appendix = std::fs::read_to_string(&exported.paths[1]).unwrap();
