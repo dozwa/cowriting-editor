@@ -79,6 +79,7 @@ to a new heading with its version and date; the release workflow does that (see 
 
 - The MIT licence has its own file.
 - The README points to the user wiki.
+- The README says what the editor is for, and what it is not for or not yet. (#24)
 
 ### For those who build it
 

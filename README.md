@@ -7,6 +7,30 @@ log becomes your disclosure of AI use.
 It is the standalone sibling of the [CoWriting plugin for Claude Code](https://github.com/dozwa/claude-cowriting)
 and writes the same log format.
 
+## What it is for
+
+Long texts that are yours and for which you must be able to say how AI was used:
+
+- **A thesis, a paper, a report or a proposal**, written over weeks, where the institution or the
+  journal expects a disclosure of AI use. The log and the disclosure made from it are what the
+  editor is built around; the rest serves them.
+- **Revising your own draft with critical readers.** The experts, the plan and the check of its
+  points are there for the author to look at their own text from other sides before somebody
+  else does. They comment; they do not rewrite.
+- **Working with a model on your own computer** when the text may not leave it.
+
+What it is not for, or not yet:
+
+- **Quick notes and everyday writing.** Markdown, a log beside every document and a live review
+  are heavy for a shopping list or a letter.
+- **Having text written for you.** The AI declines, and what it formulates anyway is marked and
+  ends up in the disclosure. That is the point of the editor, not a gap.
+- **Reviewing or screening other people's manuscripts.** The experts read the document you are
+  writing; there is no workflow for a reviewer or an editor of a journal.
+- **Writing together.** One author, one document, one computer. Projects of several files (#26)
+  and working from a shared folder (#1) are open questions, not features.
+- **LaTeX documents** (#2). The editor reads and writes markdown; LaTeX is an export.
+
 **State: early.** What works: open and save a markdown file, ask, classify, log, disclosure. The
 AI can be Claude (Anthropic API key), a model on your own computer (Ollama, LM Studio), or any
 provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Statistics Nerd, …)
