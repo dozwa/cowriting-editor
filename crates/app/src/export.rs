@@ -170,8 +170,22 @@ pub fn pandoc_args(format: FileFormat, output: &str, folder: &str, references: &
             (Paper::Letter, _) => "letter",
         };
         args.extend(["--pdf-engine".to_string(), path.to_string(), "--variable".to_string(), format!("papersize={size}")]);
+        if engine == "typst" {
+            args.push(format!("--pdf-engine-opt=--root={}", typst_root(folder)));
+        }
     }
     args
+}
+
+/// The folder Typst may read files below, for a document in `folder`: the top of its disk.
+///
+/// pandoc copies every picture into a temporary folder of its own and names the copy to Typst by its full path.
+/// Typst reads a full path as one below its root, which is the document's folder unless it is told otherwise, and
+/// reads nothing outside the root: no picture was ever found. From the top of the disk the copies are found.
+/// It also means Typst code in the document can read any file of the author's; it is the author's own document.
+/// On Windows the root is the document's drive, so pictures are not found while the temporary folder is on another drive.
+fn typst_root(folder: &str) -> String {
+    Path::new(folder).ancestors().last().filter(|top| top.has_root()).map_or_else(|| "/".to_string(), |top| top.to_string_lossy().into_owned())
 }
 
 /// Refuses a target that is not a file of the chosen kind, or that is the document itself.

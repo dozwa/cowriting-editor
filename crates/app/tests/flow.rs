@@ -474,10 +474,13 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     let offline = references(&bibliography, text, None);
     assert_eq!((offline.files.len(), offline.from_zotero, offline.missing), (1, 0, vec!["fromzotero2024".to_string(), "ghost1999".to_string()]));
     let args = pandoc_args(FileFormat::Pdf, "/out/thesis.pdf", "/work", &used.files, Some(("typst", "/tools/typst")), Paper::A4, None);
-    let expected = format!("--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine /tools/typst --variable papersize=a4", beside.clone());
+    let expected = format!("--from markdown --standalone --output /out/thesis.pdf --resource-path /work --citeproc --bibliography /kept/references.json --bibliography {} --pdf-engine /tools/typst --variable papersize=a4 --pdf-engine-opt=--root=/", beside.clone());
     assert_eq!(args.join(" "), expected);
+    // only Typst is given a root to read below; LaTeX reads any file as it is
+    assert!(!pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some(("xelatex", "/tex/xelatex")), Paper::A4, None).iter().any(|arg| arg.contains("--root")));
     // Typst and LaTeX name US letter differently; a Word file has no engine and no paper setting
-    let letter = |engine: &str| pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some((engine, engine)), Paper::Letter, None).last().cloned();
+    let letter =
+        |engine: &str| pandoc_args(FileFormat::Pdf, "o.pdf", "/work", &[], Some((engine, engine)), Paper::Letter, None).into_iter().find(|arg| arg.starts_with("papersize="));
     assert_eq!((letter("typst").as_deref(), letter("xelatex").as_deref()), (Some("papersize=us-letter"), Some("papersize=letter")));
     assert!(!pandoc_args(FileFormat::Docx, "/out/thesis.docx", "/work", &[], Some(("typst", "/tools/typst")), Paper::A4, None)
         .iter()
@@ -567,6 +570,73 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
         assert!(pdf.starts_with(b"%PDF-"), "{name} is a PDF");
         assert!(String::from_utf8_lossy(&pdf).replace("MediaBox [", "MediaBox[").contains(&format!("/MediaBox[0 0 {width}")), "{name} is {width} points wide");
     }
+}
+
+#[test]
+fn a_document_with_pictures_exports_with_them_wherever_they_lie() {
+    use cowriting_app::export::{find_program, local_tools};
+    use cowriting_app::{FileFormat, Paper, PdfChoice};
+    let folder = Folder::new("export-pictures");
+    let outside = Folder::new("export-pictures-elsewhere");
+    let picture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/pictures/picture.png");
+    std::fs::create_dir_all(folder.path("figures and plots")).unwrap();
+    for target in [folder.path("picture.png"), folder.path("figures and plots/second picture.png"), outside.path("picture.png")] {
+        std::fs::copy(&picture, target).unwrap();
+    }
+    // beside the document, in a folder with spaces in its name (written both ways), and by its full path somewhere else
+    let mut text =
+        "# Pictures\n\n![beside](picture.png)\n\n![in a folder](<figures and plots/second picture.png>)\n\n![escaped](figures%20and%20plots/second%20picture.png)\n".to_string();
+    if !cfg!(windows) {
+        text.push_str(&format!("\n![elsewhere]({})\n", outside.path("picture.png")));
+    }
+    std::fs::write(folder.path("thesis.md"), &text).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    if find_program("pandoc").is_none() {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "pandoc is not there: run scripts/fetch-tools.py");
+        eprintln!("pandoc is not installed: the export with pictures was not run");
+        return;
+    }
+    let pictures = if cfg!(windows) { 3 } else { 4 };
+    let found_all = |made: &cowriting_app::DocumentExport| assert!(!made.warnings.iter().any(|warning| warning.contains("picture")), "{:?}", made.warnings);
+
+    // Word: the pictures are in the file
+    let made = session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), &text, None, &PdfChoice::default()).unwrap();
+    found_all(&made);
+    let docx = std::fs::read(folder.path("thesis.docx")).unwrap();
+    assert!(String::from_utf8_lossy(&docx).contains("word/media/"), "the Word file holds pictures");
+
+    // a PDF with each program that is there: Typst (the editor's own, which CI insists on) and a LaTeX where one is installed
+    let engines = local_tools().pdf_engines;
+    if !engines.iter().any(|engine| engine == "typst") {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "Typst is not there: run scripts/fetch-tools.py");
+        eprintln!("Typst is not there: the PDF export with pictures was not run with it");
+    }
+    for engine in engines.iter().filter(|engine| ["typst", "xelatex", "pdflatex"].contains(&engine.as_str())) {
+        let name = format!("with-{engine}.pdf");
+        let made = session
+            .export_document(FileFormat::Pdf, &folder.path(&name), &text, None, &PdfChoice { engine: Some(engine.clone()), paper: Paper::A4 })
+            .unwrap_or_else(|why| panic!("{engine}: {why}"));
+        found_all(&made);
+        let pdf = std::fs::read(folder.path(&name)).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"), "{name} is a PDF");
+        let images = String::from_utf8_lossy(&pdf).replace("/Subtype/Image", "/Subtype /Image").matches("/Subtype /Image").count();
+        assert!(images >= 1 && images <= pictures, "{name} holds {images} pictures");
+    }
+
+    // a picture that is not there: the file is made without it, and the author is told which one
+    let lacking = format!("{text}\n![gone](no-such-picture.png)\n");
+    for (format, engine, name) in [(FileFormat::Docx, None, "lacking.docx"), (FileFormat::Pdf, engines.first().cloned(), "lacking.pdf")] {
+        if format == FileFormat::Pdf && engine.is_none() {
+            continue;
+        }
+        let made = session.export_document(format, &folder.path(name), &lacking, None, &PdfChoice { engine, paper: Paper::A4 }).unwrap_or_else(|why| panic!("{name}: {why}"));
+        assert!(made.warnings.iter().any(|warning| warning.contains("no-such-picture.png")), "{name}: {:?}", made.warnings);
+        assert!(Path::new(&folder.path(name)).is_file());
+    }
+    // nothing of pandoc's or Typst's is left beside the document, and the document is as it was
+    let left: Vec<String> = folder.files().into_iter().filter(|file| !file.starts_with(".cowriting/") && !file.ends_with(".pdf") && !file.ends_with(".docx")).collect();
+    assert_eq!(left, ["figures and plots/second picture.png", "picture.png", "thesis.md"]);
+    assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
 }
 
 #[tokio::test(flavor = "current_thread")]
