@@ -303,10 +303,17 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         rows.push(Row {
             purpose: category_label(lang, category).to_string(),
             tool: tool_label(items, profile),
-            extent: if de {
-                format!("{requests} {}, {} bis {}", if requests == 1 { "Anfrage" } else { "Anfragen" }, dates[0], dates[dates.len() - 1])
-            } else {
-                format!("{requests} {}, {} to {}", if requests == 1 { "request" } else { "requests" }, dates[0], dates[dates.len() - 1])
+            extent: {
+                let (first, last) = (dates[0], dates[dates.len() - 1]);
+                // one day is a date, not a range; the plugin's register writes the range either way
+                let days = if profile == Profile::Editor && first == last { first.to_string() } else { format!("{first} {} {last}", if de { "bis" } else { "to" }) };
+                let noun = match (de, requests == 1) {
+                    (true, true) => "Anfrage",
+                    (true, false) => "Anfragen",
+                    (false, true) => "request",
+                    (false, false) => "requests",
+                };
+                format!("{requests} {noun}, {days}")
             },
             use_,
             chapters: if chapters.is_empty() { "–".to_string() } else { chapters.join(", ") },
