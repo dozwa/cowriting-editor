@@ -2,6 +2,10 @@ import type { ReactNode } from 'react'
 import type { panels as pattern } from '../en/panels'
 
 export const panels: typeof pattern = {
+  hintDone: (n: number) => `Hinweis ${n} ist erledigt`,
+  hintsDone: (done: number, total: number) => `${done} von ${total} ${total === 1 ? 'Hinweis' : 'Hinweisen'} erledigt.`,
+  markAll: 'Alle abhaken',
+  unmarkAll: 'Alle Haken entfernen',
   quoted: text => `„${text}“`,
   line: n => `Zeile ${n}`,
   aiText: 'KI-Text',

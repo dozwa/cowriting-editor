@@ -330,6 +330,9 @@ export const api = {
   logView: (documentText: string) => invoke<LogView>('log_view', { documentText }),
   thread: (id: string) => invoke<ThreadMessage[]>('thread', { id }),
   annotate: (reference: string, use: Use, note: string) => invoke<void>('annotate', { reference, use, note }),
+  /** The hints marked as done, by answer: each by its place among the answer's list items and table rows, from 0. */
+  hintMarks: () => invoke<Record<string, number[]>>('hint_marks'),
+  setHintMarks: (turn: string, done: number[]) => invoke<void>('set_hint_marks', { turn, done }),
   /** Shows a file the editor has just written: marked in its folder, or opened with the system's program. */
   showWritten: (path: string, how: 'folder' | 'open') => invoke<void>('show_written', { path, how }),
   exportDisclosure: (options: ExportOptions) => invoke<Exported>('export_disclosure', { options }),

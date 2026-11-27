@@ -111,6 +111,11 @@ impl Bridge {
             "comment_ai_text" => self.session()?.comment_ai_text(&text("id"), &text("note")).map(|_| Value::Null),
             "log_view" => self.session()?.log_view(&text("documentText")).map(|view| json!(view)),
             "thread" => self.session()?.thread(&text("id")).map(|thread| json!(thread)),
+            "hint_marks" => Ok(json!(self.session()?.hint_marks())),
+            "set_hint_marks" => {
+                let done: Vec<usize> = serde_json::from_value(args["done"].clone()).map_err(|e| e.to_string())?;
+                self.session()?.set_hint_marks(&text("turn"), &done).map(|_| Value::Null)
+            }
             "annotate" => self.session()?.annotate(&text("reference"), &text("use"), &text("note")).map(|_| Value::Null),
             "party" => Ok(json!(self.session()?.party_view())),
             "project" => Ok(json!(self.session()?.project_view())),

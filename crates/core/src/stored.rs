@@ -53,6 +53,7 @@ pub const CHECK: Kind = Kind::new("the last check of the plan's points (check.js
 pub const VERIFY: Kind = Kind::new("the last check of the references (verify.json)", &[]);
 pub const SOURCES: Kind = Kind::new("the list of bibliography files (sources.json)", &[]);
 pub const PARTY: Kind = Kind::new("the list of experts (party.json)", &[]);
+pub const MARKS: Kind = Kind::new("the hints marked as done (marks.json)", &[]);
 pub const SETTINGS: Kind = Kind::new("the editor's settings (settings.json)", &[]);
 pub const STATE: Kind = Kind::new("what the editor remembers between starts (state.json)", &[]);
 

@@ -808,6 +808,17 @@ fn annotate(editor: State<Editor>, reference: String, r#use: String, note: Strin
     editor.session()?.annotate(&reference, &r#use, &note)
 }
 
+/// The hints the author marked as done, by answer.
+#[tauri::command]
+fn hint_marks(editor: State<Editor>) -> Result<std::collections::BTreeMap<String, Vec<usize>>, String> {
+    Ok(editor.session()?.hint_marks())
+}
+
+#[tauri::command]
+fn set_hint_marks(editor: State<Editor>, turn: String, done: Vec<usize>) -> Result<(), String> {
+    editor.session()?.set_hint_marks(&turn, &done)
+}
+
 #[tauri::command]
 fn party(editor: State<Editor>) -> Result<PartyView, String> {
     Ok(editor.session()?.party_view())
@@ -926,6 +937,8 @@ fn main() {
             log_view,
             thread,
             annotate,
+            hint_marks,
+            set_hint_marks,
             export_disclosure,
             party,
             set_brief,

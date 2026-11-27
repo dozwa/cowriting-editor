@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AiTextRow, ExternalUse, LogView, PartyView, ThreadMessage, TurnRow, Use } from './api'
 import { Dialog } from './dialogs'
@@ -8,23 +8,92 @@ import type { Live } from './App'
 import { m } from './i18n'
 import { linkLines, USE_LABELS, when } from './text'
 
-/** An AI answer as markdown; mentions of a line jump there in the editor. Raw HTML in an answer is shown as text, never run. */
-function Answer({ text, onJump }: { text: string; onJump(line: number): void }) {
+type Node = { type: string; children?: Node[]; data?: { hProperties?: Record<string, unknown> } }
+
+/** Numbers the hints of an answer, in the order they are written: every list item and every row of a table below its head. */
+function numberHints() {
+  return (tree: Node) => {
+    let n = 0
+    const number = (node: Node) => {
+      node.data = { ...node.data, hProperties: { ...node.data?.hProperties, 'data-hint': n } }
+      n += 1
+    }
+    const walk = (node: Node) => {
+      if (node.type === 'listItem') number(node)
+      if (node.type === 'table') node.children?.slice(1).forEach(number)
+      node.children?.forEach(walk)
+    }
+    walk(tree)
+  }
+}
+
+/** Which hints of an answer are done, and what a tick does. */
+type Marks = { done: number[]; onChange(done: number[]): void }
+
+/** What the parts of an answer need to know while they are drawn: where a line mention jumps, and the ticks. */
+const AnswerContext = createContext<{ onJump(line: number): void; marks?: Marks }>({ onJump: () => {} })
+
+const hintOf = (props: object) => (props as { 'data-hint'?: number })['data-hint']
+
+/** The box that ticks one hint off. */
+function HintBox({ hint }: { hint: number }) {
+  const { marks } = useContext(AnswerContext)
+  if (marks === undefined) return null
+  const isDone = marks.done.includes(hint)
+  return <input type="checkbox" className="hint-done" aria-label={m.panels.hintDone(hint + 1)} checked={isDone} onChange={() => marks.onChange(isDone ? marks.done.filter(n => n !== hint) : [...marks.done, hint])} />
+}
+
+// The parts of an answer that are drawn in the editor's own way. They are made once, not with every
+// drawing: otherwise a tick would build the whole answer anew and the box just ticked would lose the cursor.
+const ANSWER_PARTS: Components = {
+  a({ href, children }) {
+    const { onJump } = useContext(AnswerContext)
+    const line = /^#line-(\d+)$/.exec(href ?? '')
+    if (line !== null) return <button className="link" onClick={() => onJump(Number(line[1]))}>{children}</button>
+    // the window opens no web pages: an address is shown, not followed
+    return <span className="address" title={href}>{children}</span>
+  },
+  li({ children, className, ...props }) {
+    const { marks } = useContext(AnswerContext)
+    const hint = hintOf(props)
+    if (marks === undefined || hint === undefined) return <li className={className}>{children}</li>
+    return <li data-hint={hint} className={[className, 'tick', marks.done.includes(hint) ? 'done' : ''].filter(Boolean).join(' ')}><HintBox hint={hint} />{children}</li>
+  },
+  tr({ children, ...props }) {
+    const { marks } = useContext(AnswerContext)
+    const hint = hintOf(props)
+    if (marks === undefined) return <tr>{children}</tr>
+    // the head of the table gets an empty cell above the boxes
+    if (hint === undefined) return <tr><th className="hint-box" />{children}</tr>
+    return <tr data-hint={hint} className={marks.done.includes(hint) ? 'done' : undefined}><td className="hint-box"><HintBox hint={hint} /></td>{children}</tr>
+  },
+}
+const ANSWER_PLUGINS = [remarkGfm, numberHints]
+
+/**
+ * An AI answer as markdown; mentions of a line jump there in the editor. Raw HTML in an answer is shown as text, never run.
+ * With `marks`, every list item and table row has a box to tick it off as done: a help for going through a long answer.
+ */
+function Answer({ text, onJump, marks }: { text: string; onJump(line: number): void; marks?: Marks }) {
+  const body = useRef<HTMLDivElement>(null)
+  const [total, setTotal] = useState(0)
+  // the boxes are there once the answer is in the log; an answer still being written has none
+  const hasBoxes = marks !== undefined
+  useEffect(() => setTotal(body.current?.querySelectorAll('[data-hint]').length ?? 0), [text, hasBoxes])
   return (
-    <div className="answer">
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a({ href, children }) {
-            const line = /^#line-(\d+)$/.exec(href ?? '')
-            if (line !== null) return <button className="link" onClick={() => onJump(Number(line[1]))}>{children}</button>
-            // the window opens no web pages: an address is shown, not followed
-            return <span className="address" title={href}>{children}</span>
-          },
-        }}
-      >
-        {linkLines(text)}
-      </Markdown>
+    <div className="answer" ref={body}>
+      <AnswerContext.Provider value={{ onJump, marks }}>
+        <Markdown remarkPlugins={ANSWER_PLUGINS} components={ANSWER_PARTS}>
+          {linkLines(text)}
+        </Markdown>
+      </AnswerContext.Provider>
+      {marks !== undefined && total > 0 && (
+        <p className="hints-done muted">
+          {m.panels.hintsDone(marks.done.filter(n => n < total).length, total)}{' '}
+          {marks.done.length < total && <button className="link" onClick={() => marks.onChange(Array.from({ length: total }, (_, n) => n))}>{m.panels.markAll}</button>}{' '}
+          {marks.done.length > 0 && <button className="link" onClick={() => marks.onChange([])}>{m.panels.unmarkAll}</button>}
+        </p>
+      )}
     </div>
   )
 }
@@ -69,6 +138,9 @@ type AskProps = {
   party: PartyView | null
   onAsk(text: string, replyTo: string | null, persona: string | null, command?: string): void
   onAnnotate(id: string, use: Use, note: string): void
+  /** The hints ticked off as done, by answer, and what a tick does. */
+  marks: Record<string, number[]>
+  onMark(id: string, done: number[]): void
   onJump(line: number): void
   onNew(): void
   /** Ends the answer that is coming in. */
@@ -89,7 +161,7 @@ export const ACTIONS: { id: string; label: string; hint: string; request: string
   { id: 'consistency', get label() { return m.panels.consistency }, get hint() { return m.panels.consistencyHint }, get request() { return m.panels.consistencyRequest } },
 ]
 
-export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, onAnnotate, onJump, onNew, onStop, onSettings }: AskProps) {
+export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, onAnnotate, marks, onMark, onJump, onNew, onStop, onSettings }: AskProps) {
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
   const byId = new Map(turns.map(t => [t.id, t]))
@@ -142,7 +214,7 @@ export function AskPanel({ thread, live, turns, isReady, notice, party, onAsk, o
                 {message.role === 'author' ? m.panels.you : message.persona === '' ? m.panels.assistant : (expertOf(message.persona)?.name ?? message.who)} <span className="muted">{when(message.ts)}</span>
                 {isAnswer && turn?.isAiText && <span className="flag" title={m.panels.aiTextInAnswer}>{m.panels.aiText}</span>}
               </h3>
-              {isAnswer ? <Answer text={message.text} onJump={onJump} /> : <p className="said">{message.text}</p>}
+              {isAnswer ? <Answer text={message.text} onJump={onJump} marks={turn === undefined ? undefined : { done: marks[message.id] ?? [], onChange: done => onMark(message.id, done) }} /> : <p className="said">{message.text}</p>}
               {isAnswer && turn !== undefined && <Classify key={turn.id + turn.use} turn={turn} onAnnotate={onAnnotate} />}
             </article>
           )

@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
 
 export const panels = {
+  // hints of an answer, ticked off one by one
+  hintDone: (n: number) => `Hint ${n} is done`,
+  hintsDone: (done: number, total: number) => `${done} of ${total} ${total === 1 ? 'hint' : 'hints'} done.`,
+  markAll: 'Mark all',
+  unmarkAll: 'Unmark all',
   // something the author or the AI said, quoted
   quoted: (text: string) => `“${text}”`,
   line: (n: number) => `line ${n}`,

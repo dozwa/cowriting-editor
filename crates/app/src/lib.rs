@@ -1179,6 +1179,34 @@ impl Session {
         Ok(id)
     }
 
+    /// The hints the author marked as done, by the answer they are in: each hint by its place among
+    /// the answer's list items and table rows, counted from 0. A working aid for going through a
+    /// long answer; the log and the disclosure do not hold it.
+    pub fn hint_marks(&self) -> BTreeMap<String, Vec<usize>> {
+        let json = stored::read(self.workspace.host.as_ref(), &self.workspace.sidecar.marks_json(), &stored::MARKS).unwrap_or_default();
+        json.get("turns").and_then(|turns| serde_json::from_value(turns.clone()).ok()).unwrap_or_default()
+    }
+
+    /// Sets which hints of one answer are done; none takes the answer off the list.
+    pub fn set_hint_marks(&self, turn: &str, done: &[usize]) -> Result<(), String> {
+        let (host, file) = (self.workspace.host.as_ref(), self.workspace.sidecar.marks_json());
+        if !self.workspace.log.read().map_err(error)?.iter().any(|entry| matches!(entry, LogEntry::Prompt(prompt) if prompt.id == turn)) {
+            return Err(format!("The log has no answer “{turn}” to mark hints in."));
+        }
+        let mut json = stored::read(host, &file, &stored::MARKS).unwrap_or_default();
+        let mut turns = json.get("turns").and_then(|turns| turns.as_object().cloned()).unwrap_or_default();
+        let mut done: Vec<usize> = done.to_vec();
+        done.sort_unstable();
+        done.dedup();
+        if done.is_empty() {
+            turns.remove(turn);
+        } else {
+            turns.insert(turn.to_string(), serde_json::json!(done));
+        }
+        json.insert("turns".into(), serde_json::Value::Object(turns));
+        stored::write(host, &file, &stored::MARKS, &json).map_err(|e| format!("The marks could not be saved: {e}"))
+    }
+
     pub fn annotate(&self, reference: &str, use_: &str, note: &str) -> Result<(), String> {
         annotate(&self.workspace, reference, use_, note)
     }

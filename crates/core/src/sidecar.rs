@@ -191,6 +191,11 @@ impl Sidecar {
         format!("{}/verify.json", self.dir())
     }
 
+    /// Which hints of which answers the author marked as done: a working aid, not part of the log.
+    pub fn marks_json(&self) -> String {
+        format!("{}/marks.json", self.dir())
+    }
+
     pub fn doc_json(&self) -> String {
         format!("{}/doc.json", self.dir())
     }
@@ -202,7 +207,7 @@ impl Sidecar {
     /// Looks at this document's stored files before they are used: one that cannot be read is set
     /// aside and one from a newer editor is named, so that neither is written over (see `stored`).
     pub fn look_over(&self, host: &dyn Host) -> Vec<crate::stored::Notice> {
-        use crate::stored::{look_at, CHECK, DOC, LIVE, PARTY, PROJECT, SOURCES};
+        use crate::stored::{look_at, CHECK, DOC, LIVE, MARKS, PARTY, PROJECT, SOURCES};
         type Any = serde_json::Map<String, serde_json::Value>;
         [
             look_at::<DocInfo>(host, &self.doc_json(), &DOC),
@@ -211,6 +216,7 @@ impl Sidecar {
             look_at::<crate::review::CheckFile>(host, &self.check_json(), &CHECK),
             look_at::<Any>(host, &self.sources_json(), &SOURCES),
             look_at::<Any>(host, &self.party_json(), &PARTY),
+            look_at::<Any>(host, &self.marks_json(), &MARKS),
         ]
         .into_iter()
         .flatten()

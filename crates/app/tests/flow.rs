@@ -773,3 +773,40 @@ fn what_is_commented_out_stays_in_the_document_and_is_in_no_export() {
     }
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn hints_ticked_off_as_done_are_kept_beside_the_log_and_are_no_part_of_it() {
+    let folder = Folder::new("marks");
+    std::fs::write(folder.path("thesis.md"), TEXT).unwrap();
+    std::fs::write(folder.path("script.json"), r#"{"replies": [{"text": "- Line 3: name the offices.\n- Line 3: say participants."}]}"#).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    assert!(session.hint_marks().is_empty(), "a document that was never asked about has no marks, and no file for them");
+    let settings = BackendSettings { backend: format!("fake:{}", folder.path("script.json")), model: "scripted".into(), base_url: String::new(), max_tokens: 0 };
+    let asked = session
+        .ask(
+            make_backend(&settings, None).unwrap().as_ref(),
+            Ask { text: "Feedback?".into(), document_text: TEXT.into(), model: "scripted".into(), ..Default::default() },
+            &mut |_| {},
+        )
+        .await
+        .unwrap();
+    let log_before = folder.files().iter().filter(|file| file.contains("/ai-log/")).map(|file| std::fs::read_to_string(folder.path(file)).unwrap()).collect::<String>();
+
+    session.set_hint_marks(&asked.id, &[1, 0, 1]).unwrap();
+    assert_eq!(session.hint_marks().get(&asked.id), Some(&vec![0, 1]));
+    // an answer the log does not have cannot be marked: a stray id leaves nothing behind
+    assert!(session.set_hint_marks("nowhere", &[0]).unwrap_err().contains("no answer"));
+
+    // the editor is closed and opened again: the ticks are there, in a file of their own beside the log
+    let (session, opened) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    assert!(opened.notices.is_empty());
+    assert_eq!(session.hint_marks(), [(asked.id.clone(), vec![0, 1])].into_iter().collect());
+    let marks: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(folder.path(".cowriting/thesis.md/marks.json")).unwrap()).unwrap();
+    assert_eq!(marks, json!({ "turns": { asked.id.clone(): [0, 1] }, "schema": 1 }));
+    let log_after = folder.files().iter().filter(|file| file.contains("/ai-log/")).map(|file| std::fs::read_to_string(folder.path(file)).unwrap()).collect::<String>();
+    assert_eq!(log_after, log_before, "ticking a hint writes nothing into the log");
+
+    // taking every tick off again takes the answer off the list
+    session.set_hint_marks(&asked.id, &[]).unwrap();
+    assert!(session.hint_marks().is_empty());
+}

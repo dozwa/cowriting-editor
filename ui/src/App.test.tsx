@@ -32,10 +32,10 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
 }
 let lastEditor: Editor & Seen
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]> } = {}) {
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[] } = { pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -240,6 +240,8 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       calls.comments.push([id, note])
       aiText.find(row => row.id === id)!.note = note
     },
+    hintMarks: async () => ({ ...calls.marks }),
+    setHintMarks: async (turn, done) => void (calls.marks[turn] = done),
     stopAnswer: async () => {
       calls.picked.push('stopped')
       release()
@@ -432,6 +434,69 @@ test('a tested model carries no notice, and choosing Claude sends the key to the
   await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, 'sk-ant-secret']]))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(document.body.textContent).not.toContain('sk-ant-secret')
+})
+
+const HINTS = '- Line 3: name the offices.\n- Line 5: needs a source.\n  - a nested point\n\n| Line | Hint |\n|---|---|\n| 3 | subjects → participants |\n| 5 | data is plural |\n\nA closing remark.'
+
+test('each hint of an answer can be ticked off as done, all at once too, and the ticks are kept', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ answer: HINTS })
+  const { container, unmount } = render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.type(screen.getByLabelText('Ask the AI'), 'hi')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await screen.findByText('A closing remark.')
+  // a box for every list item, the nested one too, and for every row below the table's head; none for a paragraph
+  const boxes = () => [...container.querySelectorAll<HTMLInputElement>('.answer input.hint-done')]
+  expect(boxes().map(box => box.getAttribute('aria-label'))).toEqual(['Hint 1 is done', 'Hint 2 is done', 'Hint 3 is done', 'Hint 4 is done', 'Hint 5 is done'])
+  expect(container.querySelectorAll('.answer thead th').length).toBe(3)
+  expect(screen.getByText('0 of 5 hints done.')).toBeTruthy()
+
+  const second = screen.getByRole('checkbox', { name: 'Hint 2 is done' })
+  await user.click(second)
+  // the answer is not built anew by a tick: the box is the one that was pressed, and keeps the cursor
+  expect(screen.getByRole('checkbox', { name: 'Hint 2 is done' })).toBe(second)
+  expect(document.activeElement).toBe(second)
+  await user.click(screen.getByRole('checkbox', { name: 'Hint 4 is done' }))
+  await waitFor(() => expect(calls.marks).toEqual({ t1: [1, 3] }))
+  expect(screen.getByText('2 of 5 hints done.')).toBeTruthy()
+  expect(container.querySelector('.answer li.done')?.textContent).toContain('needs a source')
+  expect(container.querySelector('.answer tr.done')?.textContent).toContain('subjects → participants')
+  // the nested point is a hint of its own: it is not done because the one above it is
+  expect(container.querySelectorAll('.answer li.done').length).toBe(1)
+
+  await user.click(screen.getByRole('checkbox', { name: 'Hint 2 is done' }))
+  await waitFor(() => expect(calls.marks).toEqual({ t1: [3] }))
+  await user.click(screen.getByRole('button', { name: 'Mark all' }))
+  await waitFor(() => expect(calls.marks).toEqual({ t1: [0, 1, 2, 3, 4] }))
+  expect(boxes().every(box => box.checked)).toBe(true)
+  expect(screen.queryByRole('button', { name: 'Mark all' })).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Unmark all' }))
+  await waitFor(() => expect(calls.marks).toEqual({ t1: [] }))
+  expect(boxes().some(box => box.checked)).toBe(false)
+
+  // the document is opened again: what was ticked is ticked
+  await user.click(screen.getByRole('checkbox', { name: 'Hint 5 is done' }))
+  await waitFor(() => expect(calls.marks).toEqual({ t1: [4] }))
+  unmount()
+  const again = render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: /Log/ }))
+  await user.click(again.container.querySelector<HTMLElement>('button.turn')!)
+  await screen.findByText('A closing remark.')
+  expect([...again.container.querySelectorAll<HTMLInputElement>('.answer input.hint-done')].map(box => box.checked)).toEqual([false, false, false, false, true])
+})
+
+test('an answer without lists or tables has nothing to tick, and one that is still being written neither', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn({ answer: 'One paragraph, no list.' })
+  const { container } = render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.type(screen.getByLabelText('Ask the AI'), 'hi')
+  await user.click(screen.getByRole('button', { name: 'Ask' }))
+  await screen.findByText('One paragraph, no list.')
+  expect(container.querySelector('.answer input')).toBeNull()
+  expect(screen.queryByText(/hints? done/)).toBeNull()
 })
 
 test('HTML in an answer is shown as text, and a web address is not a link', async () => {

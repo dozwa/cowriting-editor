@@ -246,6 +246,15 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .answer table { border-collapse: collapse; font-size: 12.5px; display: block; overflow-x: auto; }
 /* break-word, not anywhere: "anywhere" lets a column shrink to one character, and a short one (line numbers) then breaks after every digit */
 .answer th, .answer td { border: 1px solid var(--rule); padding: 3px 7px; text-align: left; overflow-wrap: break-word; }
+/* hints ticked off as done: a box before each list item and table row */
+.answer li.tick { list-style: none; position: relative; }
+.answer li.tick > .hint-done { position: absolute; left: -19px; top: 0.3em; margin: 0; }
+.answer .hint-box { width: 1px; padding: 3px 5px; border-right: 0; }
+.answer .hint-done { accent-color: var(--pencil); }
+.answer li.done, .answer tr.done > td { color: var(--soft); }
+.answer li.done > :not(ul, ol, input), .answer tr.done > td:not(.hint-box) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--soft) 55%, transparent); }
+.answer li.done li:not(.done) { color: var(--ink); }
+.answer .hints-done { font-size: 12px; margin-top: 6px; }
 .answer code { background: var(--page); border-radius: 3px; padding: 0 3px; }
 .answer pre { background: var(--page); padding: 9px; border-radius: var(--radius); overflow-x: auto; }
 .answer .address { text-decoration: underline dotted; }

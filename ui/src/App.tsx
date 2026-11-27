@@ -98,6 +98,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [found, setFound] = useState('')
   /** The author said the logs without a document are not this one's. */
   const [orphansSeen, setOrphansSeen] = useState(false)
+  const [marks, setMarks] = useState<Record<string, number[]>>({})
   const [moving, setMoving] = useState<{ target: string; pictures: PicturesToMove } | null>(null)
   const [storedSeen, setStoredSeen] = useState(false)
   const [panelWidth, setPanelWidth] = useState(rememberedPanel)
@@ -294,6 +295,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       editor.current?.setText(opened.text)
       setDirty(false)
       setLog(await api.logView(opened.text))
+      setMarks(await api.hintMarks())
       setParty(await api.party())
       setProject(await api.project())
       // a document can have an AI of its own: what holds now is asked for again
@@ -450,6 +452,18 @@ export function App({ api, makeEditor = createEditor }: Props) {
     } catch (e) {
       fail(e)
       return false
+    }
+  }
+
+  /** Ticks hints of an answer off as done. Shown at once; if it cannot be kept, the tick is taken back. */
+  const mark = async (id: string, done: number[]) => {
+    const before = marks
+    setMarks({ ...marks, [id]: done })
+    try {
+      await api.setHintMarks(id, done)
+    } catch (e) {
+      setMarks(before)
+      fail(e)
     }
   }
 
@@ -719,7 +733,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
             </button>
           </nav>
           {tab === 'ask' ? (
-            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={shownParty} onAsk={ask} onAnnotate={annotate} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onStop={() => void api.stopAnswer().catch(fail)} onSettings={() => setDialog('settings')} />
+            <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={shownParty} onAsk={ask} onAnnotate={annotate} marks={marks} onMark={(id, done) => void mark(id, done)} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onStop={() => void api.stopAnswer().catch(fail)} onSettings={() => setDialog('settings')} />
           ) : tab === 'experts' && shownParty !== null ? (
             <ExpertsPanel
               party={shownParty}
