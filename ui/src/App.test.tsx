@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
-import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView, StoredNotice } from './api'
+import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView, StoredNotice, PicturesToMove } from './api'
 import { App, shownVersion } from './App'
 import type { Editor, EditorHandlers, Format, View } from './editor'
 import { type Preferences, STANDARD } from './preferences'
@@ -32,10 +32,10 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
 }
 let lastEditor: Editor & Seen
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[] } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove } = {}) {
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[] } = { pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[] } = { pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -165,8 +165,9 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     },
     pickMove: async () => '/work/drafts/chapter-1.md',
     openGuide: async which => void calls.pages.push(which),
-    moveDocument: async (target, text) => {
-      calls.moved.push([target, text])
+    picturesToMove: async () => options.picturesToMove ?? { inside: [], outside: [] },
+    moveDocument: async (target, text, pictures) => {
+      calls.moved.push(pictures === undefined ? [target, text] : [target, text, pictures])
       return { path: target, name: 'chapter-1.md', text, language: 'en', orphans: [], notices: [] }
     },
     newDocument: async path => ({ path, name: 'new.md', text: '', language: 'en', orphans: [], notices: [] }),
@@ -824,6 +825,38 @@ test('Cmd or Ctrl with F opens the find bar, wherever the cursor is', async () =
   await user.click(screen.getByPlaceholderText(/Ask about your text/))
   await user.keyboard('{Control>}f{/Control}')
   expect(lastEditor.finds).toEqual([1])
+})
+
+test('a document that names pictures from its folder asks what becomes of them before it moves', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ picturesToMove: { inside: ['images/plot.png'], outside: ['../shared/logo.svg'] } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('button', { name: 'Move…' }))
+  const dialog = await screen.findByRole('dialog', { name: 'The pictures of this document' })
+  expect(dialog.textContent).toContain('names 2 pictures')
+  expect(dialog.textContent).toContain('images/plot.png')
+  expect(dialog.textContent).toContain('../shared/logo.svg')
+  expect(calls.moved).toEqual([])
+  // cancelling moves nothing
+  await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(calls.moved).toEqual([])
+  await user.click(screen.getByRole('button', { name: 'Move…' }))
+  await user.click(await screen.findByRole('button', { name: 'Copy them along' }))
+  await waitFor(() => expect(calls.moved).toEqual([['/work/drafts/chapter-1.md', '# Thesis\n\nWe recruited 48 subjects.\n', 'copy']]))
+})
+
+test('pictures that all lie outside the folder can only be named from the new place', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ picturesToMove: { inside: [], outside: ['../shared/logo.svg'] } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('button', { name: 'Move…' }))
+  await screen.findByRole('dialog', { name: 'The pictures of this document' })
+  expect(screen.queryByRole('button', { name: 'Copy them along' })).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Leave them, rewrite the ways' }))
+  await waitFor(() => expect(calls.moved[0]?.[2]).toBe('leave'))
 })
 
 test('a stored file that was set aside or is from a newer editor is named, and the notice can be closed', async () => {

@@ -553,9 +553,19 @@ fn adopt_log(app: tauri::AppHandle, editor: State<Editor>, name: String) -> Resu
 
 /// Moves or renames the open document, with its log.
 #[tauri::command]
-fn move_document(app: tauri::AppHandle, editor: State<Editor>, target: String, text: String) -> Result<Opened, String> {
-    editor.session()?.move_document(&target, &text)?;
+fn move_document(app: tauri::AppHandle, editor: State<Editor>, target: String, text: String, pictures: Option<String>) -> Result<Opened, String> {
+    match pictures.as_deref() {
+        Some("copy") => editor.session()?.move_with_pictures(&target, &text, cowriting_app::picture::Along::Copy).map(|_| ())?,
+        Some("leave") => editor.session()?.move_with_pictures(&target, &text, cowriting_app::picture::Along::Leave).map(|_| ())?,
+        _ => editor.session()?.move_document(&target, &text)?,
+    }
     open_document(app, editor, target)
+}
+
+/// The pictures a move to `target` would leave behind.
+#[tauri::command]
+fn pictures_to_move(editor: State<Editor>, target: String, text: String) -> Result<cowriting_app::picture::ToMove, String> {
+    Ok(editor.session()?.pictures_to_move(&target, &text))
 }
 
 #[tauri::command]
@@ -910,6 +920,7 @@ fn main() {
             usage_preview,
             privacy_statement,
             move_document,
+            pictures_to_move,
             ask,
             stop_answer,
             log_view,

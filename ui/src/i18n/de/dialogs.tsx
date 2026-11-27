@@ -11,6 +11,14 @@ export const dialogs: typeof pattern = {
   pictureCopy: 'Neben das Dokument kopieren',
   pictureLink: 'Dort nennen, wo es liegt',
   pictureCancel: 'Abbrechen',
+  movePicturesTitle: 'Die Bilder dieses Dokuments',
+  movePicturesFound: (n: number) => (n === 1 ? 'Das Dokument nennt ein Bild über den Weg vom Dokument aus. Im neuen Ordner führte dieser Weg ins Leere:' : `Das Dokument nennt ${n} Bilder über den Weg vom Dokument aus. Im neuen Ordner führten diese Wege ins Leere:`),
+  movePicturesMore: (n: number) => `und ${n} weitere`,
+  movePicturesChoice: (hasOutside: boolean) =>
+    `Kopien kommen an dieselbe Stelle neben die neue Datei des Dokuments, und der Text bleibt, wie er ist; die Bilder selbst bleiben, wo sie sind.${hasOutside ? ' Bilder außerhalb des Dokumentordners werden nicht kopiert: Der Text nennt sie vom neuen Ort aus.' : ''} Ohne Kopien schreibt der Editor die Wege in Ihrem Text so um, dass sie vom neuen Ordner zu den Bildern führen, wo sie liegen.`,
+  movePicturesOutsideOnly: 'Sie liegen außerhalb des Dokumentordners. Der Editor schreibt die Wege in Ihrem Text so um, dass sie vom neuen Ordner zu den Bildern führen, wo sie liegen. Sonst ändert sich nichts am Text.',
+  movePicturesCopy: 'Mitkopieren',
+  movePicturesLeave: 'Liegen lassen, Wege umschreiben',
   leaveQuestion: 'Dieses Dokument hat Änderungen, die nicht gespeichert sind. Trotzdem verlassen?',
   leaveTitle: 'Nicht gespeicherte Änderungen',
 

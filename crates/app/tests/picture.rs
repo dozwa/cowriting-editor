@@ -130,3 +130,95 @@ fn a_copied_picture_is_in_the_export() {
         Err(why) => assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "the PDF was not made: {why}"),
     }
 }
+
+// ------------------------------------------------------------ when the document moves
+
+use cowriting_app::picture::{carried, to_move, Along};
+
+/// A document in `paper/` that names a picture beside it, one in `images/`, one outside its folder,
+/// one on the web and one that is not there.
+fn with_pictures(folder: &Folder) -> String {
+    for place in ["paper/images", "shared", "elsewhere"] {
+        std::fs::create_dir_all(folder.path(place)).unwrap();
+    }
+    for copy in ["paper/plot.png", "paper/images/my plot (1).png", "shared/logo.png"] {
+        std::fs::copy(fixture(), folder.path(copy)).unwrap();
+    }
+    let text = "# Results\n\n![a](plot.png) and ![b](<images/my plot (1).png> \"title\")\n\n![logo](../shared/logo.png) ![web](https://example.org/x.png) ![gone](missing.png)\n\nNot a picture: [link](plot.png).\n";
+    std::fs::write(folder.path("paper/thesis.md"), text).unwrap();
+    text.to_string()
+}
+
+#[test]
+fn a_move_names_the_pictures_it_would_leave_behind_and_none_when_the_folder_stays() {
+    let folder = Folder::new("named");
+    let text = with_pictures(&folder);
+    let found = to_move(&text, &folder.path("paper"), &folder.path("elsewhere"));
+    assert_eq!(found.inside, ["plot.png", "images/my plot (1).png"]);
+    assert_eq!(found.outside, ["../shared/logo.png"]);
+    // renamed in its folder: every way still leads where it led
+    assert_eq!(to_move(&text, &folder.path("paper"), &folder.path("paper")), Default::default());
+    assert_eq!(carried(&text, &folder.path("paper"), &format!("{}/", folder.path("paper")), Along::Leave), (text.clone(), Vec::new()));
+}
+
+#[test]
+fn moved_with_copies_the_pictures_are_beside_the_new_file_and_the_originals_where_they_were() {
+    let folder = Folder::new("copied");
+    let text = with_pictures(&folder);
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("paper/thesis.md")).unwrap();
+    assert_eq!(session.pictures_to_move(&folder.path("elsewhere/chapter.md"), &text).inside.len(), 2);
+    let moved = session.move_with_pictures(&folder.path("elsewhere/chapter.md"), &text, Along::Copy).unwrap();
+
+    // the text is as it was: the copies are where its ways lead, and the picture outside the folder
+    // lies the same way from the new folder as from the old one (both are beside `shared`)
+    assert_eq!(moved, text);
+    assert_eq!(std::fs::read_to_string(folder.path("elsewhere/chapter.md")).unwrap(), moved);
+    for (copy, original) in [("elsewhere/plot.png", "paper/plot.png"), ("elsewhere/images/my plot (1).png", "paper/images/my plot (1).png")] {
+        assert_eq!(std::fs::read(folder.path(copy)).unwrap(), std::fs::read(fixture()).unwrap(), "{copy}");
+        assert!(Path::new(&folder.path(original)).is_file(), "{original} stays: another document may name it");
+    }
+    assert!(!Path::new(&folder.path("elsewhere/shared")).exists() && !Path::new(&folder.path("elsewhere/missing.png")).exists());
+    assert!(!Path::new(&folder.path("paper/thesis.md")).exists());
+}
+
+#[test]
+fn moved_without_copies_the_text_names_every_picture_from_the_new_place_and_nothing_else_changes() {
+    let folder = Folder::new("left");
+    let text = with_pictures(&folder);
+    std::fs::create_dir_all(folder.path("elsewhere/deep")).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("paper/thesis.md")).unwrap();
+    let moved = session.move_with_pictures(&folder.path("elsewhere/deep/chapter.md"), &text, Along::Leave).unwrap();
+    assert_eq!(
+        moved,
+        "# Results\n\n![a](../../paper/plot.png) and ![b](<../../paper/images/my plot (1).png> \"title\")\n\n![logo](../../shared/logo.png) ![web](https://example.org/x.png) ![gone](missing.png)\n\nNot a picture: [link](plot.png).\n"
+    );
+    assert!(!Path::new(&folder.path("elsewhere/deep/plot.png")).exists());
+    // every way the text has now leads to a picture again
+    assert_eq!(
+        to_move(&moved, &folder.path("elsewhere/deep"), &folder.path("paper")).inside.len() + to_move(&moved, &folder.path("elsewhere/deep"), &folder.path("paper")).outside.len(),
+        3
+    );
+}
+
+#[test]
+fn a_copy_never_replaces_a_different_picture_that_is_already_there() {
+    let folder = Folder::new("taken");
+    let text = with_pictures(&folder);
+    std::fs::write(folder.path("elsewhere/plot.png"), b"another picture").unwrap();
+    let (moved, copies) = carried(&text, &folder.path("paper"), &folder.path("elsewhere"), Along::Copy);
+    assert!(moved.contains("![a](../paper/plot.png)"), "the picture whose place is taken is named where it lies: {moved}");
+    assert!(moved.contains("![b](<images/my plot (1).png>"));
+    assert_eq!(copies.len(), 1);
+    assert_eq!(std::fs::read(folder.path("elsewhere/plot.png")).unwrap(), b"another picture");
+}
+
+#[test]
+fn a_shared_picture_is_still_there_for_the_document_that_stays() {
+    let folder = Folder::new("shared");
+    let text = with_pictures(&folder);
+    std::fs::write(folder.path("paper/other.md"), "![a](plot.png)\n").unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("paper/thesis.md")).unwrap();
+    session.move_with_pictures(&folder.path("elsewhere/chapter.md"), &text, Along::Copy).unwrap();
+    assert_eq!(std::fs::read(folder.path("paper/plot.png")).unwrap(), std::fs::read(fixture()).unwrap(), "other.md still finds its picture");
+    assert_eq!(std::fs::read(folder.path("elsewhere/plot.png")).unwrap(), std::fs::read(fixture()).unwrap());
+}

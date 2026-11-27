@@ -19,7 +19,9 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
 struct Bridge {
-    document: String,
+    document: Mutex<String>,
+    /// Where "Move…" takes the document, in place of a file dialog (`--move-to`).
+    move_to: Option<String>,
     session: Mutex<Option<Arc<Session>>>,
     settings: Mutex<BackendSettings>,
     preferences: Mutex<Preferences>,
@@ -35,7 +37,7 @@ impl Bridge {
     }
 
     fn open(&self) -> Result<Value, String> {
-        let (session, mut opened) = Session::open(Arc::new(DiskHost), &self.document)?;
+        let (session, mut opened) = Session::open(Arc::new(DiskHost), &self.document.lock().unwrap().clone())?;
         *self.session.lock().unwrap() = Some(Arc::new(session));
         let mut notices = self.notices.lock().unwrap();
         notices.append(&mut opened.notices);
@@ -51,7 +53,7 @@ impl Bridge {
         view["isReady"] = json!(make_backend(&settings, key.as_deref()).is_ok());
         view["modelStatus"] = json!(model_status(&tested_models(), &settings.backend, &settings.model));
         view["isFirstRun"] = json!(*self.is_first_run.lock().unwrap());
-        view["openAtStart"] = json!(self.document);
+        view["openAtStart"] = json!(*self.document.lock().unwrap());
         view["preferences"] = json!(*self.preferences.lock().unwrap());
         view["version"] = json!(env!("CARGO_PKG_VERSION"));
         view["system"] = json!(format!("{} {}", std::env::consts::OS, std::env::consts::ARCH));
@@ -98,7 +100,7 @@ impl Bridge {
                 let models = runtime.block_on(list_models(&settings, key.as_deref()))?;
                 Ok(models.into_iter().map(|(id, name)| json!({ "status": model_status(&tested, &settings.backend, &id), "id": id, "name": name })).collect())
             }
-            "pick_document" => Ok(json!(self.document)),
+            "pick_document" => Ok(json!(*self.document.lock().unwrap())),
             "open_document" | "new_document" => self.open(),
             "save_document" => self.session()?.save(&text("text")).map(|found| json!(found)),
             "report_paste" => self.session()?.report_paste(&text("pasted"), args["line"].as_u64().unwrap_or(0) as usize, &text("documentText")).map(|found| json!(found)),
@@ -144,12 +146,23 @@ impl Bridge {
                 self.session()?.adopt(&text("name"))?;
                 self.open()
             }
-            // the bridge serves one document at one place
-            "pick_move" => Ok(Value::Null),
+            // no dialog here: the place named when the bridge was started, if one was
+            "pick_move" => Ok(json!(self.move_to)),
+            "pictures_to_move" => Ok(json!(self.session()?.pictures_to_move(&text("target"), &text("text")))),
+            "move_document" => {
+                let session = self.session()?;
+                match args["pictures"].as_str() {
+                    Some("copy") => session.move_with_pictures(&text("target"), &text("text"), cowriting_app::picture::Along::Copy).map(|_| ())?,
+                    Some("leave") => session.move_with_pictures(&text("target"), &text("text"), cowriting_app::picture::Along::Leave).map(|_| ())?,
+                    _ => session.move_document(&text("target"), &text("text"))?,
+                }
+                *self.document.lock().unwrap() = text("target");
+                self.open()
+            }
             "sources" => Ok(json!(self.session()?.sources_view(&text("documentText")))),
             // no dialog here: the file beside the document, if there is one
             "pick_bibliography" => {
-                let beside = std::path::Path::new(&self.document).with_file_name("refs.bib");
+                let beside = std::path::Path::new(&*self.document.lock().unwrap()).with_file_name("refs.bib");
                 Ok(if beside.exists() { json!(beside.to_string_lossy()) } else { Value::Null })
             }
             "add_bibliography" => self.session()?.add_bibliography(&text("path"), &text("documentText")).map(|_| Value::Null),
@@ -269,7 +282,8 @@ fn main() {
         max_tokens: 0,
     };
     let bridge = Arc::new(Bridge {
-        document,
+        document: Mutex::new(document),
+        move_to: value("--move-to"),
         session: Mutex::default(),
         settings: Mutex::new(settings),
         preferences: Mutex::default(),

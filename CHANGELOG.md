@@ -34,6 +34,11 @@ to a new heading with its version and date; the release workflow does that (see 
   case, whole words and regular expressions. Replacing all is one step to undo, and a
   replacement is the author's own edit: it is not taken for pasted text. The panels are not
   searched. (#11)
+- **"Move…" asks about the pictures.** When a document goes to another folder and names pictures
+  by where they lie from it, the editor asks before it moves: copy the pictures in the
+  document's folder along, or leave them and rewrite their ways in the text. Pictures outside
+  the folder are always named from the new place. The pictures themselves stay where they are,
+  and a copy never replaces a different file. (#32)
 - **Projects survive a change of version.** Every file the editor keeps (the project's
   settings, the lists of experts and bibliography files, what it knows about a document, its
   own settings) says which form it has. An older form is brought up to date step by step, and a

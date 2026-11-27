@@ -13,6 +13,15 @@ export const dialogs = {
   pictureCopy: 'Copy it beside the document',
   pictureLink: 'Name it where it is',
   pictureCancel: 'Cancel',
+  // a document that names pictures from its folder moves to another folder
+  movePicturesTitle: 'The pictures of this document',
+  movePicturesFound: (n: number) => (n === 1 ? 'The document names one picture by where it lies from the document. In the new folder that way would lead nowhere:' : `The document names ${n} pictures by where they lie from the document. In the new folder those ways would lead nowhere:`),
+  movePicturesMore: (n: number) => `and ${n} more`,
+  movePicturesChoice: (hasOutside: boolean) =>
+    `Copies go to the same place beside the document's new file, and the text stays as it is; the pictures themselves stay where they are.${hasOutside ? ' Pictures outside the document’s folder are not copied: the text names them from the new place.' : ''} Without copies, the editor rewrites the ways in your text so that they lead from the new folder to the pictures where they lie.`,
+  movePicturesOutsideOnly: 'They lie outside the document’s folder. The editor rewrites the ways in your text so that they lead from the new folder to the pictures where they lie. Nothing else in the text changes.',
+  movePicturesCopy: 'Copy them along',
+  movePicturesLeave: 'Leave them, rewrite the ways',
   leaveQuestion: 'This document has changes that are not saved. Leave it anyway?',
   leaveTitle: 'Unsaved changes',
 

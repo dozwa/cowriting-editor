@@ -439,6 +439,7 @@ button.bug { display: inline-flex; align-items: center; gap: 6px; margin-left: 6
 .welcome .foot .version { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* background files and what an expert is told */
+dialog .ways { margin: 0 0 10px 18px; font-size: 13px; overflow-wrap: anywhere; }
 .files ul { display: grid; gap: 6px; }
 .files li { padding: 7px 10px; background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); }
 .files li strong { font-weight: 650; overflow-wrap: anywhere; }

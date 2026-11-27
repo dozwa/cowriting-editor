@@ -229,12 +229,18 @@ experts is in `party.md`, experts you made in `party/<id>.md`, both in the proje
 until you first ask the AI, and nothing is written into the manuscript.
 
 The one other folder the editor makes is `images/` beside the document, and only when you have a
-picture copied there. "Move…" does not take pictures along: after moving a document to another
-folder, move its pictures too.
+picture copied there, or when "Move…" copies a document's pictures along (see below).
 
 ## Renaming and moving
 
-"Move…" renames or moves the open document and takes its folder of logs and notes along. If you
+"Move…" renames or moves the open document and takes its folder of logs and notes along. When the
+document goes to another folder and names pictures by where they lie from it (`![…](images/plot.png)`),
+the editor asks first. Either the pictures in the document's folder are copied to the same place
+beside the new file, and the text stays as it is; or they stay, and the editor rewrites those ways
+in your text so that they lead from the new folder to the pictures. That is the one change the
+editor ever makes to your text, and only when you chose it for this move. The pictures themselves
+are never moved, so another document that names them still finds them. Pictures given as HTML
+(`<img>`) or by reference (`![…][ref]`) are not seen by this. If you
 rename a file outside the editor, its log stays behind under the old name. When you then open the
 file, the editor says so and asks whether this is that document; it never attaches a log on its
 own. A log is offered only from the same folder, so a file moved to another folder outside the

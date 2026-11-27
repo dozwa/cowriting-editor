@@ -20,6 +20,27 @@ export function PictureDialog({ name, linkedAs, onCopy, onLink, onClose }: { nam
   )
 }
 
+/** Before a document moves to another folder: what becomes of the pictures it names from its own. */
+export function MovePicturesDialog({ inside, outside, onCopy, onLeave, onClose }: { inside: string[]; outside: string[]; onCopy(): void; onLeave(): void; onClose(): void }) {
+  const t = m.dialogs
+  const all = [...inside, ...outside]
+  return (
+    <Dialog title={t.movePicturesTitle} onClose={onClose}>
+      <p>{t.movePicturesFound(all.length)}</p>
+      <ul className="ways">
+        {all.slice(0, 6).map(way => <li key={way}><code>{way}</code></li>)}
+        {all.length > 6 && <li>{t.movePicturesMore(all.length - 6)}</li>}
+      </ul>
+      <p className="muted">{inside.length > 0 ? t.movePicturesChoice(outside.length > 0) : t.movePicturesOutsideOnly}</p>
+      <div className="actions">
+        <button onClick={onClose}>{t.pictureCancel}</button>
+        <button className={inside.length > 0 ? undefined : 'primary'} onClick={onLeave}>{t.movePicturesLeave}</button>
+        {inside.length > 0 && <button className="primary" onClick={onCopy}>{t.movePicturesCopy}</button>}
+      </div>
+    </Dialog>
+  )
+}
+
 /** `mayClose` is asked when Escape is pressed; saying no keeps the dialog open. */
 export function Dialog({ title, onClose, mayClose, children }: { title: string; onClose(): void; mayClose?: () => boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)

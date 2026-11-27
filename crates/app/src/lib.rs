@@ -1016,6 +1016,22 @@ impl Session {
     }
 
     /// Moves or renames the document, and its AI log, notes and settings with it. The text given is what is written.
+    /// The pictures a move to `target` would leave behind: the text names them by a way from the document's folder.
+    pub fn pictures_to_move(&self, target: &str, document_text: &str) -> picture::ToMove {
+        picture::to_move(document_text, &self.workspace.sidecar.folder, &cowriting_core::sidecar::Sidecar::for_document(target).folder)
+    }
+
+    /// Moves the document as `move_document` does, and sees to the pictures it names from its folder:
+    /// they are copied along, or the text names them from the new place. That is the one change to
+    /// the manuscript the editor makes itself, and only when the author chose it for this move.
+    /// Returns the text as it is at the new place.
+    pub fn move_with_pictures(&self, target: &str, document_text: &str, along: picture::Along) -> Result<String, String> {
+        let (text, copies) = picture::carried(document_text, &self.workspace.sidecar.folder, &cowriting_core::sidecar::Sidecar::for_document(target).folder, along);
+        self.move_document(target, &text)?;
+        picture::copy_all(&copies).map_err(|e| format!("The document is at its new place, but not all of its pictures: {e}"))?;
+        Ok(text)
+    }
+
     pub fn move_document(&self, target: &str, document_text: &str) -> Result<(), String> {
         let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
         let to = self.elsewhere(target);

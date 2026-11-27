@@ -1,10 +1,10 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectView as Project, Picture, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { ProjectView as Project, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
 import { seeView } from './diagnostics'
-import { DisclosureDialog, ExportDialog, FeedbackDialog, PictureDialog, SupportDialog, UsageDialog } from './dialogs'
+import { DisclosureDialog, ExportDialog, FeedbackDialog, MovePicturesDialog, PictureDialog, SupportDialog, UsageDialog } from './dialogs'
 import { Tour, TOUR } from './tour'
 import { createEditor, type Editor, type Format } from './editor'
 import { FormatBar, MarkdownHelp } from './formatbar'
@@ -98,6 +98,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [found, setFound] = useState('')
   /** The author said the logs without a document are not this one's. */
   const [orphansSeen, setOrphansSeen] = useState(false)
+  const [moving, setMoving] = useState<{ target: string; pictures: PicturesToMove } | null>(null)
   const [storedSeen, setStoredSeen] = useState(false)
   const [panelWidth, setPanelWidth] = useState(rememberedPanel)
   const [look, setLook] = useState(rememberedLook)
@@ -365,7 +366,22 @@ export function App({ api, makeEditor = createEditor }: Props) {
     if (doc === null || editor.current === null) return
     try {
       const target = await api.pickMove(doc.path)
-      if (target !== null) await show(await api.moveDocument(target, editor.current.getText()))
+      if (target === null) return
+      const text = editor.current.getText()
+      // pictures the text names from its folder would stay behind: the author says what becomes of them
+      const pictures = await api.picturesToMove(target, text)
+      if (pictures.inside.length + pictures.outside.length > 0) setMoving({ target, pictures })
+      else await show(await api.moveDocument(target, text))
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const moveWith = async (pictures: 'copy' | 'leave') => {
+    const target = moving?.target
+    setMoving(null)
+    if (target === undefined || editor.current === null) return
+    try {
+      await show(await api.moveDocument(target, editor.current.getText(), pictures))
     } catch (e) {
       fail(e)
     }
@@ -790,6 +806,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       </footer>
       {settingsDialog}
       {otherDialogs}
+      {moving !== null && <MovePicturesDialog inside={moving.pictures.inside} outside={moving.pictures.outside} onCopy={() => void moveWith('copy')} onLeave={() => void moveWith('leave')} onClose={() => setMoving(null)} />}
       {chosenPicture !== null && <PictureDialog name={chosenPicture.seen.name} linkedAs={chosenPicture.seen.path} onCopy={() => void copyPicture(chosenPicture.file)} onLink={() => (editor.current?.format('image', chosenPicture.seen.path), setChosenPicture(null))} onClose={() => setChosenPicture(null)} />}
       {dialog === 'markdown' && <MarkdownHelp onOpen={which => void api.openGuide(which).catch(fail)} onClose={() => setDialog(null)} />}
       {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
