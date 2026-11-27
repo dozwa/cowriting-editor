@@ -297,7 +297,7 @@ async fn ai_text_that_enters_the_document_is_logged_once_and_declared() {
         assert!(ai_text.contains(if language == "en" { "Text from other AI tools cannot be detected." } else { "Text aus anderen KI-Werkzeugen kann nicht erkannt werden." }));
     }
     let tex = session.export(&ExportOptions { language: "en".into(), format: "tex".into(), with_prompts: false, with_answers: false }).unwrap().register;
-    assert!(tex.contains("\\subsection*{Language corrections taken over from AI answers}") && tex.contains("still in the text"));
+    assert!(tex.contains("\\subsection*{\\raggedright Language corrections taken over from AI answers}") && tex.contains("still in the text"));
 }
 
 #[tokio::test(flavor = "current_thread")]

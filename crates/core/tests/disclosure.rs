@@ -23,3 +23,14 @@ fn requests_of_one_day_have_a_date_and_those_of_several_a_range() {
     assert!(!english.contains("2026-10-07 to 2026-10-07") && !german.contains("2026-10-07 bis 2026-10-07"));
     assert!(register(Lang::De, DocFormat::Tex).contains("2 Anfragen, 2026-10-07 &"));
 }
+
+#[test]
+fn a_heading_in_latex_is_set_ragged_and_the_german_one_on_the_log_is_short() {
+    let german = register(Lang::De, DocFormat::Tex);
+    assert!(german.contains("\\subsection*{\\raggedright Rückgängig gemachte Änderungen am KI-Protokoll}"), "{german}");
+    assert!(register(Lang::De, DocFormat::Md).contains("## Rückgängig gemachte Änderungen am KI-Protokoll\n"));
+    for text in [german, register(Lang::En, DocFormat::Tex)] {
+        let headings: Vec<&str> = text.lines().filter(|line| line.starts_with("\\subsection")).collect();
+        assert!(headings.len() >= 5 && headings.iter().all(|line| line.starts_with("\\subsection*{\\raggedright ")), "{headings:?}");
+    }
+}

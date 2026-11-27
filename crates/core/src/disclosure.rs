@@ -469,7 +469,11 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         ),
         Profile::Editor => pick("These changed nothing.", "Dadurch wurde nichts geändert."),
     };
-    let log_head = pick("Changes to the AI log undone after a tool call", "Nach einem Werkzeugaufruf rückgängig gemachte Änderungen am KI-Protokoll");
+    let log_head = match profile {
+        Profile::Plugin => pick("Changes to the AI log undone after a tool call", "Nach einem Werkzeugaufruf rückgängig gemachte Änderungen am KI-Protokoll"),
+        // shorter in German: the long heading ran past the margin in LaTeX
+        Profile::Editor => pick("Changes to the AI log undone after a tool call", "Rückgängig gemachte Änderungen am KI-Protokoll"),
+    };
     let log_note = match profile {
         Profile::Plugin => pick(
             "The log was restored each time; the altered version is kept in .cowriting/log-rewrites/.",
@@ -526,6 +530,11 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         }
         DocFormat::Tex => {
             let e = tex_escape;
+            // set ragged in the editor's register: a justified heading of two lines overflows where a word cannot be hyphenated
+            let sub = |heading: &str| match profile {
+                Profile::Plugin => format!("\\subsection*{{{}}}", e(heading)),
+                Profile::Editor => format!("\\subsection*{{\\raggedright {}}}", e(heading)),
+            };
             out.extend([
                 format!("\\section*{{{}}}", e(&title)),
                 String::new(),
@@ -547,13 +556,13 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 String::new(),
                 format!("\\noindent(1) {}", e(&lang_note)),
                 String::new(),
-                format!("\\subsection*{{{}}}", e(&examples_head)),
+                sub(&examples_head),
                 "\\begin{itemize}".to_string(),
             ]);
             for r in &rows {
                 out.extend(r.examples.iter().map(|example| format!("  \\item \\textit{{{}:}} {}", e(&r.purpose), e(example))));
             }
-            out.extend(["\\end{itemize}".to_string(), format!("\\subsection*{{{}}}", e(&ai_text_head))]);
+            out.extend(["\\end{itemize}".to_string(), sub(&ai_text_head)]);
             if ai_text.is_empty() {
                 out.push(e(&none));
             } else {
@@ -564,18 +573,18 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
             if profile == Profile::Editor {
                 out.push(e(&detection_note));
                 if !corrections.is_empty() {
-                    out.extend([format!("\\subsection*{{{}}}", e(&corrections_head)), "\\begin{itemize}".to_string()]);
+                    out.extend([sub(&corrections_head), "\\begin{itemize}".to_string()]);
                     out.extend(corrections.iter().map(|line| format!("  \\item {}", e(line))));
                     out.push("\\end{itemize}".into());
                 }
             }
             if !external.is_empty() {
-                out.extend([format!("\\subsection*{{{}}}", e(&external_head)), "\\begin{itemize}".to_string()]);
+                out.extend([sub(&external_head), "\\begin{itemize}".to_string()]);
                 out.extend(external.iter().map(|line| format!("  \\item {}", e(line))));
                 out.extend(["\\end{itemize}".to_string(), e(&external_note)]);
             }
             for (heading, lines, note) in [(&guard_head, &guard_lines, &guard_note), (&log_head, &log_lines, &log_note), (&refused_head, &refused_lines, &refused_note)] {
-                out.push(format!("\\subsection*{{{}}}", e(heading)));
+                out.push(sub(heading));
                 out.extend(tex_section(lines, note, &none));
             }
             out.extend([String::new(), format!("\\textit{{{}}}", e(&resp)), String::new()]);
