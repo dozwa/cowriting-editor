@@ -48,6 +48,7 @@ export const bridgeApi: Api = {
   setPrompt: (id, prompt) => call('set_prompt', { id, prompt }),
   supportAnswered: async () => {},
   tourSeen: async () => {},
+  countSelection: (text, from, to) => call('count_selection', { text, from, to }),
   picturesToMove: (target, text) => call('pictures_to_move', { target, text }),
   moveDocument: (target, text, pictures) => call('move_document', { target, text, pictures: pictures ?? null }),
   saveDocument: text => call('save_document', { text }),

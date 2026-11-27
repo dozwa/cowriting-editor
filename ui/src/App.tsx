@@ -1,5 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectView as Project, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { ProjectView as Project, Counted, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
@@ -282,12 +282,15 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const refreshRef = useRef(refreshLog)
   refreshRef.current = refreshLog
   const counting = useRef<number | undefined>(undefined)
+  const selecting = useRef<number | undefined>(undefined)
+  const [selected, setSelected] = useState<Counted | null>(null)
   const autosaving = useRef<number | undefined>(undefined)
 
   const show = useCallback(
     async (opened: Opened) => {
       setDoc(opened)
       setOrphansSeen(false)
+      setSelected(null)
       if (opened.notices.length > 0) setStoredSeen(false)
       setThread([])
       setLive(null)
@@ -328,6 +331,15 @@ export function App({ api, makeEditor = createEditor }: Props) {
         }
       },
       onPaste: (text, line) => void pastedRef.current(text, line),
+      // what is selected is counted once the selection rests; a bare cursor shows the document's count again
+      onSelect: (from, to) => {
+        window.clearTimeout(selecting.current)
+        if (from === to) return setSelected(null)
+        selecting.current = window.setTimeout(() => {
+          const text = editor.current?.getText()
+          if (text !== undefined) api.countSelection(text, from, to).then(setSelected, () => setSelected(null))
+        }, 200)
+      },
     })
     editor.current.setText(doc.text)
     setDirty(false)
@@ -651,7 +663,11 @@ export function App({ api, makeEditor = createEditor }: Props) {
           <span className={isDirty ? 'state dirty' : 'state'}>{isDirty ? m.app.notSaved : m.app.saved}</span>
         </span>
         <span className="spacer" />
-        <span className="muted" title={m.app.charsDetail(log.chars.withSpaces, log.chars.withoutSpaces)}>{m.app.words(log.words)} · {m.app.chars(log.chars.withSpaces)}</span>
+        {selected === null ? (
+          <span className="muted" title={m.app.charsDetail(log.chars.withSpaces, log.chars.withoutSpaces)}>{m.app.words(log.words)} · {m.app.chars(log.chars.withSpaces)}</span>
+        ) : (
+          <span className="muted counted-selection" role="status" title={m.app.selectedDetail(selected.chars.withoutSpaces, log.words, log.chars.withSpaces)}>{m.app.selectedCount(selected.words, selected.chars.withSpaces)}</span>
+        )}
         <button data-tour="finish" onClick={() => setDialog('export')}>{m.app.export}</button>
         <button data-tour="finish" onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0 && log.external.length === 0} title={log.stats.turns === 0 && log.external.length === 0 ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
         <button data-tour="settings around" onClick={() => setDialog('settings')}>{m.app.settings}</button>

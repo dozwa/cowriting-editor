@@ -229,6 +229,8 @@ export type EditorHandlers = {
   onChange(): void
   /** Text was pasted or dropped into the document; `line` is where it starts now, 1-based. */
   onPaste(pasted: string, line: number): void
+  /** What is selected changed: from where to where, in the editor's positions; the same twice for a bare cursor. */
+  onSelect?(from: number, to: number): void
 }
 
 export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Editor {
@@ -254,6 +256,7 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
         EditorView.lineWrapping,
         spelling.of(attributes(true, 'en')),
         EditorView.updateListener.of(update => {
+          if (update.selectionSet || update.docChanged) handlers.onSelect?.(update.state.selection.main.from, update.state.selection.main.to)
           if (!update.docChanged) return
           handlers.onChange()
           for (const transaction of update.transactions) {

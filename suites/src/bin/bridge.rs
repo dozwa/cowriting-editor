@@ -123,6 +123,9 @@ impl Bridge {
                 let personas: Vec<String> = serde_json::from_value(args["personas"].clone()).unwrap_or_default();
                 self.session()?.link_file(&text("path"), &personas).map(|_| json!(self.session().unwrap().project_view()))
             }
+            "count_selection" => {
+                Ok(json!(cowriting_core::words::count_selection(&text("text"), args["from"].as_u64().unwrap_or(0) as usize, args["to"].as_u64().unwrap_or(0) as usize)))
+            }
             "picture" => self.session()?.picture(&text("path")).map(|picture| json!(picture)),
             "copy_picture" => self.session()?.copy_picture(&text("path")).map(|picture| json!(picture)),
             "unlink_file" => self.session()?.unlink_file(&text("path")).map(|_| json!(self.session().unwrap().project_view())),

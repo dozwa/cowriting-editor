@@ -116,7 +116,10 @@ records what the AI was given.
 
 The top bar counts the **words and characters** of your text (with spaces; the count without them
 is shown when the pointer rests on it). Front matter, code, comments, citation keys and markdown's
-marks are not counted, and of a link only its text is a character.
+marks are not counted, and of a link only its text is a character. While text is selected, the
+bar shows the count of the selection instead ("Selected: 120 words · 790 characters"), by the same
+rules: a selection inside a comment counts nothing, one that cuts through a link counts the part
+of its text it holds. That is how you check an abstract or a summary against its limit.
 
 "How markdown works", at the end of the row, shows the marks worth knowing. Its two links open
 commonmark.org/help and pandoc's manual in your browser. With zotero.org/styles (from the Sources

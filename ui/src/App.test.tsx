@@ -1,6 +1,6 @@
 // The window with the app behind it replaced by a stand-in that keeps a log the way the real
 // one does. What is checked is what the author sees and what the window asks the app to do.
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
 import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView, StoredNotice, PicturesToMove } from './api'
@@ -11,7 +11,7 @@ import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
 
 /** What the stand-in editor was told, for the tests to read. */
-type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; finds: number[]; view: View | null }
+type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; finds: number[]; view: View | null; /** What the real editor says when the selection changes. */ select(from: number, to: number): void }
 
 /** A text field in place of the real editor, which needs a browser's layout. */
 const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Seen => {
@@ -28,7 +28,7 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
   const jumps: number[] = []
   const formats: Format[] = []
   const pictures: string[] = []
-  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), find: () => void lastEditor.finds.push(1), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), jumps, formats, pictures, finds: [], view: null }
+  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), find: () => void lastEditor.finds.push(1), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), select: (from, to) => handlers.onSelect?.(from, to), jumps, formats, pictures, finds: [], view: null }
   return lastEditor
 }
 let lastEditor: Editor & Seen
@@ -166,6 +166,10 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     },
     pickMove: async () => '/work/drafts/chapter-1.md',
     openGuide: async which => void calls.pages.push(which),
+    countSelection: async (text, from, to) => {
+      const part = text.slice(from, to)
+      return { words: part.split(/\s+/).filter(Boolean).length, chars: { withSpaces: part.length, withoutSpaces: part.replace(/\s/g, '').length } }
+    },
     picturesToMove: async () => options.picturesToMove ?? { inside: [], outside: [] },
     moveDocument: async (target, text, pictures) => {
       calls.moved.push(pictures === undefined ? [target, text] : [target, text, pictures])
@@ -972,6 +976,25 @@ test('pictures that all lie outside the folder can only be named from the new pl
   expect(screen.queryByRole('button', { name: 'Copy them along' })).toBeNull()
   await user.click(screen.getByRole('button', { name: 'Leave them, rewrite the ways' }))
   await waitFor(() => expect(calls.moved[0]?.[2]).toBe('leave'))
+})
+
+test('while text is selected the top bar counts the selection, and the document again when it ends', async () => {
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const bar = screen.getByRole('banner')
+  expect(within(bar).getByText(/12,345 characters/)).toBeTruthy()
+  // "We recruited 48 subjects." in '# Thesis\n\nWe recruited 48 subjects.\n'
+  act(() => lastEditor.select(10, 35))
+  const counted = await within(bar).findByRole('status')
+  expect(counted.textContent).toBe('Selected: 4 words · 25 characters')
+  expect(counted.getAttribute('title')).toContain('22 characters without spaces. The document has 7 words and 12,345 characters.')
+  // the selection moves on while the count is still out: the last one stands
+  act(() => lastEditor.select(10, 12))
+  await waitFor(() => expect(within(bar).getByRole('status').textContent).toBe('Selected: 1 word · 2 characters'))
+  act(() => lastEditor.select(12, 12))
+  await waitFor(() => expect(within(bar).queryByRole('status')).toBeNull())
+  expect(within(bar).getByText(/12,345 characters/)).toBeTruthy()
 })
 
 test('a stored file that was set aside or is from a newer editor is named, and the notice can be closed', async () => {

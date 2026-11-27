@@ -31,6 +31,9 @@ to a new heading with its version and date; the release workflow does that (see 
   the document (the picture itself is never moved or changed), or name it where it is. Not yet
   looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
+- **The count of a selection.** While text is selected, the top bar shows its words and
+  characters in place of the document's, counted by the same rules; the document's numbers are
+  in the tooltip. With several selections at once, the main one is counted. (#30)
 - **Type and layout of a PDF.** The export dialog has a part "Type and layout": typeface of the
   text, size, margins, line spacing, indented paragraphs, ragged right, numbered headings. It
   works with Typst and with an installed LaTeX and is remembered for the next export. What the

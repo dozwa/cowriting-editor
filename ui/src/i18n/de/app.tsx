@@ -20,6 +20,9 @@ export const app: typeof pattern = {
   notSaved: 'nicht gespeichert',
   words: (n: number) => `${n.toLocaleString('de')} ${n === 1 ? 'Wort' : 'Wörter'}`,
   chars: (n: number) => `${n.toLocaleString('de')} Zeichen`,
+  selectedCount: (words: number, chars: number) => `Markiert: ${words.toLocaleString('de')} ${words === 1 ? 'Wort' : 'Wörter'} · ${chars.toLocaleString('de')} Zeichen`,
+  selectedDetail: (withoutSpaces: number, allWords: number, allChars: number) =>
+    `${withoutSpaces.toLocaleString('de')} Zeichen ohne Leerzeichen. Das Dokument hat ${allWords.toLocaleString('de')} Wörter und ${allChars.toLocaleString('de')} Zeichen. Die Markierung wird gezählt wie das Dokument: nichts aus Kommentaren, Code, Kopfdaten oder Markdown-Zeichen.`,
   charsDetail: (withSpaces: number, withoutSpaces: number) =>
     `${withSpaces.toLocaleString('de')} Zeichen mit Leerzeichen, ${withoutSpaces.toLocaleString('de')} ohne. Nicht gezählt: Kopfdaten, Code, Kommentare, Zitierschlüssel, Markdown-Zeichen, die Adressen von Links und Bilder.`,
   export: 'Exportieren…',

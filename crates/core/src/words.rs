@@ -30,8 +30,33 @@ static TEX_STRIP: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     patterns.iter().map(|p| Regex::new(p).unwrap()).collect()
 });
 
-/// The words a reader reads: syntax, front matter, code, comments and citation keys are not counted.
-pub fn count_words(text: &str, format: Format) -> usize {
+/// Two characters no text holds, put where a selection begins and ends: they go through the
+/// counting with the text, and what is counted between them is the selection's share.
+const FROM: char = '\u{E000}';
+const TO: char = '\u{E001}';
+
+/// `pattern.replace_all`, but a mark of the selection that lies in what is replaced is kept. A
+/// text without such marks, which is every text but a selection's, comes out exactly as before.
+fn replaced(pattern: &Regex, text: &str, stays: &str) -> String {
+    if !text.contains([FROM, TO]) {
+        return pattern.replace_all(text, stays).into_owned();
+    }
+    pattern
+        .replace_all(text, |found: &regex::Captures| {
+            let mut kept = String::new();
+            found.expand(stays, &mut kept);
+            for mark in [FROM, TO] {
+                if found[0].contains(mark) && !kept.contains(mark) {
+                    kept.push(mark);
+                }
+            }
+            kept
+        })
+        .into_owned()
+}
+
+/// The text with everything taken out that is not counted as a word.
+fn prose_for_words(text: &str, format: Format) -> String {
     let mut t = text.to_string();
     match format {
         Format::Latex => {
@@ -42,12 +67,21 @@ pub fn count_words(text: &str, format: Format) -> usize {
         }
         Format::Markdown => {
             for pattern in MD_LEFT_OUT.iter() {
-                t = pattern.replace_all(&t, " ").into_owned();
+                t = replaced(pattern, &t, " ");
             }
-            t = MD_MARK_CHARS.replace_all(&t, " ").into_owned();
+            t = replaced(&MD_MARK_CHARS, &t, " ");
         }
     }
-    t.split_whitespace().filter(|w| WORDLIKE.is_match(w)).count()
+    t
+}
+
+fn words_in(prose: &str) -> usize {
+    prose.split_whitespace().filter(|w| WORDLIKE.is_match(w)).count()
+}
+
+/// The words a reader reads: syntax, front matter, code, comments and citation keys are not counted.
+pub fn count_words(text: &str, format: Format) -> usize {
+    words_in(&prose_for_words(text, format))
 }
 
 /// How many characters a text has, as a call for papers counts them.
@@ -92,6 +126,11 @@ static MD_MARKS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
 /// link and a picture. A run of spaces and line ends is one space; a letter with its accent, or an
 /// emoji, is one character however it is stored.
 pub fn count_chars(text: &str, format: Format) -> Chars {
+    chars_in(&prose_for_chars(text, format))
+}
+
+/// The text with everything taken out that is not counted as a character.
+fn prose_for_chars(text: &str, format: Format) -> String {
     let mut t = text.to_string();
     match format {
         Format::Latex => {
@@ -102,16 +141,55 @@ pub fn count_chars(text: &str, format: Format) -> Chars {
         }
         Format::Markdown => {
             for pattern in MD_LEFT_OUT.iter() {
-                t = pattern.replace_all(&t, " ").into_owned();
+                t = replaced(pattern, &t, " ");
             }
             for (pattern, stays) in MD_MARKS.iter() {
-                t = pattern.replace_all(&t, *stays).into_owned();
+                t = replaced(pattern, &t, stays);
             }
         }
     }
-    let words: Vec<&str> = t.split_whitespace().collect();
+    t
+}
+
+fn chars_in(prose: &str) -> Chars {
+    let words: Vec<&str> = prose.split_whitespace().collect();
     let without_spaces = words.iter().map(|word| word.graphemes(true).count()).sum();
     Chars { with_spaces: without_spaces + words.len().saturating_sub(1), without_spaces }
+}
+
+/// The words and characters of a part of a text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Counted {
+    pub words: usize,
+    pub chars: Chars,
+}
+
+/// What of a markdown text's count falls to the part from `from` to `to` (in UTF-16 units, as an
+/// editor in a web view counts positions). The rules are the document's: a selection inside a
+/// comment or a code block counts nothing, one that cuts through a link counts the part of the
+/// link's text it holds, and marks count nowhere. A word that is cut counts as a word.
+pub fn count_selection(text: &str, from: usize, to: usize) -> Counted {
+    // a text that holds the two marks itself keeps its length and loses them
+    let text = text.replace([FROM, TO], "\u{FFFD}");
+    let byte_at = |units: usize| {
+        let mut seen = 0;
+        text.char_indices()
+            .find(|(_, c)| {
+                let is_here = seen >= units;
+                seen += c.len_utf16();
+                is_here
+            })
+            .map_or(text.len(), |(at, _)| at)
+    };
+    // the front matter is found by where the text begins: the marks stay out of it
+    let front = MD_LEFT_OUT[0].find(&text).map_or(0, |found| found.end());
+    let (from, to) = (byte_at(from.min(to)).max(front), byte_at(from.max(to)).max(front));
+    let marked = format!("{}{FROM}{}{TO}{}", &text[..from], &text[from..to], &text[to..]);
+    let between = |prose: String| match (prose.find(FROM), prose.find(TO)) {
+        (Some(start), Some(end)) if start < end => prose[start + FROM.len_utf8()..end].to_string(),
+        _ => String::new(),
+    };
+    Counted { words: words_in(&between(prose_for_words(&marked, Format::Markdown))), chars: chars_in(&between(prose_for_chars(&marked, Format::Markdown))) }
 }
 
 /// A run of non-blank lines, with 1-based line numbers; `end` is its last line.

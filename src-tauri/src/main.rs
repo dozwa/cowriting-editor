@@ -373,6 +373,12 @@ fn link_file(editor: State<Editor>, path: String, personas: Vec<String>) -> Resu
     Ok(session.project_view())
 }
 
+/// The words and characters of the selected part of the text, by the document's own rules. `from` and `to` are the editor's positions.
+#[tauri::command]
+fn count_selection(text: String, from: usize, to: usize) -> cowriting_core::words::Counted {
+    cowriting_core::words::count_selection(&text, from, to)
+}
+
 /// How the open document would name a picture the author chose.
 #[tauri::command]
 fn picture(editor: State<Editor>, path: String) -> Result<cowriting_app::picture::Picture, String> {
@@ -932,6 +938,7 @@ fn main() {
             privacy_statement,
             move_document,
             pictures_to_move,
+            count_selection,
             ask,
             stop_answer,
             log_view,

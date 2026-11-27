@@ -22,6 +22,8 @@ export type RefHit = { citekey: string | null; title: string; authors: string; y
 export type SourceHits = { from: 'zotero' | 'bibliography'; hits: RefHit[] }
 
 /** A picture as the open document would name it: `path` goes between the brackets, `isInside` when it lies in the document's folder or below. */
+/** The words and characters of a part of the text. */
+export type Counted = { words: number; chars: { withSpaces: number; withoutSpaces: number } }
 export type Picture = { path: string; name: string; isInside: boolean }
 /** The pictures a move would leave behind, by the way the text names them: in the document's folder, and elsewhere. */
 export type PicturesToMove = { inside: string[]; outside: string[] }
@@ -284,6 +286,8 @@ export const api = {
   /** Asks the author where the document should go; null when they cancel. */
   pickMove: (current: string) => save({ filters: markdown(), defaultPath: current }),
   /** Moves or renames the open document, with its log. */
+  /** The words and characters of the text from `from` to `to` (the editor's positions), counted as the document's are. */
+  countSelection: (text: string, from: number, to: number) => invoke<Counted>('count_selection', { text, from, to }),
   picturesToMove: (target: string, text: string) => invoke<PicturesToMove>('pictures_to_move', { target, text }),
   moveDocument: (target: string, text: string, pictures?: 'copy' | 'leave') => invoke<Opened>('move_document', { target, text, pictures: pictures ?? null }),
   /** Saves; returns the AI text found in what changed since the last save, now logged. */

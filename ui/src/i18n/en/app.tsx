@@ -21,6 +21,10 @@ export const app = {
   notSaved: 'not saved',
   words: (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'word' : 'words'}`,
   chars: (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'character' : 'characters'}`,
+  // while text is selected: its count in place of the document's, which the tooltip still names
+  selectedCount: (words: number, chars: number) => `Selected: ${words.toLocaleString('en')} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString('en')} ${chars === 1 ? 'character' : 'characters'}`,
+  selectedDetail: (withoutSpaces: number, allWords: number, allChars: number) =>
+    `${withoutSpaces.toLocaleString('en')} characters without spaces. The document has ${allWords.toLocaleString('en')} words and ${allChars.toLocaleString('en')} characters. What is selected is counted as the document is: nothing of comments, code, front matter or marks.`,
   charsDetail: (withSpaces: number, withoutSpaces: number) =>
     `${withSpaces.toLocaleString('en')} characters with spaces, ${withoutSpaces.toLocaleString('en')} without. Not counted: front matter, code, comments, citation keys, markdown's marks, the addresses of links, and pictures.`,
   export: 'Export…',
