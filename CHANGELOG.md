@@ -29,6 +29,11 @@ to a new heading with its version and date; the release workflow does that (see 
   the document (the picture itself is never moved or changed), or name it where it is. Not yet
   looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
+- **Find and replace.** Cmd or Ctrl with F opens a bar over the text that marks every match,
+  says which of how many is selected, and replaces one or all; with the options upper and lower
+  case, whole words and regular expressions. Replacing all is one step to undo, and a
+  replacement is the author's own edit: it is not taken for pasted text. The panels are not
+  searched. (#11)
 - **Projects survive a change of version.** Every file the editor keeps (the project's
   settings, the lists of experts and bibliography files, what it knows about a document, its
   own settings) says which form it has. An older form is brought up to date step by step, and a

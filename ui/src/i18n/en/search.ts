@@ -1,0 +1,17 @@
+export const search = {
+  title: 'Find and replace',
+  find: 'Find',
+  replaceWith: 'Replace with',
+  previous: 'Previous match (Shift+Enter)',
+  next: 'Next match (Enter)',
+  matchCase: 'Match upper and lower case',
+  wholeWord: 'Whole words only',
+  wholeWordShown: 'W',
+  regexp: 'Regular expression',
+  replaceOne: 'Replace',
+  replaceAll: 'Replace all',
+  close: 'Close (Esc)',
+  none: 'No matches',
+  notAPattern: 'Not a valid expression',
+  count: (at: number, count: number, isMore: boolean) => `${at === 0 ? '' : `${at.toLocaleString('en')} of `}${isMore ? 'more than ' : ''}${count.toLocaleString('en')}${at === 0 ? (count === 1 ? ' match' : ' matches') : ''}`,
+}

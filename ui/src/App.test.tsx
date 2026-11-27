@@ -10,7 +10,7 @@ import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
 
 /** What the stand-in editor was told, for the tests to read. */
-type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; view: View | null }
+type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; finds: number[]; view: View | null }
 
 /** A text field in place of the real editor, which needs a browser's layout. */
 const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Seen => {
@@ -27,7 +27,7 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
   const jumps: number[] = []
   const formats: Format[] = []
   const pictures: string[] = []
-  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), jumps, formats, pictures, view: null }
+  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), find: () => void lastEditor.finds.push(1), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), jumps, formats, pictures, finds: [], view: null }
   return lastEditor
 }
 let lastEditor: Editor & Seen
@@ -814,6 +814,16 @@ test('Claude Code is chosen without a key or an address, and the dialog says who
   expect((dialog.getByLabelText(/^Model/) as HTMLInputElement).value).toBe('sonnet')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'claude-code', model: 'sonnet', baseUrl: '', maxTokens: 0 }, null]]))
+})
+
+test('Cmd or Ctrl with F opens the find bar, wherever the cursor is', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByPlaceholderText(/Ask about your text/))
+  await user.keyboard('{Control>}f{/Control}')
+  expect(lastEditor.finds).toEqual([1])
 })
 
 test('a stored file that was set aside or is from a newer editor is named, and the notice can be closed', async () => {

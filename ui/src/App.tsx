@@ -507,6 +507,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
     else if (doc === null) return
     else if (action === 'save') void save()
     else if (action === 'export') setDialog('export')
+    else if (action === 'find') editor.current?.find()
     else if (action === 'ask') {
       setTab('ask')
       window.setTimeout(() => document.querySelector<HTMLElement>('.composer textarea')?.focus())
@@ -529,7 +530,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       const action = (Object.keys(keys) as Action[]).find(id => keys[id] === pressed)
       if (action === undefined) return
       // a markdown shortcut writes into the text, so it only works while the cursor is there
-      const isOfTheWindow = ['save', 'open', 'new', 'export', 'settings', 'ask', 'buttons', 'lineNumbers', 'source', 'calm'].includes(action) || action in TAB_OF
+      const isOfTheWindow = ['save', 'open', 'new', 'find', 'export', 'settings', 'ask', 'buttons', 'lineNumbers', 'source', 'calm'].includes(action) || action in TAB_OF
       if (!isOfTheWindow && !(event.target instanceof Element && event.target.closest('.sheet') !== null)) return
       event.preventDefault()
       event.stopPropagation()

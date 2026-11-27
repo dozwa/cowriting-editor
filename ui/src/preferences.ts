@@ -104,7 +104,7 @@ export function applyLook(preferences: Preferences, root: HTMLElement = document
 /** What a shortcut can do. The markdown buttons carry their `Format`; the rest is the window's. */
 export type Tab = 'ask' | 'experts' | 'live' | 'scope' | 'sources' | 'log'
 export type TabAction = 'tabAsk' | 'tabExperts' | 'tabLive' | 'tabPlan' | 'tabSources' | 'tabLog'
-export type Action = 'save' | 'open' | 'new' | 'export' | 'settings' | 'ask' | 'buttons' | 'lineNumbers' | 'source' | 'calm' | TabAction | Format
+export type Action = 'save' | 'open' | 'new' | 'export' | 'settings' | 'ask' | 'buttons' | 'lineNumbers' | 'source' | 'calm' | 'find' | TabAction | Format
 
 /** The tab of the side panel each of its shortcuts shows. */
 export const TAB_OF: Record<TabAction, Tab> = { tabAsk: 'ask', tabExperts: 'experts', tabLive: 'live', tabPlan: 'scope', tabSources: 'sources', tabLog: 'log' }
@@ -115,7 +115,7 @@ const action = (id: Action, keys: string) => ({ id, keys, get name() { return m.
 export const ACTIONS: { group: string; actions: { id: Action; name: string; keys: string }[] }[] = [
   {
     get group() { return m.settings.groups.document },
-    actions: [action('save', 'Mod-s'), action('open', 'Mod-o'), action('new', 'Mod-n'), action('export', 'Mod-e'), action('ask', 'Mod-j'), action('settings', 'Mod-,')],
+    actions: [action('save', 'Mod-s'), action('open', 'Mod-o'), action('new', 'Mod-n'), action('find', 'Mod-f'), action('export', 'Mod-e'), action('ask', 'Mod-j'), action('settings', 'Mod-,')],
   },
   {
     get group() { return m.settings.groups.shown },

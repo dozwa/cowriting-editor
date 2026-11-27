@@ -127,3 +127,83 @@ test('the lines of a table are set in one width, and only those', () => {
   const lines = [...parent.querySelectorAll('.cm-line')].map(line => [line.textContent, line.classList.contains('md-table')])
   expect(lines).toEqual([['Before.', false], ['', false], ['| Group | n |', true], ['|---|---|', true], ['| A | 24 |', true], ['', false], ['After.', false]])
 })
+
+/** The find bar of an editor, opened, and what a test does in it. */
+function finding(marked: string) {
+  const pasted: string[] = []
+  const parent = document.createElement('div')
+  document.body.append(parent)
+  const editor = createEditor(parent, { onChange: () => {}, onPaste: text => void pasted.push(text) })
+  const [from, to] = [marked.indexOf('['), marked.indexOf(']') - 1]
+  editor.setText(marked.replace('[', '').replace(']', ''))
+  const view = EditorView.findFromDOM(parent.querySelector<HTMLElement>('.cm-editor')!)!
+  view.dispatch({ selection: { anchor: from, head: to } })
+  editor.find()
+  const bar = parent.querySelector<HTMLElement>('.search')!
+  const field = (name: string) => bar.querySelector<HTMLInputElement>(`input[name="${name}"]`)!
+  const type = (name: string, text: string) => {
+    field(name).value = text
+    field(name).dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const press = (label: RegExp) => [...bar.querySelectorAll('button')].find(button => label.test(button.getAttribute('aria-label') ?? ''))!.click()
+  const key = (name: string, key: string, shiftKey = false) => field(name).dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }))
+  const selected = () => {
+    const { from, to } = view.state.selection.main
+    const text = editor.getText()
+    return `${text.slice(0, from)}[${text.slice(from, to)}]${text.slice(to)}`
+  }
+  const count = () => bar.querySelector('.count')!.textContent
+  return { editor, view, parent, bar, field, type, press, key, selected, count, pasted }
+}
+
+test('finding goes from match to match, says how many there are, and takes a selected word as what is looked for', () => {
+  const { field, type, press, key, selected, count, parent, view } = finding('The [sample] was small. A Sample of 48. Resampled twice.')
+  expect(field('search').value).toBe('sample')
+  expect(document.activeElement).toBe(field('search'))
+  expect(count()).toBe('1 of 3')
+  key('search', 'Enter')
+  expect(selected()).toBe('The sample was small. A [Sample] of 48. Resampled twice.')
+  expect(count()).toBe('2 of 3')
+  key('search', 'Enter', true)
+  expect(selected()).toBe('The [sample] was small. A Sample of 48. Resampled twice.')
+
+  // the options narrow it: the case, whole words, a pattern
+  press(/upper and lower case/)
+  expect(count()).toBe('1 of 2')
+  press(/Whole words/)
+  expect(count()).toBe('1 of 1')
+  press(/upper and lower case/)
+  press(/Whole words/)
+  press(/Regular expression/)
+  type('search', '\\d+')
+  expect(selected()).toBe('The sample was small. A Sample of [48]. Resampled twice.')
+  type('search', '(')
+  expect([count(), field('search').getAttribute('aria-invalid')]).toEqual(['Not a valid expression', 'true'])
+  press(/Regular expression/)
+  type('search', 'nowhere')
+  expect(count()).toBe('No matches')
+
+  // Escape closes the bar and gives the text the cursor back
+  key('search', 'Escape')
+  expect(parent.querySelector('.search')).toBeNull()
+  expect(view.hasFocus).toBe(true)
+})
+
+test('replacing one match or all of them is the author\'s own edit: one step to undo, and never taken for a paste', async () => {
+  const { undo } = await import('@codemirror/commands')
+  const { editor, view, field, type, press, key, selected, count, pasted } = finding('[]Subjects were recruited. The subjects agreed. Each subject signed.')
+  type('search', 'subject')
+  type('replace', 'participant')
+  expect(selected()).toBe('[Subject]s were recruited. The subjects agreed. Each subject signed.')
+  key('replace', 'Enter')
+  expect(editor.getText()).toBe('participants were recruited. The subjects agreed. Each subject signed.')
+  expect(count()).toBe('1 of 2')
+  press(/^Replace all$/)
+  expect(editor.getText()).toBe('participants were recruited. The participants agreed. Each participant signed.')
+  expect(count()).toBe('No matches')
+  // the button is switched off now; the cursor is in its field, so Escape still closes the bar
+  expect(document.activeElement).toBe(field('replace'))
+  undo(view)
+  expect(editor.getText()).toBe('participants were recruited. The subjects agreed. Each subject signed.')
+  expect(pasted).toEqual([])
+})

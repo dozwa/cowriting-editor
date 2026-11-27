@@ -62,6 +62,12 @@ the bottom of the window you can hide the buttons, turn on **line numbers** (the
 lines), and switch to **Source**, which shows the text exactly as it is saved, every mark in
 place. The line between text and side panel can be dragged; a double-click puts it back.
 
+**Find and replace** (Cmd or Ctrl with F) opens a bar over the text: every match is marked, the
+bar says which of how many is selected, Enter and Shift+Enter go on and back (Cmd or Ctrl with G
+does the same from the text), and Escape closes it. A word that is selected is what is looked
+for. The options are upper and lower case, whole words, and regular expressions. "Replace all" is
+one step to undo. A match in marks the preview hides, such as a link's address, shows them.
+
 The **Picture** button lets you choose the file (PNG, JPEG, GIF, SVG, WebP or PDF) and writes its
 path as it lies from your document. A picture that is not in the document's folder can be copied
 into a folder `images` beside the document, so that both move together, or named where it is;

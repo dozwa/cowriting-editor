@@ -1,0 +1,17 @@
+export const search = {
+  title: 'Suchen und Ersetzen',
+  find: 'Suchen',
+  replaceWith: 'Ersetzen durch',
+  previous: 'Vorheriger Treffer (Umschalt+Eingabe)',
+  next: 'Nächster Treffer (Eingabe)',
+  matchCase: 'Groß- und Kleinschreibung beachten',
+  wholeWord: 'Nur ganze Wörter',
+  wholeWordShown: 'W',
+  regexp: 'Regulärer Ausdruck',
+  replaceOne: 'Ersetzen',
+  replaceAll: 'Alle ersetzen',
+  close: 'Schließen (Esc)',
+  none: 'Keine Treffer',
+  notAPattern: 'Kein gültiger Ausdruck',
+  count: (at: number, count: number, isMore: boolean) => `${at === 0 ? '' : `${at.toLocaleString('de')} von `}${isMore ? 'mehr als ' : ''}${count.toLocaleString('de')}${at === 0 ? ' Treffer' : ''}`,
+}

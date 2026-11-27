@@ -139,6 +139,7 @@ export const settings: typeof pattern = {
     save: 'Speichern',
     open: 'Dokument öffnen',
     new: 'Neues Dokument',
+    find: 'Suchen und Ersetzen',
     export: 'Nach PDF oder Word exportieren',
     ask: 'Zum Fragefeld gehen',
     settings: 'Einstellungen',

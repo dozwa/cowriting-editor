@@ -149,6 +149,19 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .page .cm-lineNumbers .cm-gutterElement { display: flex; align-items: center; justify-content: flex-end; padding: 0 0 0 12px; min-width: 2.5em; }
 /* source view: the markdown as it is saved, every mark in place, nothing sized */
 /* a little smaller than the styled text, and it grows with the size the author set */
+/* find and replace: a bar over the text, in the window's own look */
+.page .cm-panels { background: var(--page); color: var(--ink); border-bottom: 1px solid var(--rule); font: 13px/1.4 var(--ui); zoom: var(--ui-zoom, 1); }
+.page .cm-panels-top { border-bottom: 1px solid var(--rule); }
+.search { display: grid; gap: 6px; padding: 8px 14px; }
+.search .row { display: flex; gap: 6px; align-items: center; }
+.search input { flex: 0 1 22rem; min-width: 8rem; font: inherit; padding: 4px 8px; }
+.search input[aria-invalid='true'] { border-color: var(--red); }
+.search .count { flex: 1 1 auto; min-width: 6.5rem; color: var(--soft); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.search button { font-size: 12.5px; padding: 3px 9px; }
+.search .toggle { font-family: var(--mono); font-size: 11.5px; padding: 3px 7px; color: var(--soft); }
+.search .toggle[aria-pressed='true'] { background: var(--desk); color: var(--ink); font-weight: 650; border-color: var(--soft); }
+.page .cm-searchMatch { background: var(--marker-wash); border-radius: 2px; }
+.page .cm-searchMatch-selected { background: var(--marker-wash); outline: 1.5px solid var(--marker); }
 .page .cm-source .cm-scroller { font: calc(var(--text-size, 18px) * 0.78) / 1.75 var(--mono); }
 .page .cm-source :is(.md-h1, .md-h2, .md-h3) { font-size: inherit; line-height: inherit; letter-spacing: 0; }
 .page .cm-source .md-code { font-size: inherit; background: none; }

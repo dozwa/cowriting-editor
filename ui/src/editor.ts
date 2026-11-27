@@ -8,6 +8,7 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/lang
 import { Compartment, EditorSelection, EditorState, type Range } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, keymap, lineNumbers, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
+import { openSearch, searching } from './search'
 
 const styles = HighlightStyle.define([
   { tag: tags.heading1, class: 'md-h1' },
@@ -217,6 +218,8 @@ export type Editor = {
   jumpToLine(line: number): void
   /** Writes a markdown element at the cursor or around what is selected. `picture` is the path of a chosen picture, for 'image'. */
   format(kind: Format, picture?: string): void
+  /** Opens the bar for finding and replacing, with the cursor in it. */
+  find(): void
   setView(view: View): void
   focus(): void
   destroy(): void
@@ -237,6 +240,7 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
       doc: '',
       extensions: [
         history(),
+        searching(),
         keymap.of([
           indentWithTab,
           ...defaultKeymap,
@@ -275,6 +279,7 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
       view.focus()
     },
     format: (kind, picture) => format(view, kind, picture),
+    find: () => openSearch(view),
     setView: ({ lineNumbers: isNumbered, source, spellcheck, language }) =>
       view.dispatch({
         effects: [numbering.reconfigure(isNumbered ? lineNumbers() : []), styling.reconfigure(source ? EditorView.editorAttributes.of({ class: 'cm-source' }) : livePreview), spelling.reconfigure(attributes(spellcheck, language))],

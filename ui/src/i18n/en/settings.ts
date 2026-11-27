@@ -137,6 +137,7 @@ export const settings = {
     save: 'Save',
     open: 'Open a document',
     new: 'New document',
+    find: 'Find and replace',
     export: 'Export to PDF or Word',
     ask: 'Go to the question field',
     settings: 'Settings',
