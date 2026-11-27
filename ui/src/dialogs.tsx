@@ -173,6 +173,7 @@ export function pdfChoiceFrom(kept: unknown): PdfChoice {
   return {
     engine: typeof choice.engine === 'string' ? choice.engine : null,
     paper: choice.paper === 'letter' || choice.paper === 'a4' ? choice.paper : /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4',
+    wordTemplate: name(choice.wordTemplate),
     layout: {
       font: name(layout.font),
       headingFont: name(layout.headingFont),
@@ -314,7 +315,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
           <option value="docx">Word (.docx)</option>
         </select>
       </label>
-      {format === 'pdf' && engines.length > 0 && (
+      {(format === 'docx' || engines.length > 0) && (
         <div className="row">
           <label>
             {t.paper}
@@ -323,7 +324,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
               <option value="letter">US Letter</option>
             </select>
           </label>
-          {engines.length > 1 && (
+          {format === 'pdf' && engines.length > 1 && (
             <label>
               {t.typesetWith}
               <select value={engine ?? ''} onChange={e => choose({ engine: e.target.value })}>
@@ -333,7 +334,17 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
           )}
         </div>
       )}
-      {format === 'pdf' && engines.length > 0 && (
+      {format === 'docx' && (
+        <>
+          <div className="row">
+            <span>{pdf.wordTemplate === '' ? t.wordNoTemplate : t.wordTemplate(<code title={pdf.wordTemplate}>{pdf.wordTemplate.split(/[\\/]/).pop()}</code>)}</span>
+            <button onClick={() => void api.pickWordTemplate().then(picked => picked !== null && choose({ wordTemplate: picked }), e => setError(String(e)))}>{t.wordChooseTemplate}</button>
+            {pdf.wordTemplate !== '' && <button className="link" onClick={() => choose({ wordTemplate: '' })}>{t.wordRemoveTemplate}</button>}
+          </div>
+          <p className="muted">{pdf.wordTemplate === '' ? t.wordNote : t.wordTemplateNote}</p>
+        </>
+      )}
+      {(format === 'pdf' ? engines.length > 0 : pdf.wordTemplate === '') && (
         <details className="layout" open={isOwnLayout}>
           <summary>{t.layout}{isOwnLayout ? ` · ${t.layoutOwn}` : ''}</summary>
           <div className="row">
@@ -400,16 +411,15 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
           <label className="check"><input type="checkbox" checked={layout.twoColumns} onChange={e => lay({ twoColumns: e.target.checked })} /> {t.layoutTwoColumns}</label>
           <label className="check"><input type="checkbox" checked={layout.twoSided} onChange={e => lay({ twoSided: e.target.checked })} /> {t.layoutTwoSided}</label>
           <label className="check"><input type="checkbox" checked={layout.indent} onChange={e => lay({ indent: e.target.checked })} /> {t.layoutIndent}</label>
-          <label className="check"><input type="checkbox" checked={layout.ragged} onChange={e => lay({ ragged: e.target.checked })} /> {t.layoutRagged}</label>
+          {format === 'pdf' && <label className="check"><input type="checkbox" checked={layout.ragged} onChange={e => lay({ ragged: e.target.checked })} /> {t.layoutRagged}</label>}
           <label className="check"><input type="checkbox" checked={layout.numbered} onChange={e => lay({ numbered: e.target.checked })} /> {t.layoutNumbered}</label>
           {fonts.length > 0 && namedFonts.filter(font => !fonts.some(name => name.toLowerCase() === font.toLowerCase())).map(font => <p key={font} className="hint">{t.layoutFontMissing(font)}</p>)}
-          {namedFonts.length > 0 && engine === 'pdflatex' && <p className="hint">{t.layoutFontPdflatex}</p>}
-          {engine !== null && engine !== 'typst' && layout.fontSize !== null && (layout.fontSize < 10 || layout.fontSize > 12) && <p className="muted">{t.layoutSizeLatex}</p>}
-          {inDocument.length > 0 && <p className="muted">{t.layoutInDocument(inDocument.join(', '))}</p>}
+          {format === 'pdf' && namedFonts.length > 0 && engine === 'pdflatex' && <p className="hint">{t.layoutFontPdflatex}</p>}
+          {format === 'pdf' && engine !== null && engine !== 'typst' && layout.fontSize !== null && (layout.fontSize < 10 || layout.fontSize > 12) && <p className="muted">{t.layoutSizeLatex}</p>}
+          {format === 'pdf' && inDocument.length > 0 && <p className="muted">{t.layoutInDocument(inDocument.join(', '))}</p>}
           {isOwnLayout && <button className="link" onClick={() => lay(STANDARD_LAYOUT)}>{t.layoutReset}</button>}
         </details>
       )}
-      {format === 'docx' && <p className="muted">{t.wordNote}</p>}
       {tools !== undefined && (
         <p className="muted">{tools.hasZotero ? t.fromZotero : t.zoteroNotRunning}</p>
       )}

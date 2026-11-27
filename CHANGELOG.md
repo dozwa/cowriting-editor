@@ -50,6 +50,12 @@ to a new heading with its version and date; the release workflow does that (see 
   hyphenation, to PDF and Word. A typeface the layout names and the computer does not have is
   named before the export and again after it, when Typst has set the text in another one.
   (#13, #34)
+- **The layout of a Word file.** A Word export has the paper and what is set under "Type and
+  layout" in its own styles, page setup, header and footer: typefaces, size, line spacing,
+  margins, columns, indented paragraphs, numbered headings, page numbers. Or it takes all that
+  from a Word template of yours, chosen in the export dialog and kept with the project. Before,
+  a Word file always had pandoc's styles on US Letter. Checked by reading the files the export
+  makes, not yet by opening them in Word itself. (#34)
 - **Hints can be ticked off.** Every list item and table row of an answer has a box to mark it
   as done, with "Mark all" and "Unmark all" for the whole answer and a count of what is left.
   The ticks are kept beside the log (`marks.json`) and survive closing the document; they are a

@@ -57,7 +57,8 @@ export type PdfLayout = {
   ragged: boolean
   numbered: boolean
 }
-export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout }
+/** What is chosen for an export; the paper and the layout hold for a Word file too. `wordTemplate` is a Word file of the author's whose styles a Word export takes in place of the layout, or empty. */
+export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout; wordTemplate: string }
 export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[]; /** Typefaces the layout names that this computer does not have: the PDF has another one in their place. */ missingFonts: string[] }
 
 export type Use = 'adopted' | 'adapted' | 'rejected' | 'info'
@@ -359,6 +360,11 @@ export const api = {
   addBibliography: (path: string, documentText: string) => invoke<void>('add_bibliography', { path, documentText }),
   removeBibliography: (path: string) => invoke<void>('remove_bibliography', { path }),
   /** Asks the author for a reference style file; null when they cancel. */
+  /** Asks for a Word file whose styles a Word export takes; null when the author cancels. */
+  pickWordTemplate: async (): Promise<string | null> => {
+    const picked = await open({ multiple: false, filters: [{ name: 'Word', extensions: ['docx', 'dotx'] }] })
+    return typeof picked === 'string' ? picked : null
+  },
   pickStyle: async (): Promise<string | null> => {
     const path = await open({ multiple: false, directory: false, filters: [{ name: m.dialogs.fileStyle, extensions: ['csl'] }] })
     return typeof path === 'string' ? path : null

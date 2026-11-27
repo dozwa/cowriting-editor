@@ -73,6 +73,7 @@ export const bridgeApi: Api = {
   addBibliography: (path, documentText) => call('add_bibliography', { path, documentText }),
   removeBibliography: path => call('remove_bibliography', { path }),
   pickStyle: async () => null,
+  pickWordTemplate: async () => null,
   setStyle: (path, documentText) => call('set_style', { path, documentText }),
   removeStyle: () => call('remove_style'),
   searchSources: (query, documentText) => call('search_sources', { query, documentText }),

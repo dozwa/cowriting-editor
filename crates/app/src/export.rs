@@ -55,7 +55,8 @@ pub enum Paper {
     Letter,
 }
 
-/// What the author chose for a PDF.
+/// What the author chose for an export. It began with the PDF and has its name from that; the
+/// paper and the layout hold for a Word file as well.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PdfChoice {
@@ -67,6 +68,10 @@ pub struct PdfChoice {
     /// How the text is set, where the author wants it other than the standard.
     #[serde(default)]
     pub layout: Layout,
+    /// A Word file of the author's whose styles, page and header a Word export takes, in place of
+    /// the layout: a faculty's or a journal's template. Empty for none.
+    #[serde(default)]
+    pub word_template: String,
 }
 
 /// Where the page's number stands.

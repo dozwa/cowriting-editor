@@ -213,6 +213,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx', exportChoice],
     keepExportChoice: async pdf => void (exportChoice = pdf),
     pickExport: async (_format, suggested) => suggested,
+    pickWordTemplate: async () => '/templates/faculty.docx',
     exportDocument: async (format, target, documentText, pdf) => {
       calls.exports.push([format, target, documentText])
       calls.pdf.push(pdf)
@@ -901,7 +902,7 @@ test('a project keeps its own layout, and a project without one starts from what
   unmount()
 
   // a project with a layout of its own shows that one, whatever this computer chose last
-  const own = standIn({ exportChoice: { engine: null, paper: 'a4', layout: { ...STANDARD_LAYOUT, marginCm: 3, numbered: true } } })
+  const own = standIn({ exportChoice: { engine: null, paper: 'a4', layout: { ...STANDARD_LAYOUT, marginCm: 3, numbered: true }, wordTemplate: '' } })
   render(<App api={own.api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
@@ -948,6 +949,40 @@ test('headings, code, single sides, columns and page numbers can be set, and wha
   expect(calls.pdf[0]?.layout).toEqual({ ...STANDARD_LAYOUT, headingFont: 'Arial', codeFont: 'Fira Code', fontSize: 14, pageNumbers: 'top-outer', noNumberOnFirstPage: true, twoColumns: true, marginLeftCm: 3.5, twoSided: true })
 })
 
+test('a Word file takes the layout as its styles, or a template of the author\'s in its place', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  await user.selectOptions(await screen.findByLabelText('Format'), 'docx')
+  // the same layout as for a PDF, without what Word sets itself
+  expect(screen.getByText(/gets the paper and what is set under/)).toBeTruthy()
+  await user.click(screen.getByText('Type and layout'))
+  await user.selectOptions(screen.getByLabelText('Margins'), '2.5')
+  expect(screen.queryByLabelText(/Ragged right/)).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await screen.findByRole('status')
+  expect(calls.exports[0]?.slice(0, 2)).toEqual(['docx', '/work/thesis.docx'])
+  expect(calls.pdf[0]).toMatchObject({ wordTemplate: '', layout: { marginCm: 2.5 } })
+
+  // a template of the author's: named, kept with the project, and the layout steps back
+  await user.click(screen.getByRole('button', { name: 'Choose a Word template…' }))
+  expect(await screen.findByText('faculty.docx')).toBeTruthy()
+  expect(screen.getByText(/come from your template/)).toBeTruthy()
+  expect(screen.queryByText(/^Type and layout/)).toBeNull()
+  expect((await api.exportSetup())[3]?.wordTemplate).toBe('/templates/faculty.docx')
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await waitFor(() => expect(calls.pdf[1]?.wordTemplate).toBe('/templates/faculty.docx'))
+  // a PDF still has its layout; taking the template off brings it back for Word
+  await user.selectOptions(screen.getByLabelText('Format'), 'pdf')
+  expect(screen.getByText(/^Type and layout/)).toBeTruthy()
+  await user.selectOptions(screen.getByLabelText('Format'), 'docx')
+  await user.click(screen.getByRole('button', { name: 'Take it off' }))
+  expect(screen.getByText(/^Type and layout/)).toBeTruthy()
+})
+
 test('the layout a document sets in its front matter is named', () => {
   expect(layoutInFrontMatter('---\ntitle: Thesis\nfontsize: 12pt\ngeometry: margin=3cm\nlinestretch: 1.5\n---\n\n# Text\n\nfontsize: no\n')).toEqual(['fontsize', 'geometry', 'linestretch'])
   expect(layoutInFrontMatter('---\nclassoption: twocolumn\nheader-includes: |\n  \\usepackage{x}\nmonofont: Menlo\n---\n')).toEqual(['classoption', 'header-includes', 'monofont'])
@@ -967,15 +1002,16 @@ test('a PDF is set with Typst on the chosen paper, and an installed LaTeX can be
   await user.selectOptions(screen.getByLabelText('Paper'), 'letter')
   await user.click(screen.getByRole('button', { name: 'Export' }))
   await screen.findByRole('status')
-  expect(calls.pdf).toEqual([{ engine: 'typst', paper: 'letter', layout: STANDARD_LAYOUT }])
+  expect(calls.pdf).toEqual([{ engine: 'typst', paper: 'letter', layout: STANDARD_LAYOUT, wordTemplate: '' }])
 
   // the author's own LaTeX
   await user.selectOptions(screen.getByLabelText('Typeset with'), 'xelatex')
   await user.click(screen.getByRole('button', { name: 'Export' }))
-  await waitFor(() => expect(calls.pdf[1]).toEqual({ engine: 'xelatex', paper: 'letter', layout: STANDARD_LAYOUT }))
-  // a Word file has neither choice
+  await waitFor(() => expect(calls.pdf[1]).toEqual({ engine: 'xelatex', paper: 'letter', layout: STANDARD_LAYOUT, wordTemplate: '' }))
+  // a Word file has the paper too, and no typesetter
   await user.selectOptions(screen.getByLabelText('Format'), 'docx')
-  expect(screen.queryByLabelText('Paper')).toBeNull()
+  expect((screen.getByLabelText('Paper') as HTMLSelectElement).value).toBe('letter')
+  expect(screen.queryByLabelText('Typeset with')).toBeNull()
   unmount()
 
   // next time the choice is still there

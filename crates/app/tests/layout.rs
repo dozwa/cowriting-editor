@@ -149,7 +149,7 @@ fn a_projects_layout_is_kept_with_the_project_and_not_with_the_document() {
     let (session, _) = Session::open_in(Arc::new(DiskHost), &folder.path("thesis.md"), Some(&projects)).unwrap();
     assert_eq!(session.export_choice(), None, "nothing was ever chosen here");
 
-    let choice = PdfChoice { engine: Some("xelatex".into()), paper: Paper::Letter, layout: Layout { font_size: Some(48), ..thesis_layout() } };
+    let choice = PdfChoice { engine: Some("xelatex".into()), paper: Paper::Letter, layout: Layout { font_size: Some(48), ..thesis_layout() }, ..PdfChoice::default() };
     session.keep_export_choice(&choice).unwrap();
     // what the export could not set is not kept either
     let kept = PdfChoice { layout: Layout { font_size: None, ..thesis_layout() }, ..choice.clone() };

@@ -11,6 +11,7 @@ pub mod preferences;
 pub mod shown;
 pub mod support;
 pub mod usage;
+pub mod word;
 
 use cowriting_backends::anthropic::AnthropicBackend;
 use cowriting_backends::fake::FakeBackend;
@@ -759,9 +760,32 @@ impl Session {
         );
         // the document's language (for hyphenation) and, for a PDF, the layout the author chose: in a file of
         // its own, so that what the document's front matter says comes first
+        // a Word file has no typesetter to tell: its layout is in the styles of a Word file pandoc is shown
+        let temporary = |ending: &str| std::env::temp_dir().join(format!("cowriting-export-{}-{}.{ending}", std::process::id(), host.new_id()));
+        let mut styles_made = None;
+        if format == FileFormat::Docx {
+            let template = pdf.word_template.trim();
+            let styles = if template.is_empty() {
+                let made = temporary("docx");
+                std::fs::write(&made, word::reference_doc(&pdf.layout, pdf.paper)?).map_err(|e| format!("The Word styles could not be written: {e}"))?;
+                styles_made.insert(made).to_string_lossy().into_owned()
+            } else if std::path::Path::new(template).is_file() {
+                template.to_string()
+            } else {
+                return Err(format!("The Word template {template} is not there any more. Choose another in the export dialog, or take it off."));
+            };
+            args.extend(["--reference-doc".to_string(), styles]);
+            if pdf.layout.numbered {
+                args.push("--number-sections".into());
+            }
+        }
         let layout = if format == FileFormat::Pdf { pdf.layout.clone() } else { export::Layout::default() };
-        let metadata = std::env::temp_dir().join(format!("cowriting-export-{}-{}.yaml", std::process::id(), host.new_id()));
-        std::fs::write(&metadata, layout.metadata(&self.workspace.language)).map_err(|e| format!("The export's settings could not be written: {e}"))?;
+        let metadata = temporary("yaml");
+        let written = std::fs::write(&metadata, layout.metadata(&self.workspace.language)).map_err(|e| format!("The export's settings could not be written: {e}"));
+        if let (Err(_), Some(styles)) = (&written, &styles_made) {
+            let _ = std::fs::remove_file(styles);
+        }
+        written?;
         args.extend(["--metadata-file".to_string(), metadata.to_string_lossy().into_owned()]);
         let made = match zotero.map(|csl| std::fs::write(&kept, csl)) {
             Some(Err(e)) => Err(format!("The references from Zotero could not be handed to the export: {e}")),
@@ -769,6 +793,9 @@ impl Session {
         };
         let _ = std::fs::remove_file(&metadata);
         let _ = std::fs::remove_file(&kept);
+        if let Some(styles) = &styles_made {
+            let _ = std::fs::remove_file(styles);
+        }
         let warnings = made?;
         // Typst sets what it has no typeface for in another one and says nothing; a LaTeX stops, and its words were passed on above
         let missing_fonts = if matches!((format, &engine), (FileFormat::Pdf, Some(("typst", _)))) { export::fonts_not_here(&layout.fonts()) } else { Vec::new() };

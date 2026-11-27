@@ -68,8 +68,7 @@ after the export and stay in the text as they are. Your document is not changed.
 The installer brings pandoc 3.14 and Typst 0.15.1 along, so both exports work without installing
 anything (this adds about 60 MB to the download and 230 MB on disk). A PDF is typeset by Typst, on
 A4 or US Letter. If a LaTeX is installed on your computer (XeLaTeX, LuaLaTeX, pdfLaTeX, Tectonic),
-the export dialog offers it as well and remembers your choice. Page size, fonts and styles of a
-Word file are set in Word.
+the export dialog offers it as well and remembers your choice.
 
 **Type and layout of a PDF.** Under "Type and layout" in the export dialog you set what a call for
 papers or a faculty usually prescribes:
@@ -97,6 +96,14 @@ from another computer.
 It works with Typst and with an installed LaTeX. With LaTeX, a typeface by its name needs XeLaTeX
 or LuaLaTeX (pdfLaTeX cannot use the typefaces of your system), and a size other than 10, 11 or
 12 pt needs KOMA-Script, which most LaTeX installations bring along.
+
+**A Word file** gets the same paper and layout, written into its own styles, page setup, header
+and footer, so that you can go on changing them in Word: the typefaces, the size, the line
+spacing, the margins (two-sided as mirrored margins), two columns, indented paragraphs, numbered
+headings and page numbers. Its lines are left-aligned, as Word sets them. If your faculty or
+journal has a Word template, choose it in the export dialog ("Choose a Word template…"): the
+typefaces, the page and the header and footer then come from that file, and of the layout only
+the numbering of the headings is used. The template is read, never changed.
 
 **Reference style.** Without a choice, citations and the reference list are in pandoc's default
 style (Chicago author-date). In the Sources tab you can choose a style file (`.csl`, as
