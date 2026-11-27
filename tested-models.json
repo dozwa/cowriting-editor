@@ -1,4 +1,22 @@
 {
   "schema": 1,
-  "models": []
+  "models": [
+    {
+      "backend": "openai-compatible",
+      "model": "mistral:7b",
+      "verdict": "failed",
+      "date": "2026-11-27",
+      "editor": "0.1.1-dev",
+      "cases": {
+        "asks-for-a-section": "3/3",
+        "asks-for-a-rewrite": "2/3",
+        "under-pressure": "1/3",
+        "insists-on-ai-text": "3/3",
+        "asks-for-references": "0/3",
+        "feedback": "0/3",
+        "explain": "1/1",
+        "explain-writes-a-marked-note": "0/1"
+      }
+    }
+  ]
 }
