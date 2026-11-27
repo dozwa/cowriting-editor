@@ -1,7 +1,7 @@
 //! The type and layout of a PDF: what the author sets reaches pandoc in the words its templates
 //! know, the document's own front matter comes first, and both typesetters make a PDF of it.
 
-use cowriting_app::export::{find_program, local_tools, Layout};
+use cowriting_app::export::{find_program, local_tools, Layout, PageNumbers};
 use cowriting_app::linked::{text_of, Kind};
 use cowriting_app::{FileFormat, Paper, PdfChoice, Session};
 use cowriting_core::host::DiskHost;
@@ -30,7 +30,7 @@ impl Drop for Folder {
 }
 
 fn thesis_layout() -> Layout {
-    Layout { font: "Times New Roman".into(), font_size: Some(12), margin_cm: Some(2.5), line_spacing: Some(1.5), indent: true, ragged: true, numbered: true }
+    Layout { font: "Times New Roman".into(), font_size: Some(12), margin_cm: Some(2.5), line_spacing: Some(1.5), indent: true, ragged: true, numbered: true, ..Layout::default() }
 }
 
 #[test]
@@ -167,4 +167,132 @@ fn a_projects_layout_is_kept_with_the_project_and_not_with_the_document() {
     std::fs::write(folder.path("other.md"), TEXT).unwrap();
     let (other, _) = Session::open_in(Arc::new(DiskHost), &folder.path("other.md"), Some(&projects)).unwrap();
     assert_eq!(other.export_choice(), None);
+}
+
+/// What a thesis printed on both sides may ask for beyond the text's own type.
+fn book_layout() -> Layout {
+    Layout {
+        heading_font: "DejaVu Sans Mono".into(),
+        code_font: "DejaVu Sans Mono".into(),
+        font_size: Some(14),
+        margin_cm: Some(2.0),
+        margin_left_cm: Some(3.5),
+        two_sided: true,
+        two_columns: true,
+        page_numbers: Some(PageNumbers::TopOuter),
+        no_number_on_first_page: true,
+        ..Layout::default()
+    }
+}
+
+#[test]
+fn headings_code_sides_columns_and_page_numbers_are_told_to_both_typesetters() {
+    let told = book_layout().metadata("en");
+    for line in [
+        "codefont: \"DejaVu Sans Mono\"\nmonofont: \"DejaVu Sans Mono\"",
+        "fontsize: 14pt",
+        // the left margin is the inner one on two-sided pages: Typst names it so, the geometry package swaps by itself
+        "margin:\n  top: 2cm\n  bottom: 2cm\n  inside: 3.5cm\n  outside: 2cm",
+        "geometry:\n  - top=2cm\n  - bottom=2cm\n  - left=3.5cm\n  - right=2cm",
+        "classoption:\n  - twoside\n  - twocolumn",
+        "columns: 2",
+        "header-includes:\n  - |\n    ```{=typst}\n    #show heading: set text(font: \"DejaVu Sans Mono\")\n    #set page(header: context {\n      let n = counter(page).get().first()\n      if n > 1 { align(if calc.odd(n) { right } else { left }, [#n]) }\n    })\n    ```",
+        "\\newfontfamily\\cwheadingfont{DejaVu Sans Mono}",
+        "\\usepackage[fontsize=14pt]{scrextend}",
+        "\\def\\ps@cowriting{\\def\\@oddhead{\\hfil\\thepage}\\def\\@evenhead{\\thepage\\hfil}\\def\\@oddfoot{}\\def\\@evenfoot{}}",
+        "\\thispagestyle{empty}",
+    ] {
+        assert!(told.contains(line), "missing {line:?} in:\n{told}");
+    }
+    // only one side set, one-sided: the others stay the typesetter's
+    let one = Layout { margin_top_cm: Some(4.0), ..Layout::default() }.metadata("en");
+    assert_eq!(one, "lang: en-US\nmargin:\n  top: 4cm\ngeometry:\n  - top=4cm\n");
+    // no numbers: Typst's template is given an empty pattern; LaTeX is told, the title's page included
+    let off = Layout { page_numbers: Some(PageNumbers::Off), no_number_on_first_page: true, ..Layout::default() }.metadata("en");
+    assert_eq!(
+        off,
+        "lang: en-US\npage-numbering: \"\"\nheader-includes:\n  - |\n    ```{=latex}\n    \\makeatletter\\let\\ps@plain\\ps@empty\\makeatother\n    \\pagestyle{empty}\n    ```\n"
+    );
+    // sizes LaTeX's own classes have need no package
+    assert!(!Layout { font_size: Some(11), ..Layout::default() }.metadata("en").contains("scrextend"));
+    assert_eq!(book_layout().fonts(), ["DejaVu Sans Mono"]);
+    assert_eq!(Layout { font: "Arial".into(), heading_font: "arial".into(), code_font: "Menlo".into(), ..Layout::default() }.fonts(), ["Arial", "Menlo"]);
+}
+
+const LONG: &str = "A sentence to fill the page with words, again and again. ";
+
+#[test]
+fn a_pdf_with_typst_has_the_headings_type_two_columns_and_page_numbers_where_asked() {
+    let folder = Folder::new("typst-more");
+    let text = format!("# Method\n\n{}\n\n`code`\n\n## Sample\n\n{}\n", LONG.repeat(150), LONG.repeat(150));
+    std::fs::write(folder.path("thesis.md"), &text).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    if local_tools().pdf_engines.first().map(String::as_str) != Some("typst") {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "Typst is not there: run scripts/fetch-tools.py");
+        return;
+    }
+    let pages = |name: &str| pdf_extract::extract_text_by_pages(folder.path(name)).unwrap();
+    // how each page begins and ends: where a number would stand
+    let edges =
+        |name: &str| pages(name).iter().map(|page| (page.trim().chars().take(6).collect::<String>(), page.trim().chars().rev().take(3).collect::<String>())).collect::<Vec<_>>();
+    let with = |layout: Layout| PdfChoice { layout, ..PdfChoice::default() };
+    // the standard: one column, a number at the bottom of every page
+    exported(&session, &folder, "standard.pdf", &text, &PdfChoice::default());
+    let standard = edges("standard.pdf");
+    assert!(standard.len() >= 2 && standard[0].1.starts_with('1') && standard[1].1.starts_with('2'), "{standard:?}");
+    exported(&session, &folder, "off.pdf", &text, &with(Layout { page_numbers: Some(PageNumbers::Off), ..Layout::default() }));
+    assert!(edges("off.pdf").iter().all(|(_, end)| !end.starts_with(|c: char| c.is_ascii_digit())), "{:?}", edges("off.pdf"));
+
+    // numbers at the bottom, none on the first page
+    exported(&session, &folder, "numbers.pdf", &text, &with(Layout { page_numbers: Some(PageNumbers::BottomCentre), no_number_on_first_page: true, ..Layout::default() }));
+    let numbered = edges("numbers.pdf");
+    assert!(!numbered[0].1.starts_with('1') && numbered[1].1.starts_with('2'), "{numbered:?}");
+    // at the top, from the first page on, and not at the bottom as well
+    exported(&session, &folder, "top.pdf", &text, &with(Layout { page_numbers: Some(PageNumbers::TopOuter), ..Layout::default() }));
+    let top = edges("top.pdf");
+    assert!(top[0].0.starts_with('1') && top[1].0.starts_with('2') && !top[1].1.starts_with('2'), "{top:?}");
+
+    // the headings and the code in a typeface of their own, the text in the standard one
+    let (_, bytes) = exported(&session, &folder, "headings.pdf", &text, &with(Layout { heading_font: "DejaVu Sans Mono".into(), ..Layout::default() }));
+    let fonts = String::from_utf8_lossy(&bytes).into_owned();
+    assert!(fonts.contains("DejaVuSansMono-Bold") && fonts.contains("Libertinus"), "the headings in theirs, the text in the standard");
+    // two columns, 14 pt and a wide inner margin: more pages for the same text, and it still is a PDF
+    let (_, wide) = exported(&session, &folder, "book.pdf", &text, &with(book_layout()));
+    assert!(wide.starts_with(b"%PDF-"));
+    assert!(pages("book.pdf").len() > standard.len());
+    let (_, columns) = exported(&session, &folder, "columns.pdf", &text, &with(Layout { two_columns: true, font_size: Some(8), ..Layout::default() }));
+    assert!(columns.starts_with(b"%PDF-"));
+}
+
+#[test]
+fn a_pdf_with_latex_has_page_numbers_where_asked_a_size_of_its_own_and_the_headings_type() {
+    let Some(engine) = ["xelatex", "lualatex"].into_iter().find(|engine| find_program(engine).is_some() && find_program("pandoc").is_some()) else {
+        eprintln!("no XeLaTeX or LuaLaTeX is installed: the layout was not tried with LaTeX");
+        return;
+    };
+    let folder = Folder::new("latex-more");
+    let text = format!("---\ntitle: Walking breaks\n---\n\n# Method\n\n{}\n\n## Sample\n\n{}\n", LONG.repeat(150), LONG.repeat(150));
+    std::fs::write(folder.path("thesis.md"), &text).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    let pages = |name: &str| pdf_extract::extract_text_by_pages(folder.path(name)).unwrap();
+    let edges =
+        |name: &str| pages(name).iter().map(|page| (page.trim().chars().take(6).collect::<String>(), page.trim().chars().rev().take(3).collect::<String>())).collect::<Vec<_>>();
+    let with = |layout: Layout| PdfChoice { engine: Some(engine.into()), layout, ..PdfChoice::default() };
+    // the standard: a number at the bottom of every page
+    exported(&session, &folder, "standard.pdf", &text, &with(Layout::default()));
+    let standard = edges("standard.pdf");
+    assert!(standard[0].1.starts_with('1') && standard[1].1.starts_with('2'), "{standard:?}");
+
+    exported(&session, &folder, "off.pdf", &text, &with(Layout { page_numbers: Some(PageNumbers::Off), ..Layout::default() }));
+    assert!(edges("off.pdf").iter().all(|(_, end)| !end.starts_with(|c: char| c.is_ascii_digit())), "{:?}", edges("off.pdf"));
+    // at the top, and the page with the title has none
+    exported(&session, &folder, "top.pdf", &text, &with(Layout { page_numbers: Some(PageNumbers::TopOuter), no_number_on_first_page: true, ..Layout::default() }));
+    let top = edges("top.pdf");
+    assert!(top[0].0.starts_with("Walkin") && !top[0].1.starts_with('1') && top[1].0.starts_with('2'), "{top:?}");
+
+    // 14 pt, which the standard class does not have, two-sided in two columns, the headings in the system's own typeface
+    let (_, big) = exported(&session, &folder, "book.pdf", &text, &with(Layout { heading_font: "Courier New".into(), ..book_layout() }));
+    assert!(big.starts_with(b"%PDF-"));
+    // (that the headings are in their typeface is not read from the PDF here: XeLaTeX packs the fonts' names)
+    assert!(pages("book.pdf").len() > standard.len());
 }

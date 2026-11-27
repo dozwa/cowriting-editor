@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, PdfChoice, PdfLayout } from './api'
+import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, PageNumbers, PdfChoice, PdfLayout } from './api'
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
@@ -162,15 +162,36 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
 /** The typesetting programs by the names authors know; read when drawn, for the language shown now. */
 const engineNames = (): Record<string, string> => ({ typst: m.dialogs.typstEngine, xelatex: 'LaTeX (XeLaTeX)', lualatex: 'LaTeX (LuaLaTeX)', pdflatex: 'LaTeX (pdfLaTeX)', tectonic: 'LaTeX (Tectonic)' })
 
+const PAGE_NUMBERS: PageNumbers[] = ['off', 'bottom-centre', 'bottom-outer', 'top-outer']
+
 /** A kept choice, read with care: whatever is missing or of the wrong kind is the standard. The paper is a guess from the system's language when none is kept. */
 export function pdfChoiceFrom(kept: unknown): PdfChoice {
   const choice = (typeof kept === 'object' && kept !== null ? kept : {}) as Partial<PdfChoice>
   const layout = (typeof choice.layout === 'object' && choice.layout !== null ? choice.layout : {}) as Partial<PdfLayout>
   const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+  const name = (value: unknown) => (typeof value === 'string' ? value : '')
   return {
     engine: typeof choice.engine === 'string' ? choice.engine : null,
     paper: choice.paper === 'letter' || choice.paper === 'a4' ? choice.paper : /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4',
-    layout: { font: typeof layout.font === 'string' ? layout.font : '', fontSize: number(layout.fontSize), marginCm: number(layout.marginCm), lineSpacing: number(layout.lineSpacing), indent: layout.indent === true, ragged: layout.ragged === true, numbered: layout.numbered === true },
+    layout: {
+      font: name(layout.font),
+      headingFont: name(layout.headingFont),
+      codeFont: name(layout.codeFont),
+      fontSize: number(layout.fontSize),
+      marginCm: number(layout.marginCm),
+      marginTopCm: number(layout.marginTopCm),
+      marginBottomCm: number(layout.marginBottomCm),
+      marginLeftCm: number(layout.marginLeftCm),
+      marginRightCm: number(layout.marginRightCm),
+      twoSided: layout.twoSided === true,
+      lineSpacing: number(layout.lineSpacing),
+      twoColumns: layout.twoColumns === true,
+      pageNumbers: PAGE_NUMBERS.find(place => place === layout.pageNumbers) ?? null,
+      noNumberOnFirstPage: layout.noNumberOnFirstPage === true,
+      indent: layout.indent === true,
+      ragged: layout.ragged === true,
+      numbered: layout.numbered === true,
+    },
   }
 }
 
@@ -186,11 +207,32 @@ function lastPdfChoice(): PdfChoice {
   }
 }
 
+/** The four sides a margin of its own can be set for, in the order they are shown. */
+const SIDES = ['marginTopCm', 'marginBottomCm', 'marginLeftCm', 'marginRightCm'] as const
+
 /** The layout pandoc's template gives a PDF when nothing is chosen. */
-const STANDARD_LAYOUT: PdfLayout = { font: '', fontSize: null, marginCm: null, lineSpacing: null, indent: false, ragged: false, numbered: false }
+const STANDARD_LAYOUT: PdfLayout = { font: '', headingFont: '', codeFont: '', fontSize: null, marginCm: null, marginTopCm: null, marginBottomCm: null, marginLeftCm: null, marginRightCm: null, twoSided: false, lineSpacing: null, twoColumns: false, pageNumbers: null, noNumberOnFirstPage: false, indent: false, ragged: false, numbered: false }
 
 /** The layout fields a document's front matter sets itself, by the name it uses: those come first, whatever the dialog says. */
-const FRONT_MATTER_LAYOUT: Record<string, keyof PdfLayout> = { mainfont: 'font', fontsize: 'fontSize', margin: 'marginCm', geometry: 'marginCm', linestretch: 'lineSpacing', indent: 'indent', 'section-numbering': 'numbered', numbersections: 'numbered' }
+const FRONT_MATTER_LAYOUT: Record<string, keyof PdfLayout> = {
+  mainfont: 'font',
+  monofont: 'codeFont',
+  codefont: 'codeFont',
+  fontsize: 'fontSize',
+  margin: 'marginCm',
+  geometry: 'marginCm',
+  linestretch: 'lineSpacing',
+  indent: 'indent',
+  'section-numbering': 'numbered',
+  numbersections: 'numbered',
+  columns: 'twoColumns',
+  // two columns and two-sided pages are options of LaTeX's class: a document that sets its own leaves these out
+  classoption: 'twoColumns',
+  'page-numbering': 'pageNumbers',
+  // the headings' typeface, the page numbers' place and sizes beyond LaTeX's own are said there
+  'header-includes': 'pageNumbers',
+  'include-before': 'indent',
+}
 
 /** The names among them that the text's front matter holds. */
 export function layoutInFrontMatter(text: string): string[] {
@@ -256,6 +298,9 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   const isOwnLayout = JSON.stringify(layout) !== JSON.stringify(STANDARD_LAYOUT)
   const inDocument = layoutInFrontMatter(getText())
   const fonts = tools?.fonts ?? []
+  /** The typefaces the layout names, each once. */
+  const namedFonts = [layout.font, layout.headingFont, layout.codeFont].map(font => font.trim()).filter((font, at, all) => font !== '' && all.findIndex(other => other.toLowerCase() === font.toLowerCase()) === at)
+  const hasPlacedNumbers = layout.pageNumbers !== null && layout.pageNumbers !== 'off'
   const numberOrNull = (value: string) => (value === '' ? null : Number(value))
   const t = m.dialogs
   const cannot = tools === undefined ? '' : !tools.hasPandoc ? t.noPandoc : format === 'pdf' && engines.length === 0 ? t.noPdfEngine : ''
@@ -301,8 +346,18 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
               {t.layoutSize}
               <select value={layout.fontSize ?? ''} onChange={e => lay({ fontSize: numberOrNull(e.target.value) })}>
                 <option value="">{t.layoutStandard}</option>
-                {[10, 11, 12].map(size => <option key={size} value={size}>{size} pt</option>)}
+                {[9, 10, 11, 12, 13, 14].map(size => <option key={size} value={size}>{size} pt</option>)}
               </select>
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              {t.layoutHeadingFont}
+              <input list="pdf-fonts" value={layout.headingFont} placeholder={t.layoutAsText} onChange={e => lay({ headingFont: e.target.value })} />
+            </label>
+            <label>
+              {t.layoutCodeFont}
+              <input list="pdf-fonts" value={layout.codeFont} placeholder={t.layoutStandard} onChange={e => lay({ codeFont: e.target.value })} />
             </label>
           </div>
           <div className="row">
@@ -321,11 +376,35 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
               </select>
             </label>
           </div>
+          <details className="sides" open={SIDES.some(side => layout[side] !== null)}>
+            <summary>{t.layoutSides}</summary>
+            <div className="row">
+              {SIDES.map(side => (
+                <label key={side}>
+                  {t.layoutSide(side, layout.twoSided)}
+                  <input type="number" min={0.5} max={6} step={0.1} value={layout[side] ?? ''} placeholder={layout.marginCm === null ? t.layoutStandard : String(layout.marginCm)} onChange={e => lay({ [side]: numberOrNull(e.target.value) })} />
+                </label>
+              ))}
+            </div>
+          </details>
+          <div className="row">
+            <label>
+              {t.layoutPageNumbers}
+              <select value={layout.pageNumbers ?? ''} onChange={e => lay({ pageNumbers: PAGE_NUMBERS.find(place => place === e.target.value) ?? null })}>
+                <option value="">{t.layoutPageNumbersStandard}</option>
+                {PAGE_NUMBERS.map(place => <option key={place} value={place}>{t.layoutPageNumbersAt(place, layout.twoSided)}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="check"><input type="checkbox" disabled={!hasPlacedNumbers} checked={hasPlacedNumbers && layout.noNumberOnFirstPage} onChange={e => lay({ noNumberOnFirstPage: e.target.checked })} /> {t.layoutNoFirstNumber}</label>
+          <label className="check"><input type="checkbox" checked={layout.twoColumns} onChange={e => lay({ twoColumns: e.target.checked })} /> {t.layoutTwoColumns}</label>
+          <label className="check"><input type="checkbox" checked={layout.twoSided} onChange={e => lay({ twoSided: e.target.checked })} /> {t.layoutTwoSided}</label>
           <label className="check"><input type="checkbox" checked={layout.indent} onChange={e => lay({ indent: e.target.checked })} /> {t.layoutIndent}</label>
           <label className="check"><input type="checkbox" checked={layout.ragged} onChange={e => lay({ ragged: e.target.checked })} /> {t.layoutRagged}</label>
           <label className="check"><input type="checkbox" checked={layout.numbered} onChange={e => lay({ numbered: e.target.checked })} /> {t.layoutNumbered}</label>
-          {layout.font !== '' && fonts.length > 0 && !fonts.some(name => name.toLowerCase() === layout.font.trim().toLowerCase()) && <p className="hint">{t.layoutFontMissing(layout.font)}</p>}
-          {layout.font !== '' && engine === 'pdflatex' && <p className="hint">{t.layoutFontPdflatex}</p>}
+          {fonts.length > 0 && namedFonts.filter(font => !fonts.some(name => name.toLowerCase() === font.toLowerCase())).map(font => <p key={font} className="hint">{t.layoutFontMissing(font)}</p>)}
+          {namedFonts.length > 0 && engine === 'pdflatex' && <p className="hint">{t.layoutFontPdflatex}</p>}
+          {engine !== null && engine !== 'typst' && layout.fontSize !== null && (layout.fontSize < 10 || layout.fontSize > 12) && <p className="muted">{t.layoutSizeLatex}</p>}
           {inDocument.length > 0 && <p className="muted">{t.layoutInDocument(inDocument.join(', '))}</p>}
           {isOwnLayout && <button className="link" onClick={() => lay(STANDARD_LAYOUT)}>{t.layoutReset}</button>}
         </details>

@@ -40,13 +40,14 @@ to a new heading with its version and date; the release workflow does that (see 
 - **The count of a selection.** While text is selected, the top bar shows its words and
   characters in place of the document's, counted by the same rules; the document's numbers are
   in the tooltip. With several selections at once, the main one is counted. (#30)
-- **Type and layout of a PDF.** The export dialog has a part "Type and layout": typeface of the
-  text, size, margins, line spacing, indented paragraphs, ragged right, numbered headings. It
-  works with Typst and with an installed LaTeX. The choice is kept with the project, so every
-  document has its own, and a new document starts with the one chosen last. What the
-  document's front matter sets comes first. The export now also passes the document's language
-  on, for hyphenation, to PDF and Word. Not yet: typefaces for headings and code, page numbers,
-  columns, named presets, and the layout of a Word file. (#13, #34)
+- **Type and layout of a PDF.** The export dialog has a part "Type and layout": the typeface of
+  the text, of the headings and of code; the size (9 to 14 pt); margins, for all sides or side
+  by side, also two-sided; line spacing; one or two columns; indented paragraphs; ragged right;
+  numbered headings; and page numbers (none, at the bottom, at the top, none on the first page).
+  It works with Typst and with an installed LaTeX. The choice is kept with the project, so every
+  document has its own, and a new document starts with the one chosen last. What the document's
+  front matter sets comes first. The export now also passes the document's language on, for
+  hyphenation, to PDF and Word. (#13, #34)
 - **Hints can be ticked off.** Every list item and table row of an answer has a box to mark it
   as done, with "Mark all" and "Unmark all" for the whole answer and a count of what is left.
   The ticks are kept beside the log (`marks.json`) and survive closing the document; they are a

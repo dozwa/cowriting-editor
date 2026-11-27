@@ -69,6 +69,19 @@ pub struct PdfChoice {
     pub layout: Layout,
 }
 
+/// Where the page's number stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PageNumbers {
+    /// No numbers at all.
+    Off,
+    BottomCentre,
+    /// At the bottom, on the right; on the outer side when the pages are two-sided.
+    BottomOuter,
+    /// At the top, on the right; on the outer side when the pages are two-sided.
+    TopOuter,
+}
+
 /// How the text of a PDF is set: what a call for papers or a faculty usually prescribes. Whatever
 /// is left at its standard is not passed on, and pandoc's template decides.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -76,12 +89,31 @@ pub struct PdfChoice {
 pub struct Layout {
     /// The typeface of the text, by the name the system knows it under; empty for the standard.
     pub font: String,
-    /// In points: 10, 11 or 12, which is what LaTeX's standard class has.
+    /// The typeface of the headings; empty for that of the text.
+    pub heading_font: String,
+    /// The typeface of code; empty for the standard.
+    pub code_font: String,
+    /// In points, 8 to 20. LaTeX's standard class has 10, 11 and 12; for the others it needs KOMA-Script.
     pub font_size: Option<u8>,
     /// The margin on all four sides, in centimetres.
     pub margin_cm: Option<f32>,
+    /// One side's own margin, where it is not that of all four.
+    pub margin_top_cm: Option<f32>,
+    pub margin_bottom_cm: Option<f32>,
+    /// The left margin; the inner one when the pages are two-sided.
+    pub margin_left_cm: Option<f32>,
+    /// The right margin; the outer one when the pages are two-sided.
+    pub margin_right_cm: Option<f32>,
+    /// Printed on both sides of the paper: left and right swap from page to page.
+    pub two_sided: bool,
     /// 1 is single, 1.5 one and a half, 2 double.
     pub line_spacing: Option<f32>,
+    /// The text in two columns.
+    pub two_columns: bool,
+    /// Where the page numbers stand; None leaves it to the templates, which put one at the bottom of every page.
+    pub page_numbers: Option<PageNumbers>,
+    /// The first page carries no number.
+    pub no_number_on_first_page: bool,
     /// Paragraphs begin with an indent and have no space between them; the standard is a space and no indent.
     pub indent: bool,
     /// Lines end where the words end; the standard is justified.
@@ -90,18 +122,60 @@ pub struct Layout {
     pub numbered: bool,
 }
 
+/// A font's name is letters, digits and a few signs: nothing that could end the line it is written on.
+fn font_name(name: &str) -> String {
+    let kept: String = name.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.' | '\'' | '+' | '&')).take(80).collect();
+    kept.trim().to_string()
+}
+
+/// A raw block for one typesetter, as an entry of a list in the metadata file.
+fn raw_entry(lines: &mut Vec<String>, format: &str, code: &[String]) {
+    if code.is_empty() {
+        return;
+    }
+    lines.push("  - |".into());
+    lines.push(format!("    ```{{={format}}}"));
+    lines.extend(code.iter().flat_map(|part| part.lines()).map(|line| format!("    {line}")));
+    lines.push("    ```".into());
+}
+
 impl Layout {
     /// The same layout with every value inside what the export can set.
     pub fn within_limits(&self) -> Layout {
-        // a font's name is letters, digits and a few signs: nothing that could end the line it is written on
-        let font: String = self.font.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.' | '\'' | '+' | '&')).take(80).collect();
+        let cm = |margin: Option<f32>| margin.filter(|margin| margin.is_finite()).map(|margin| (margin.clamp(0.5, 6.0) * 100.0).round() / 100.0);
         Layout {
-            font: font.trim().to_string(),
-            font_size: self.font_size.filter(|size| (10..=12).contains(size)),
-            margin_cm: self.margin_cm.filter(|margin| margin.is_finite()).map(|margin| (margin.clamp(0.5, 6.0) * 100.0).round() / 100.0),
+            font: font_name(&self.font),
+            heading_font: font_name(&self.heading_font),
+            code_font: font_name(&self.code_font),
+            font_size: self.font_size.filter(|size| (8..=20).contains(size)),
+            margin_cm: cm(self.margin_cm),
+            margin_top_cm: cm(self.margin_top_cm),
+            margin_bottom_cm: cm(self.margin_bottom_cm),
+            margin_left_cm: cm(self.margin_left_cm),
+            margin_right_cm: cm(self.margin_right_cm),
             line_spacing: self.line_spacing.filter(|spacing| spacing.is_finite()).map(|spacing| (spacing.clamp(0.8, 3.0) * 100.0).round() / 100.0),
+            // no numbers, then none to leave off the first page
+            no_number_on_first_page: self.no_number_on_first_page && !matches!(self.page_numbers, None | Some(PageNumbers::Off)),
             ..self.clone()
         }
+    }
+
+    /// The typefaces this layout names, without doubles: what a computer must have to set it as meant.
+    pub fn fonts(&self) -> Vec<String> {
+        let layout = self.within_limits();
+        let mut fonts: Vec<String> = Vec::new();
+        for name in [layout.font, layout.heading_font, layout.code_font] {
+            if !name.is_empty() && !fonts.iter().any(|other| other.eq_ignore_ascii_case(&name)) {
+                fonts.push(name);
+            }
+        }
+        fonts
+    }
+
+    /// The margins as (top, bottom, left, right), each its own or that of all four; None when no margin is set.
+    fn sides(&self) -> Option<[Option<f32>; 4]> {
+        let sides = [self.margin_top_cm, self.margin_bottom_cm, self.margin_left_cm, self.margin_right_cm].map(|side| side.or(self.margin_cm));
+        sides.iter().any(Option::is_some).then_some(sides)
     }
 
     /// What pandoc is told about the document besides its own front matter, as a metadata file
@@ -111,15 +185,59 @@ impl Layout {
     pub fn metadata(&self, language: &str) -> String {
         let layout = self.within_limits();
         let mut lines = vec![format!("lang: {}", if language == "de" { "de-DE" } else { "en-US" })];
+        // what the templates have no name for is said in the typesetter's own words: before the
+        // template's settings (`header`) where it concerns the page, after them (`before`) for the text
+        let (mut typst_header, mut latex_header, mut typst_before, mut latex_before): (Vec<String>, Vec<String>, Vec<String>, Vec<String>) = Default::default();
         if !layout.font.is_empty() {
             lines.push(format!("mainfont: \"{}\"", layout.font));
         }
+        if !layout.code_font.is_empty() {
+            // Typst's template calls it codefont, LaTeX's monofont
+            lines.extend([format!("codefont: \"{}\"", layout.code_font), format!("monofont: \"{}\"", layout.code_font)]);
+        }
+        if !layout.heading_font.is_empty() {
+            let font = &layout.heading_font;
+            typst_header.push(format!("#show heading: set text(font: \"{font}\")"));
+            // a typeface by its name needs XeLaTeX or LuaLaTeX; KOMA-Script's classes have a word for the headings' type, the standard classes are told heading by heading
+            latex_header.push(format!(
+                "\\ifPDFTeX\\else\n\\newfontfamily\\cwheadingfont{{{font}}}\n\\makeatletter\n\\@ifundefined{{KOMAClassName}}{{%\n\
+                 \\renewcommand\\section{{\\@startsection{{section}}{{1}}{{\\z@}}{{-3.5ex \\@plus -1ex \\@minus -.2ex}}{{2.3ex \\@plus .2ex}}{{\\cwheadingfont\\Large\\bfseries}}}}%\n\
+                 \\renewcommand\\subsection{{\\@startsection{{subsection}}{{2}}{{\\z@}}{{-3.25ex \\@plus -1ex \\@minus -.2ex}}{{1.5ex \\@plus .2ex}}{{\\cwheadingfont\\large\\bfseries}}}}%\n\
+                 \\renewcommand\\subsubsection{{\\@startsection{{subsubsection}}{{3}}{{\\z@}}{{-3.25ex \\@plus -1ex \\@minus -.2ex}}{{1.5ex \\@plus .2ex}}{{\\cwheadingfont\\normalsize\\bfseries}}}}%\n\
+                 }}{{\\addtokomafont{{disposition}}{{\\cwheadingfont}}}}\n\\makeatother\n\\fi"
+            ));
+        }
         if let Some(size) = layout.font_size {
             lines.push(format!("fontsize: {size}pt"));
+            if !(10..=12).contains(&size) {
+                // LaTeX's standard classes know 10, 11 and 12 pt; KOMA-Script sets any size, in its own classes and in the others
+                latex_header.push(format!(
+                    "\\makeatletter\n\\@ifundefined{{KOMAClassName}}{{\\usepackage[fontsize={size}pt]{{scrextend}}}}{{\\KOMAoptions{{fontsize={size}pt}}}}\n\\makeatother"
+                ));
+            }
         }
-        if let Some(margin) = layout.margin_cm {
-            // Typst takes the sides one by one, LaTeX the geometry package's words
-            lines.extend(["margin:".to_string(), format!("  x: {margin}cm"), format!("  y: {margin}cm"), format!("geometry: margin={margin}cm")]);
+        match (layout.sides(), layout.margin_cm) {
+            // one margin for all four sides: Typst takes the sides one by one, LaTeX the geometry package's words
+            (Some(sides), Some(margin)) if sides.iter().all(|side| *side == Some(margin)) && !layout.two_sided => {
+                lines.extend(["margin:".to_string(), format!("  x: {margin}cm"), format!("  y: {margin}cm"), format!("geometry: margin={margin}cm")]);
+            }
+            (Some(sides), _) => {
+                // two-sided: Typst calls left and right inside and outside; the geometry package swaps them itself
+                let typst = if layout.two_sided { ["top", "bottom", "inside", "outside"] } else { ["top", "bottom", "left", "right"] };
+                lines.push("margin:".into());
+                lines.extend(typst.iter().zip(sides).filter_map(|(name, side)| side.map(|cm| format!("  {name}: {cm}cm"))));
+                lines.push("geometry:".into());
+                lines.extend(["top", "bottom", "left", "right"].iter().zip(sides).filter_map(|(name, side)| side.map(|cm| format!("  - {name}={cm}cm"))));
+            }
+            (None, _) => {}
+        }
+        let options: Vec<&str> = [(layout.two_sided, "twoside"), (layout.two_columns, "twocolumn")].iter().filter(|(is_set, _)| *is_set).map(|(_, option)| *option).collect();
+        if !options.is_empty() {
+            lines.push("classoption:".into());
+            lines.extend(options.iter().map(|option| format!("  - {option}")));
+        }
+        if layout.two_columns {
+            lines.push("columns: 2".into());
         }
         if let Some(spacing) = layout.line_spacing {
             lines.push(format!("linestretch: {spacing}"));
@@ -130,26 +248,57 @@ impl Layout {
         if layout.indent {
             lines.push("indent: true".into());
         }
-        // what the templates have no name for is said in the typesetter's own words, after the template's settings
-        let mut typst: Vec<String> = Vec::new();
-        let mut latex: Vec<&str> = Vec::new();
+        match layout.page_numbers {
+            None => {}
+            Some(PageNumbers::Off) => {
+                // Typst's template takes an empty pattern as none; LaTeX numbers every page, the title's by a style of its own
+                lines.push("page-numbering: \"\"".into());
+                latex_header.push("\\makeatletter\\let\\ps@plain\\ps@empty\\makeatother\n\\pagestyle{empty}".into());
+            }
+            Some(place) => {
+                // the template's own number is taken off: the one set here stands where it was asked for
+                lines.push("page-numbering: \"\"".into());
+                let first = if layout.no_number_on_first_page { 1 } else { 0 };
+                let (is_top, is_centred) = (place == PageNumbers::TopOuter, place == PageNumbers::BottomCentre);
+                let side = match (is_centred, layout.two_sided) {
+                    (true, _) => "center",
+                    (false, false) => "right",
+                    (false, true) => "if calc.odd(n) { right } else { left }",
+                };
+                typst_header.push(format!(
+                    "#set page({}: context {{\n  let n = counter(page).get().first()\n  if n > {first} {{ align({side}, [#n]) }}\n}})",
+                    if is_top { "header" } else { "footer" }
+                ));
+                let (odd, even) = match (is_centred, layout.two_sided) {
+                    (true, _) => ("\\hfil\\thepage\\hfil", "\\hfil\\thepage\\hfil"),
+                    (false, false) => ("\\hfil\\thepage", "\\hfil\\thepage"),
+                    (false, true) => ("\\hfil\\thepage", "\\thepage\\hfil"),
+                };
+                let (head, foot) = if is_top { ((odd, even), ("", "")) } else { (("", ""), (odd, even)) };
+                let mut style = format!(
+                    "\\makeatletter\n\\def\\ps@cowriting{{\\def\\@oddhead{{{}}}\\def\\@evenhead{{{}}}\\def\\@oddfoot{{{}}}\\def\\@evenfoot{{{}}}}}\n\\let\\ps@plain\\ps@cowriting\n\\makeatother\n\\pagestyle{{cowriting}}",
+                    head.0, head.1, foot.0, foot.1
+                );
+                if layout.no_number_on_first_page {
+                    // the title sets its page's style itself, after everything said here
+                    style.push_str("\n\\AtBeginDocument{\\thispagestyle{empty}\\let\\cwmaketitle\\maketitle\\renewcommand\\maketitle{\\cwmaketitle\\thispagestyle{empty}}}");
+                }
+                latex_header.push(style);
+            }
+        }
         if layout.indent {
             // no space between paragraphs: the distance of two lines, which the template sets as 0.65em times the line spacing
-            typst.push(format!("#set par(first-line-indent: 1.5em, spacing: {}em)", ((0.65 * layout.line_spacing.unwrap_or(1.0)) * 1000.0).round() / 1000.0));
+            typst_before.push(format!("#set par(first-line-indent: 1.5em, spacing: {}em)", ((0.65 * layout.line_spacing.unwrap_or(1.0)) * 1000.0).round() / 1000.0));
         }
         if layout.ragged {
-            typst.push("#set par(justify: false)".into());
-            latex.push("\\raggedright");
+            typst_before.push("#set par(justify: false)".into());
+            latex_before.push("\\raggedright".into());
         }
-        if !typst.is_empty() || !latex.is_empty() {
-            lines.push("include-before:".into());
-            for (format, code) in [("typst", typst.join("\n")), ("latex", latex.join("\n"))] {
-                if !code.is_empty() {
-                    lines.push("  - |".into());
-                    lines.push(format!("    ```{{={format}}}"));
-                    lines.extend(code.lines().map(|line| format!("    {line}")));
-                    lines.push("    ```".into());
-                }
+        for (name, typst, latex) in [("header-includes", typst_header, latex_header), ("include-before", typst_before, latex_before)] {
+            if !typst.is_empty() || !latex.is_empty() {
+                lines.push(format!("{name}:"));
+                raw_entry(&mut lines, "typst", &typst);
+                raw_entry(&mut lines, "latex", &latex);
             }
         }
         format!("{}\n", lines.join("\n"))

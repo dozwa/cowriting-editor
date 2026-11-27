@@ -72,15 +72,27 @@ the export dialog offers it as well and remembers your choice. Page size, fonts 
 Word file are set in Word.
 
 **Type and layout of a PDF.** Under "Type and layout" in the export dialog you set what a call for
-papers or a faculty usually prescribes: the typeface of the text (one of those on your computer),
-its size (10, 11 or 12 pt), the margins, the line spacing, paragraphs with an indent instead of a
-space between them, ragged right instead of justified, and numbered headings. What you leave at
-"Standard" is as pandoc's template has it. The choice is kept with the
+papers or a faculty usually prescribes:
+
+- the typeface of the text, of the headings and of code (those on your computer), and the size
+  (9 to 14 pt);
+- the margins, for all four sides or side by side, and whether the pages are two-sided, so that
+  the inner and the outer margin swap from page to page;
+- the line spacing, one or two columns, paragraphs with an indent instead of a space between
+  them, ragged right instead of justified, numbered headings;
+- page numbers: none, at the bottom in the middle, at the bottom or at the top on the outer side,
+  and none on the first page.
+
+What you leave at "Standard" is as pandoc's template has it. The choice is kept with the
 project (see Projects), so every document has its own; a document you export for the first time
-starts with what you chose last. If your document sets one of these itself in its front matter (`fontsize: 11pt`,
-`geometry: margin=3cm`, `linestretch`, `mainfont`, …), that comes first, and the dialog says which.
-The export also tells the typesetter your document's language, so that words are hyphenated by its
-rules. pdfLaTeX cannot use the typefaces of your system; XeLaTeX, LuaLaTeX and Typst can.
+starts with what you chose last. If your document sets one of these itself in its front matter
+(`fontsize: 11pt`, `geometry: margin=3cm`, `linestretch`, `mainfont`, `header-includes`, …), that
+comes first, and the dialog says which. The export also tells the typesetter your document's
+language, so that words are hyphenated by its rules.
+
+It works with Typst and with an installed LaTeX. With LaTeX, a typeface by its name needs XeLaTeX
+or LuaLaTeX (pdfLaTeX cannot use the typefaces of your system), and a size other than 10, 11 or
+12 pt needs KOMA-Script, which most LaTeX installations bring along.
 
 **Reference style.** Without a choice, citations and the reference list are in pandoc's default
 style (Chicago author-date). In the Sources tab you can choose a style file (`.csl`, as

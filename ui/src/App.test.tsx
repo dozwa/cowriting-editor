@@ -838,7 +838,7 @@ function windowStorage() {
   vi.stubGlobal('localStorage', { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) })
 }
 
-const STANDARD_LAYOUT = { font: '', fontSize: null, marginCm: null, lineSpacing: null, indent: false, ragged: false, numbered: false }
+const STANDARD_LAYOUT: PdfChoice['layout'] = { font: '', headingFont: '', codeFont: '', fontSize: null, marginCm: null, marginTopCm: null, marginBottomCm: null, marginLeftCm: null, marginRightCm: null, twoSided: false, lineSpacing: null, twoColumns: false, pageNumbers: null, noNumberOnFirstPage: false, indent: false, ragged: false, numbered: false }
 
 test('the type and layout of a PDF can be set as a call for papers asks, are remembered, and the front matter comes first', async () => {
   const user = userEvent.setup()
@@ -861,7 +861,7 @@ test('the type and layout of a PDF can be set as a call for papers asks, are rem
   expect(screen.getByText(/Type and layout · set by you/)).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Export' }))
   await screen.findByRole('status')
-  expect(calls.pdf[0]?.layout).toEqual({ font: 'Times New Roman', fontSize: 12, marginCm: 2.5, lineSpacing: 1.5, indent: true, ragged: false, numbered: true })
+  expect(calls.pdf[0]?.layout).toEqual({ ...STANDARD_LAYOUT, font: 'Times New Roman', fontSize: 12, marginCm: 2.5, lineSpacing: 1.5, indent: true, numbered: true })
 
   // a typeface the computer does not have, and an engine that cannot use the system's typefaces, are said
   expect(screen.queryByText(/not among the typefaces/)).toBeNull()
@@ -907,8 +907,45 @@ test('a project keeps its own layout, and a project without one starts from what
   expect((screen.getByLabelText(/Number the headings/) as HTMLInputElement).checked).toBe(true)
 })
 
+test('headings, code, single sides, columns and page numbers can be set, and what the computer lacks or LaTeX needs is said', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  const { api, calls } = standIn({ pdfEngines: ['typst', 'xelatex'] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  await user.click(await screen.findByText('Type and layout'))
+
+  await user.type(screen.getByLabelText('Typeface of the headings'), 'Arial')
+  await user.type(screen.getByLabelText('Typeface of code'), 'Fira Code')
+  await user.selectOptions(screen.getByLabelText('Size'), '14')
+  // no number on the first page needs numbers that are placed here
+  expect((screen.getByLabelText('No number on the first page') as HTMLInputElement).disabled).toBe(true)
+  await user.selectOptions(screen.getByLabelText('Page numbers'), 'top-outer')
+  await user.click(screen.getByLabelText('No number on the first page'))
+  await user.click(screen.getByLabelText('Two columns'))
+  // the sides are called by what they are on the page
+  await user.click(screen.getByText('A margin of its own for single sides'))
+  await user.type(screen.getByLabelText('Left (cm)'), '3.5')
+  await user.click(screen.getByLabelText(/Two-sided/))
+  expect(screen.getByLabelText('Inside (cm)')).toBeTruthy()
+  expect(within(screen.getByLabelText('Page numbers')).getByRole('option', { name: 'At the top, outside' })).toBeTruthy()
+
+  // only the typeface this computer does not have is named; a size LaTeX's classes lack is explained once LaTeX is chosen
+  expect(screen.getByText(/“Fira Code” is not among the typefaces/)).toBeTruthy()
+  expect(screen.queryByText(/“Arial” is not among/)).toBeNull()
+  expect(screen.queryByText(/KOMA-Script/)).toBeNull()
+  await user.selectOptions(screen.getByLabelText('Typeset with'), 'xelatex')
+  expect(screen.getByText(/KOMA-Script/)).toBeTruthy()
+
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await screen.findByRole('status')
+  expect(calls.pdf[0]?.layout).toEqual({ ...STANDARD_LAYOUT, headingFont: 'Arial', codeFont: 'Fira Code', fontSize: 14, pageNumbers: 'top-outer', noNumberOnFirstPage: true, twoColumns: true, marginLeftCm: 3.5, twoSided: true })
+})
+
 test('the layout a document sets in its front matter is named', () => {
   expect(layoutInFrontMatter('---\ntitle: Thesis\nfontsize: 12pt\ngeometry: margin=3cm\nlinestretch: 1.5\n---\n\n# Text\n\nfontsize: no\n')).toEqual(['fontsize', 'geometry', 'linestretch'])
+  expect(layoutInFrontMatter('---\nclassoption: twocolumn\nheader-includes: |\n  \\usepackage{x}\nmonofont: Menlo\n---\n')).toEqual(['classoption', 'header-includes', 'monofont'])
   expect(layoutInFrontMatter('# No front matter\n\nfontsize: 12pt\n')).toEqual([])
 })
 
