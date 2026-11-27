@@ -47,14 +47,11 @@ pub fn server(trial: Option<&str>) -> Option<String> {
 }
 
 fn read(file: &Path) -> Value {
-    std::fs::read_to_string(file).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok()).filter(Value::is_object).unwrap_or_else(|| json!({}))
+    crate::preferences::read_json(file, &cowriting_core::stored::STATE)
 }
 
 fn write(file: &Path, json: &Value) {
-    if let Some(folder) = file.parent() {
-        let _ = std::fs::create_dir_all(folder);
-    }
-    let _ = std::fs::write(file, format!("{}\n", serde_json::to_string_pretty(json).expect("plain data")));
+    let _ = crate::preferences::write_json(file, &cowriting_core::stored::STATE, json);
 }
 
 /// The author was asked once whether figures may be sent; they are not asked by a dialog again.

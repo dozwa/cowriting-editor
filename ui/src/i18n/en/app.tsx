@@ -35,6 +35,9 @@ export const app = {
       {isSameText ? 'Its last saved text is exactly this document.' : 'Its last saved text differs from this document.'} Is {document} that document, renamed?
     </>
   ),
+  storedSetAside: (file: string, keptAs: string) =>
+    `${file} could not be read. It was not written over: it is kept as ${keptAs} in the same folder, and the editor goes on with its standard for it.`,
+  storedNewer: (file: string) => `A newer version of the editor wrote ${file}. This version uses what it understands of it and does not change it; what it holds cannot be changed here until the editor is updated.`,
   continueLog: 'Yes, continue its log',
   newDocumentHere: 'No, this is a new document',
   found: (words: number, isPasted: boolean, isCorrection: boolean) =>

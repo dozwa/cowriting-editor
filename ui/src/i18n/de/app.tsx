@@ -33,6 +33,9 @@ export const app: typeof pattern = {
       {isSameText ? 'Sein zuletzt gespeicherter Text ist genau dieses Dokument.' : 'Sein zuletzt gespeicherter Text weicht von diesem Dokument ab.'} Ist {document} dieses Dokument, nur umbenannt?
     </>
   ),
+  storedSetAside: (file: string, keptAs: string) =>
+    `${file} ließ sich nicht lesen. Die Datei wurde nicht überschrieben: Sie liegt als ${keptAs} im selben Ordner, und der Editor arbeitet dafür mit seinem Standard weiter.`,
+  storedNewer: (file: string) => `${file} stammt von einer neueren Version des Editors. Diese Version nutzt davon, was sie versteht, und ändert die Datei nicht; was darin steht, lässt sich hier erst nach einem Update ändern.`,
   continueLog: 'Ja, sein Protokoll fortführen',
   newDocumentHere: 'Nein, dies ist ein neues Dokument',
   found: (words: number, isPasted: boolean, isCorrection: boolean) =>

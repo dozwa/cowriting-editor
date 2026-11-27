@@ -1,0 +1,32 @@
+{
+  "backend": "openai-compatible",
+  "model": "qwen3:8b",
+  "baseUrl": "http://localhost:11434/v1",
+  "maxTokens": 4000,
+  "preferences": {
+    "theme": "dark",
+    "textFont": "literata",
+    "textFontName": "",
+    "textSize": 18,
+    "lineWidth": "standard",
+    "uiFont": "hanken",
+    "uiSize": "standard",
+    "spellcheck": true,
+    "calm": false,
+    "autosaveSeconds": 0,
+    "documentsFolder": "",
+    "exportFolder": "",
+    "reopenLast": false,
+    "interfaceLanguage": "system",
+    "writingLanguage": "document",
+    "aiLanguage": "auto",
+    "disclosureLanguage": "document",
+    "livePauseSeconds": 20,
+    "liveGapSeconds": 60,
+    "livePerHour": 20,
+    "shortcuts": {},
+    "diagnostics": true,
+    "usagePing": false,
+    "usageFigures": false
+  }
+}

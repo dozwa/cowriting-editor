@@ -38,17 +38,14 @@ pub struct Asking {
 }
 
 fn read(file: &Path) -> (Value, Support) {
-    let json = std::fs::read_to_string(file).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok()).filter(Value::is_object).unwrap_or_else(|| json!({}));
+    let json = crate::preferences::read_json(file, &cowriting_core::stored::STATE);
     let support = serde_json::from_value(json["support"].clone()).unwrap_or_default();
     (json, support)
 }
 
 fn write(file: &Path, mut json: Value, support: Support) {
     json["support"] = json!(support);
-    if let Some(folder) = file.parent() {
-        let _ = std::fs::create_dir_all(folder);
-    }
-    let _ = std::fs::write(file, format!("{}\n", serde_json::to_string_pretty(&json).expect("plain data")));
+    let _ = crate::preferences::write_json(file, &cowriting_core::stored::STATE, &json);
 }
 
 /// Counts one start of the editor, and says whether it asks this time.

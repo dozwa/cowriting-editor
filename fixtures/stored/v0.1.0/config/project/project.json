@@ -1,0 +1,12 @@
+{
+  "document": "/home/author/paper/thesis.md",
+  "files": [
+    {
+      "path": "/home/author/paper/rules.md",
+      "personas": []
+    }
+  ],
+  "writingLanguage": "en",
+  "aiLanguage": "de",
+  "livePerHour": 12
+}

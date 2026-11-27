@@ -1,0 +1,14 @@
+{
+  "ts": "2026-11-27T13:34:56.032Z",
+  "rows": [
+    {
+      "key": "miller2019",
+      "derived": false,
+      "file": "refs.bib",
+      "title": "Walking breaks at work",
+      "year": "2019",
+      "doi": "10.1000/walk",
+      "status": "ok"
+    }
+  ]
+}

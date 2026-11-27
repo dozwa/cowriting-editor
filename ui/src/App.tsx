@@ -98,6 +98,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [found, setFound] = useState('')
   /** The author said the logs without a document are not this one's. */
   const [orphansSeen, setOrphansSeen] = useState(false)
+  const [storedSeen, setStoredSeen] = useState(false)
   const [panelWidth, setPanelWidth] = useState(rememberedPanel)
   const [look, setLook] = useState(rememberedLook)
   /** The preferences as the settings dialog has them while it is open, to show at once. */
@@ -285,6 +286,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
     async (opened: Opened) => {
       setDoc(opened)
       setOrphansSeen(false)
+      if (opened.notices.length > 0) setStoredSeen(false)
       setThread([])
       setLive(null)
       setError('')
@@ -603,6 +605,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
   }
 
   const open_ = log.stats.unannotated
+  const stored = [...(settings?.notices ?? []), ...doc.notices]
+  const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
+
   return (
     <div className="app">
       <header className="bar">
@@ -630,6 +635,14 @@ export function App({ api, makeEditor = createEditor }: Props) {
             </p>
           ))}
           <button className="link" onClick={() => setOrphansSeen(true)}>{m.app.newDocumentHere}</button>
+        </div>
+      )}
+      {stored.length > 0 && !storedSeen && (
+        <div className="notice" role="note">
+          {stored.map(notice => (
+            <p key={notice.file}>{notice.what === 'setAside' ? m.app.storedSetAside(fileName(notice.file), fileName(notice.keptAs)) : m.app.storedNewer(fileName(notice.file))}</p>
+          ))}
+          <button className="link" onClick={() => setStoredSeen(true)}>{m.app.dismiss}</button>
         </div>
       )}
       {found !== '' && (

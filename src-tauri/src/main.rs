@@ -42,6 +42,8 @@ struct Editor {
     is_ping_sent: std::sync::atomic::AtomicBool,
     /// What was written for the author since the start; only these can be shown from the window.
     written: cowriting_app::shown::Written,
+    /// What the start found about the editor's own files: one set aside, one from a newer version.
+    notices: Mutex<Vec<cowriting_core::stored::Notice>>,
 }
 
 impl Editor {
@@ -211,6 +213,8 @@ struct SettingsView {
     /// The tour of the editor was not seen yet: the window starts with it.
     show_tour: bool,
     usage: UsageView,
+    /// The editor's own files that could not be read and were set aside, or that a newer version wrote.
+    notices: Vec<cowriting_core::stored::Notice>,
 }
 
 /// What the window needs to ask for consent to usage figures, and to show what stands.
@@ -260,6 +264,7 @@ fn get_settings(app: tauri::AppHandle, editor: State<Editor>) -> SettingsView {
             is_asked: state_file(&app).is_some_and(|state| usage::was_asked(&state)),
             installation: state_file(&app).and_then(|state| usage::installation(&state)),
         },
+        notices: editor.notices.lock().unwrap().clone(),
     }
 }
 
@@ -851,6 +856,10 @@ fn main() {
             // pandoc and Typst ship in the app's resources
             if let Ok(resources) = tauri::Manager::path(app).resource_dir() {
                 cowriting_app::export::set_tools_dir(resources.join("tools"));
+            }
+            // before anything reads or writes the editor's own files: one that cannot be read is set aside, not written over
+            if let (Ok(settings), Some(state)) = (settings_file(app.handle()), state_file(app.handle())) {
+                *app.state::<Editor>().notices.lock().unwrap() = cowriting_app::preferences::look_over(&settings, &state);
             }
             if let Ok(folder) = settings_folder(app.handle()) {
                 let log = DIAGNOSTICS.get_or_init(|| Diagnostics::at(folder.join("diagnostics.log"), read_file(app.handle()).preferences.diagnostics));

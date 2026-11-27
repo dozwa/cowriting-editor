@@ -571,17 +571,16 @@ fn is_absolute(path: &str) -> bool {
 
 /// The files the author added in the editor (`sources.json` in the sidecar), as full paths.
 pub fn added_files(host: &dyn Host, sidecar: &Sidecar) -> Vec<String> {
-    let saved: Option<Value> = host.read(&sidecar.sources_json()).ok().and_then(|text| serde_json::from_str(&text).ok());
-    saved.and_then(|v| serde_json::from_value(v["files"].clone()).ok()).unwrap_or_default()
+    sources_json(host, sidecar).get("files").and_then(|files| serde_json::from_value(files.clone()).ok()).unwrap_or_default()
 }
 
 /// `sources.json` as it is, to change one thing in it and keep the rest.
 fn sources_json(host: &dyn Host, sidecar: &Sidecar) -> Value {
-    host.read(&sidecar.sources_json()).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok()).filter(Value::is_object).unwrap_or_else(|| serde_json::json!({}))
+    Value::Object(crate::stored::read(host, &sidecar.sources_json(), &crate::stored::SOURCES).unwrap_or_default())
 }
 
 fn save_sources_json(host: &dyn Host, sidecar: &Sidecar, json: &Value) -> std::io::Result<()> {
-    host.write(&sidecar.sources_json(), &format!("{}\n", serde_json::to_string_pretty(json).expect("plain data")))
+    crate::stored::write(host, &sidecar.sources_json(), &crate::stored::SOURCES, json)
 }
 
 pub fn save_added_files(host: &dyn Host, sidecar: &Sidecar, files: &[String]) -> std::io::Result<()> {

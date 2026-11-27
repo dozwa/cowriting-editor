@@ -18,6 +18,7 @@ pub mod scope;
 pub mod sidecar;
 pub mod sources;
 pub mod stats;
+pub mod stored;
 pub mod text;
 pub mod thread;
 pub mod tools;

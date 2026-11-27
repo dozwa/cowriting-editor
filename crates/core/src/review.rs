@@ -85,22 +85,27 @@ pub struct LiveSettings {
     pub is_on: bool,
     #[serde(default)]
     pub personas: Vec<String>,
+    /// What a newer version of the editor wrote here and this one does not know: kept as it is.
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 impl LiveSettings {
     /// Off, with the experts that make sense sentence by sentence, as far as they are in the party.
     pub fn load(workspace: &Workspace) -> LiveSettings {
         let party = workspace.party();
-        let saved: Option<LiveSettings> = workspace.host.read(&workspace.sidecar.live_json()).ok().and_then(|text| serde_json::from_str(&text).ok());
+        let saved: Option<LiveSettings> = crate::stored::read_as(workspace.host.as_ref(), &workspace.sidecar.live_json(), &crate::stored::LIVE);
         let known = |ids: Vec<String>| ids.into_iter().filter(|id| party.by_id(id).is_some()).collect::<Vec<_>>();
         match saved {
-            Some(saved) => LiveSettings { is_on: saved.is_on, personas: known(saved.personas) },
-            None => LiveSettings { is_on: false, personas: known(WATCH_DEFAULT.iter().filter(|id| party.is_member(id)).map(|id| id.to_string()).collect()) },
+            Some(saved) => LiveSettings { is_on: saved.is_on, personas: known(saved.personas), extra: saved.extra },
+            None => {
+                LiveSettings { is_on: false, personas: known(WATCH_DEFAULT.iter().filter(|id| party.is_member(id)).map(|id| id.to_string()).collect()), extra: Default::default() }
+            }
         }
     }
 
     pub fn save(&self, workspace: &Workspace) -> std::io::Result<()> {
-        workspace.host.write(&workspace.sidecar.live_json(), &format!("{}\n", serde_json::to_string_pretty(self).expect("plain data")))
+        crate::stored::write(workspace.host.as_ref(), &workspace.sidecar.live_json(), &crate::stored::LIVE, self)
     }
 }
 
@@ -235,10 +240,13 @@ pub struct CheckFile {
     pub ts: String,
     pub model: String,
     pub points: BTreeMap<String, Checked>,
+    /// What a newer version of the editor wrote here and this one does not know: kept as it is.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 pub fn read_check(workspace: &Workspace) -> Option<CheckFile> {
-    serde_json::from_str(&workspace.host.read(&workspace.sidecar.check_json()).ok()?).ok()
+    crate::stored::read_as(workspace.host.as_ref(), &workspace.sidecar.check_json(), &crate::stored::CHECK)
 }
 
 /// The author's plan, or None when they have not set one.
@@ -285,8 +293,8 @@ pub async fn check_points(workspace: &Workspace, backend: &dyn Backend, model: &
     let (_, ts) = log_call(workspace, backend, Call { origin: "scope", category: "structure", asked, model: answered_by.clone(), personas: Vec::new(), answer: logged, document })?;
 
     let points: BTreeMap<String, Checked> = results.iter().map(|r| (plan.points[r.n - 1].text.clone(), r.found.clone())).collect();
-    let file = CheckFile { ts, model: answered_by, points };
-    workspace.host.write(&workspace.sidecar.check_json(), &format!("{}\n", serde_json::to_string_pretty(&file).expect("plain data"))).map_err(TurnError::Io)?;
+    let file = CheckFile { ts, model: answered_by, points, extra: Default::default() };
+    crate::stored::write(workspace.host.as_ref(), &workspace.sidecar.check_json(), &crate::stored::CHECK, &file).map_err(TurnError::Io)?;
     let count = |status: PointStatus| results.iter().filter(|r| r.found.status == status).count();
     let (covered, partial) = (count(PointStatus::Covered), count(PointStatus::Partial));
     Ok(CheckSummary { covered, partial, missing: plan.points.len() - covered - partial })

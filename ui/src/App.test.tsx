@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
-import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView } from './api'
+import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView, StoredNotice } from './api'
 import { App, shownVersion } from './App'
 import type { Editor, EditorHandlers, Format, View } from './editor'
 import { type Preferences, STANDARD } from './preferences'
@@ -32,7 +32,7 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
 }
 let lastEditor: Editor & Seen
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[] } = {}) {
   const turns: TurnRow[] = []
   let release = () => {}
   const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: [string, string][]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[] } = { pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
@@ -76,7 +76,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     words: 7,
     chars: { withSpaces: 12345, withoutSpaces: 10321 },
   })
-  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, notices: [], settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
     sendFeedback: async (way, title, text) => void calls.feedback.push([way, title, text]),
     usageAnswered: async (ping, figures) => {
@@ -158,18 +158,18 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     pickDocument: async folder => (calls.picked.push(`open in ${folder}`), null),
     pickNewDocument: async folder => (calls.picked.push(`new in ${folder}`), null),
     confirmLeave: async () => true,
-    openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: options.orphans ?? [] }),
+    openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: options.orphans ?? [], notices: options.notices ?? [] }),
     adoptLog: async name => {
       calls.adopted.push(name)
-      return { path: '/work/thesis.md', name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: [] }
+      return { path: '/work/thesis.md', name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: [], notices: [] }
     },
     pickMove: async () => '/work/drafts/chapter-1.md',
     openGuide: async which => void calls.pages.push(which),
     moveDocument: async (target, text) => {
       calls.moved.push([target, text])
-      return { path: target, name: 'chapter-1.md', text, language: 'en', orphans: [] }
+      return { path: target, name: 'chapter-1.md', text, language: 'en', orphans: [], notices: [] }
     },
-    newDocument: async path => ({ path, name: 'new.md', text: '', language: 'en', orphans: [] }),
+    newDocument: async path => ({ path, name: 'new.md', text: '', language: 'en', orphans: [], notices: [] }),
     saveDocument: async text => {
       calls.saved.push(text)
       return detect(text, 'typed', 0, text)
@@ -814,6 +814,19 @@ test('Claude Code is chosen without a key or an address, and the dialog says who
   expect((dialog.getByLabelText(/^Model/) as HTMLInputElement).value).toBe('sonnet')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(calls.settings).toEqual([[{ backend: 'claude-code', model: 'sonnet', baseUrl: '', maxTokens: 0 }, null]]))
+})
+
+test('a stored file that was set aside or is from a newer editor is named, and the notice can be closed', async () => {
+  const user = userEvent.setup()
+  const notices: StoredNotice[] = [{ what: 'setAside', file: '/home/me/config/projects/thesis.md-1/project.json', keptAs: '/home/me/config/projects/thesis.md-1/project.json.broken-2026-11-27' }]
+  const { api } = standIn({ notices, settings: { notices: [{ what: 'newer', file: 'C:\\Users\\me\\config\\settings.json' }] } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const note = await screen.findByText(/project\.json could not be read/)
+  expect(note.textContent).toContain('kept as project.json.broken-2026-11-27')
+  expect(screen.getByText(/A newer version of the editor wrote settings\.json/)).toBeTruthy()
+  await user.click(within(note.parentElement!).getByRole('button', { name: 'Dismiss' }))
+  expect(screen.queryByText(/could not be read/)).toBeNull()
 })
 
 test('a renamed document is offered its old log, and takes it only when the author says so', async () => {

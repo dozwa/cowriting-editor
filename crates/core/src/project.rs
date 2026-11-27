@@ -79,16 +79,19 @@ pub struct Project {
     /// This project's own provider and model. A key is never kept here: it is in the system's key store, by provider.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ai: Option<ProjectAi>,
+    /// What a newer version of the editor wrote here and this one does not know: kept as it is.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Project {
     pub fn load(host: &dyn Host, sidecar: &Sidecar) -> Project {
-        host.read(&sidecar.project_json()).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
+        crate::stored::read_as(host, &sidecar.project_json(), &crate::stored::PROJECT).unwrap_or_default()
     }
 
     pub fn save(&self, host: &dyn Host, sidecar: &Sidecar) -> std::io::Result<()> {
         let project = Project { document: sidecar.document.clone(), ..self.clone() };
-        host.write(&sidecar.project_json(), &format!("{}\n", serde_json::to_string_pretty(&project).expect("plain data")))
+        crate::stored::write(host, &sidecar.project_json(), &crate::stored::PROJECT, &project)
     }
 }
 

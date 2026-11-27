@@ -29,6 +29,16 @@ to a new heading with its version and date; the release workflow does that (see 
   the document (the picture itself is never moved or changed), or name it where it is. Not yet
   looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
+- **Projects survive a change of version.** Every file the editor keeps (the project's
+  settings, the lists of experts and bibliography files, what it knows about a document, its
+  own settings) says which form it has. An older form is brought up to date step by step, and a
+  copy of the old file is kept in `backup/` beside it. A file that cannot be read is no longer
+  replaced by the standard and written over: it is set aside as `<name>.broken-<date>` and the
+  editor says so. A file a newer editor wrote is left as it is, and a document last worked on
+  with a newer editor is not opened, so its record is not continued in a form it may have left
+  behind. What a newer editor added to a file stays when an older one saves it. Updates from
+  inside the app are not part of this. (#25)
+
 ### Fixed
 
 - **PDF export with Typst and pictures.** Every export with Typst failed as soon as the document

@@ -30,6 +30,7 @@ use cowriting_core::sources::{
     CheckedRef, Hit, References, Status, Style,
 };
 use cowriting_core::stats::compute_stats;
+use cowriting_core::stored;
 use cowriting_core::thread::thread_of;
 use cowriting_core::turn::{annotate, run_turn, Ask, TurnEvent, TurnOutcome, Workspace};
 use cowriting_core::types::ExternalEntry;
@@ -58,6 +59,8 @@ pub struct Opened {
     pub language: String,
     /// AI logs in this folder whose document is gone, offered when this document has none: it may be that document, renamed.
     pub orphans: Vec<Orphan>,
+    /// Stored files that could not be read and were set aside, or that a newer editor wrote.
+    pub notices: Vec<cowriting_core::stored::Notice>,
 }
 
 /// An AI log without its document.
@@ -386,6 +389,9 @@ pub struct SourcesView {
 pub struct VerifyFile {
     pub ts: String,
     pub rows: Vec<CheckedRef>,
+    /// What a newer version of the editor wrote here and this one does not know: kept as it is.
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// The hits of a search, and where they are from.
@@ -475,9 +481,14 @@ impl Session {
         if let Some(projects) = projects {
             follow_move(host.as_ref(), path, projects);
         }
+        if stored::is_newer(host.as_ref(), &cowriting_core::sidecar::Sidecar::for_document(path).doc_json(), &stored::DOC) {
+            return Err(format!("{path} was last worked on with a newer version of the editor, and this version cannot continue its AI log safely. Please update the editor."));
+        }
         let workspace = Workspace::open_in(host, path, EDITOR_VERSION, projects);
+        let mut notices = workspace.sidecar.look_over(workspace.host.as_ref());
+        notices.extend(stored::look_at::<VerifyFile>(workspace.host.as_ref(), &workspace.sidecar.verify_json(), &stored::VERIFY));
         let orphans = if workspace.sidecar.info(workspace.host.as_ref()).is_some() { Vec::new() } else { orphans_of(&workspace, &text) };
-        let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone(), orphans };
+        let opened = Opened { path: path.to_string(), name: workspace.sidecar.name.clone(), text, language: workspace.language.clone(), orphans, notices };
         // live review left on: what is in the document now is the baseline, as when it is turned on
         let baseline = LiveSettings::load(&workspace).is_on.then(|| opened.text.clone());
         let live = Mutex::new(LiveState { baseline, ..Default::default() });
@@ -586,7 +597,9 @@ impl Session {
             return Err(format!("This document's party has no expert “{unknown}”."));
         }
         self.workspace.sidecar.ensure(self.workspace.host.as_ref(), document_text).map_err(error)?;
-        LiveSettings { is_on, personas: personas.to_vec() }.save(&self.workspace).map_err(|e| format!("The setting could not be saved: {e}"))?;
+        LiveSettings { is_on, personas: personas.to_vec(), extra: LiveSettings::load(&self.workspace).extra }
+            .save(&self.workspace)
+            .map_err(|e| format!("The setting could not be saved: {e}"))?;
         self.live.lock().unwrap().baseline = is_on.then(|| document_text.to_string());
         Ok(())
     }
@@ -643,7 +656,7 @@ impl Session {
         } else {
             cited.iter().filter(|key| !bibliography.entries.iter().any(|e| !e.derived && &e.key == *key)).cloned().collect()
         };
-        let checked = host.read(&self.workspace.sidecar.verify_json()).ok().and_then(|text| serde_json::from_str(&text).ok());
+        let checked = stored::read_as(host, &self.workspace.sidecar.verify_json(), &stored::VERIFY);
         let style = load_style(host, &self.workspace.sidecar, document_text);
         SourcesView { entries: bibliography.entries.len(), files: bibliography.files, cited: cited.len(), missing, checked, style }
     }
@@ -779,10 +792,9 @@ impl Session {
         if rows.iter().all(|row| row.status == Status::Error) {
             return Err(format!("The check could not be made: {}", rows[0].detail.clone().unwrap_or_default()));
         }
-        let file = VerifyFile { ts: host.now(), rows };
+        let file = VerifyFile { ts: host.now(), rows, extra: Default::default() };
         sidecar.ensure(host, document_text).map_err(error)?;
-        host.write(&sidecar.verify_json(), &format!("{}\n", serde_json::to_string_pretty(&file).expect("plain data")))
-            .map_err(|e| format!("The result could not be saved: {e}"))?;
+        stored::write(host, &sidecar.verify_json(), &stored::VERIFY, &file).map_err(|e| format!("The result could not be saved: {e}"))?;
         Ok(file)
     }
 
@@ -1124,8 +1136,10 @@ impl Session {
         if is_member {
             members.push(id.to_string());
         }
-        let text = serde_json::to_string_pretty(&serde_json::json!({ "members": members })).unwrap();
-        self.workspace.host.write(&self.workspace.sidecar.party_json(), &text).map_err(|e| format!("The party could not be saved: {e}"))
+        let (host, file) = (self.workspace.host.as_ref(), self.workspace.sidecar.party_json());
+        let mut json = stored::read(host, &file, &stored::PARTY).unwrap_or_default();
+        json.insert("members".into(), serde_json::json!(members));
+        stored::write(host, &file, &stored::PARTY, &json).map_err(|e| format!("The party could not be saved: {e}"))
     }
 
     /// Makes an expert of the author's own for this document, and returns its id.

@@ -234,11 +234,7 @@ impl Party {
                 persona.prompt = own;
             }
         }
-        party.members = host
-            .read(&sidecar.party_json())
-            .ok()
-            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-            .and_then(|v| serde_json::from_value(v["members"].clone()).ok());
+        party.members = crate::stored::read(host, &sidecar.party_json(), &crate::stored::PARTY).and_then(|json| serde_json::from_value(json.get("members")?.clone()).ok());
         party
     }
 

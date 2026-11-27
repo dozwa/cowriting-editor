@@ -8,7 +8,9 @@ import type { Preferences } from './preferences'
 
 /** An AI log in the document's folder whose document is gone. */
 export type Orphan = { name: string; isSameText: boolean; questions: number }
-export type Opened = { path: string; name: string; text: string; language: string; orphans: Orphan[] }
+/** A stored file that could not be read and was set aside, or that a newer version of the editor wrote and this one leaves alone. */
+export type StoredNotice = { what: 'setAside'; file: string; keptAs: string } | { what: 'newer'; file: string }
+export type Opened = { path: string; name: string; text: string; language: string; orphans: Orphan[]; notices: StoredNotice[] }
 
 export type BibFile = { path: string; name: string; format: string; entries: number; isFromDocument: boolean; error?: string }
 export type RefRecord = { doi: string; title: string; year: string }
@@ -165,7 +167,7 @@ export type AskResult = { id: string; answer: string; isAiText: boolean; refused
 export type Settings = { backend: string; model: string; baseUrl: string; maxTokens: number }
 /** Whether a model kept to the assist-only rules in the behaviour suite. */
 export type ModelStatus = 'tested' | 'failed' | 'untested'
-export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null } }
+export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; notices: StoredNotice[] }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean }

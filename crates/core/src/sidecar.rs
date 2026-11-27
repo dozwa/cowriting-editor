@@ -34,7 +34,9 @@ pub struct DocInfo {
     /// The language the document is written in: 'en' or 'de'.
     #[serde(default = "english")]
     pub language: String,
-    pub schema: u32,
+    /// What a newer version of the editor wrote here and this one does not know: kept as it is.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 fn english() -> String {
@@ -197,9 +199,27 @@ impl Sidecar {
         Layout::editor(&self.folder, &self.relative())
     }
 
+    /// Looks at this document's stored files before they are used: one that cannot be read is set
+    /// aside and one from a newer editor is named, so that neither is written over (see `stored`).
+    pub fn look_over(&self, host: &dyn Host) -> Vec<crate::stored::Notice> {
+        use crate::stored::{look_at, CHECK, DOC, LIVE, PARTY, PROJECT, SOURCES};
+        type Any = serde_json::Map<String, serde_json::Value>;
+        [
+            look_at::<DocInfo>(host, &self.doc_json(), &DOC),
+            look_at::<crate::project::Project>(host, &self.project_json(), &PROJECT),
+            look_at::<crate::review::LiveSettings>(host, &self.live_json(), &LIVE),
+            look_at::<crate::review::CheckFile>(host, &self.check_json(), &CHECK),
+            look_at::<Any>(host, &self.sources_json(), &SOURCES),
+            look_at::<Any>(host, &self.party_json(), &PARTY),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
     /// What the sidecar knows about its document; `None` before the first use or when it cannot be read.
     pub fn info(&self, host: &dyn Host) -> Option<DocInfo> {
-        serde_json::from_str(&host.read(&self.doc_json()).ok()?).ok()
+        crate::stored::read_as(host, &self.doc_json(), &crate::stored::DOC)
     }
 
     /// The sidecar's `doc.json`, created at first use and brought up to date with the document's name and content.
@@ -210,7 +230,7 @@ impl Sidecar {
             created_at: host.now(),
             last_hash: String::new(),
             language: english(),
-            schema: 1,
+            extra: Default::default(),
         });
         let hash = content_hash(document_text);
         if info.last_hash != hash || info.file != self.name || !host.exists(&self.doc_json()) {
@@ -239,6 +259,6 @@ impl Sidecar {
     }
 
     pub fn write_info(&self, host: &dyn Host, info: &DocInfo) -> io::Result<()> {
-        host.write(&self.doc_json(), &format!("{}\n", serde_json::to_string_pretty(info).expect("doc.json is plain data")))
+        crate::stored::write(host, &self.doc_json(), &crate::stored::DOC, info)
     }
 }

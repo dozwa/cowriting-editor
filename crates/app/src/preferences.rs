@@ -6,6 +6,8 @@
 
 use crate::BackendSettings;
 use cowriting_core::disclosure::Lang;
+use cowriting_core::host::DiskHost;
+use cowriting_core::stored;
 use cowriting_core::turn::Languages;
 use cowriting_core::watch::Pace;
 use serde::{Deserialize, Serialize};
@@ -156,66 +158,74 @@ pub struct SettingsFile {
     pub preferences: Preferences,
 }
 
-fn read_json(file: &Path) -> Value {
-    std::fs::read_to_string(file).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok()).filter(Value::is_object).unwrap_or_else(|| json!({}))
+/// One of the editor's own files (`settings.json`, `state.json`) as JSON; empty when there is none.
+pub(crate) fn read_json(file: &Path, kind: &stored::Kind) -> Value {
+    Value::Object(stored::read(&DiskHost, &file.to_string_lossy(), kind).unwrap_or_default())
 }
 
-fn write_json(file: &Path, value: &Value) -> Result<(), String> {
-    let save = || -> std::io::Result<()> {
-        if let Some(folder) = file.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
-        std::fs::write(file, format!("{}\n", serde_json::to_string_pretty(value).expect("plain data")))
-    };
-    save().map_err(|e| format!("The settings could not be saved: {e}"))
+/// Writes one of the editor's own files. One that a newer editor wrote is left as it is, and one
+/// that cannot be read is set aside first (see `cowriting_core::stored`).
+pub(crate) fn write_json(file: &Path, kind: &stored::Kind, value: &Value) -> Result<(), String> {
+    stored::write(&DiskHost, &file.to_string_lossy(), kind, value).map_err(|e| format!("The settings could not be saved: {e}"))
+}
+
+/// Looks at the editor's own files before they are used: one that cannot be read is set aside,
+/// one from a newer editor is named. Neither is written over.
+pub fn look_over(settings: &Path, state: &Path) -> Vec<stored::Notice> {
+    type Any = serde_json::Map<String, Value>;
+    let look = |file: &Path, kind| stored::look_at::<Any>(&DiskHost, &file.to_string_lossy(), kind);
+    [look(settings, &stored::SETTINGS), look(state, &stored::STATE)].into_iter().flatten().collect()
 }
 
 impl SettingsFile {
     /// A file that is missing or unreadable gives the standard.
     pub fn read(file: &Path) -> SettingsFile {
-        let json = read_json(file);
+        let json = read_json(file, &stored::SETTINGS);
         let preferences = serde_json::from_value::<Preferences>(json["preferences"].clone()).unwrap_or_default().within_limits();
         SettingsFile { backend: serde_json::from_value(json).ok(), preferences }
     }
 
     pub fn save_backend(file: &Path, backend: &BackendSettings) -> Result<(), String> {
-        let mut json = read_json(file);
+        let mut json = read_json(file, &stored::SETTINGS);
         for (key, value) in json!(backend).as_object().expect("a struct") {
             json[key] = value.clone();
         }
-        write_json(file, &json)
+        write_json(file, &stored::SETTINGS, &json)
     }
 
     /// Saves the preferences, within their limits, and returns them as saved.
     pub fn save_preferences(file: &Path, preferences: Preferences) -> Result<Preferences, String> {
         let preferences = preferences.within_limits();
-        let mut json = read_json(file);
-        json["preferences"] = json!(preferences);
-        write_json(file, &json)?;
+        let mut json = read_json(file, &stored::SETTINGS);
+        // what a newer version keeps among the preferences and this one does not know stays
+        let mut kept = json["preferences"].as_object().cloned().unwrap_or_default();
+        kept.extend(json!(preferences).as_object().expect("a struct").clone());
+        json["preferences"] = Value::Object(kept);
+        write_json(file, &stored::SETTINGS, &json)?;
         Ok(preferences)
     }
 }
 
 /// The document that was open last, kept beside the settings (`state.json`): nothing the author set.
 pub fn last_document(file: &Path) -> Option<String> {
-    read_json(file)["lastDocument"].as_str().filter(|path| Path::new(path).is_file()).map(String::from)
+    read_json(file, &stored::STATE)["lastDocument"].as_str().filter(|path| Path::new(path).is_file()).map(String::from)
 }
 
 pub fn remember_document(file: &Path, document: &str) {
-    let mut json = read_json(file);
+    let mut json = read_json(file, &stored::STATE);
     json["lastDocument"] = json!(document);
-    let _ = write_json(file, &json);
+    let _ = write_json(file, &stored::STATE, &json);
 }
 
 /// The tour of the editor is shown by itself until the author went through it or closed it once.
 pub fn is_tour_due(file: &Path) -> bool {
-    read_json(file)["tourSeen"] != json!(true)
+    read_json(file, &stored::STATE)["tourSeen"] != json!(true)
 }
 
 pub fn tour_seen(file: &Path) {
-    let mut json = read_json(file);
+    let mut json = read_json(file, &stored::STATE);
     json["tourSeen"] = json!(true);
-    let _ = write_json(file, &json);
+    let _ = write_json(file, &stored::STATE, &json);
 }
 
 /// Where an export goes when the author chose a folder for exports: the same file name, there.

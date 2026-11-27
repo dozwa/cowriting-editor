@@ -97,6 +97,26 @@ key goes into `tauri.conf.json`, the private key stays a GitHub secret
 else's hands: `ui/node_modules/.bin/tauri signer generate`. Lose that key and installed copies
 can no longer be updated. Guide: https://tauri.app/plugin/updater/
 
+## Changing a file the editor keeps
+
+The rules are at the top of `crates/core/src/stored.rs`; every stored JSON file is read and
+written through that module and has a `Kind` there. Version 0.1.0 wrote the first form of each.
+
+- **A new field** needs no new form. Give it a standard (`#[serde(default)]`), so an old file
+  reads. An older editor keeps the field when it saves the file (`extra` in the types).
+- **A field renamed, retyped or removed, or a meaning changed,** is a new form:
+  1. Write the step: a function on the file's JSON that takes the last form to the new one, and
+     add it to the end of the kind's `steps`. The form's number follows from their count. Steps
+     are never changed or removed afterwards: a file may be any number of forms behind.
+  2. Add a fixture: the file as the last released version wrote it, under
+     `fixtures/stored/<version>/` (`fixtures/stored/v0.1.0` was made by running v0.1.0), and a
+     test in `crates/app/tests/update.rs` that opens it and finds everything still there.
+  3. Say it in `CHANGELOG.md`: a released editor of the form before will leave such a file as it
+     is and ask for an update, and will not open a document whose `doc.json` is newer.
+- **The log** (`ai-log/*.jsonl`) has no form number. Lines are only added; none is rewritten.
+  A new kind of line or a new field is fine. The reader (`LogEntry::from_value`) must go on
+  understanding every form a line ever had; `update.rs` reads the log of v0.1.0 for that.
+
 ## The programs inside
 
 pandoc (GPL-2.0-or-later) and Typst (Apache-2.0) ship unchanged; their licences and source links

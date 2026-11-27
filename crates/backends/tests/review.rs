@@ -28,7 +28,7 @@ fn backend(replies: serde_json::Value) -> FakeBackend {
 }
 
 fn watching(ids: &[&str]) -> LiveSettings {
-    LiveSettings { is_on: true, personas: ids.iter().map(|id| id.to_string()).collect() }
+    LiveSettings { is_on: true, personas: ids.iter().map(|id| id.to_string()).collect(), extra: Default::default() }
 }
 
 #[test]

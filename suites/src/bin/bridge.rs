@@ -25,6 +25,8 @@ struct Bridge {
     preferences: Mutex<Preferences>,
     key: Mutex<Option<String>>,
     is_first_run: Mutex<bool>,
+    /// What opening found about stored files, kept for the run: the page opens the document more than once while it is developed.
+    notices: Mutex<Vec<cowriting_core::stored::Notice>>,
 }
 
 impl Bridge {
@@ -33,8 +35,11 @@ impl Bridge {
     }
 
     fn open(&self) -> Result<Value, String> {
-        let (session, opened) = Session::open(Arc::new(DiskHost), &self.document)?;
+        let (session, mut opened) = Session::open(Arc::new(DiskHost), &self.document)?;
         *self.session.lock().unwrap() = Some(Arc::new(session));
+        let mut notices = self.notices.lock().unwrap();
+        notices.append(&mut opened.notices);
+        opened.notices = notices.clone();
         Ok(json!(opened))
     }
 
@@ -53,6 +58,7 @@ impl Bridge {
         view["contact"] = json!(cowriting_app::feedback::MAIL);
         view["repository"] = json!(cowriting_app::feedback::REPOSITORY);
         view["showTour"] = json!(false);
+        view["notices"] = json!([]);
         // the bridge keeps general settings only, and sends no usage figures
         view["general"] = json!(settings);
         view["isAiOwn"] = json!(false);
@@ -269,6 +275,7 @@ fn main() {
         preferences: Mutex::default(),
         key: Mutex::new(std::env::var("COWRITING_API_KEY").ok().filter(|k| !k.trim().is_empty())),
         is_first_run: Mutex::new(args.iter().any(|a| a == "--first-run")),
+        notices: Mutex::default(),
     });
     // this computer only
     let listener = TcpListener::bind(("127.0.0.1", value("--port").and_then(|p| p.parse().ok()).unwrap_or(1421))).expect("the bridge's port is taken");
