@@ -231,7 +231,8 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .answer ul, .answer ol { padding-left: 20px; list-style: revert; }
 .answer li + li { margin-top: 3px; }
 .answer table { border-collapse: collapse; font-size: 12.5px; display: block; overflow-x: auto; }
-.answer th, .answer td { border: 1px solid var(--rule); padding: 3px 7px; text-align: left; }
+/* break-word, not anywhere: "anywhere" lets a column shrink to one character, and a short one (line numbers) then breaks after every digit */
+.answer th, .answer td { border: 1px solid var(--rule); padding: 3px 7px; text-align: left; overflow-wrap: break-word; }
 .answer code { background: var(--page); border-radius: 3px; padding: 0 3px; }
 .answer pre { background: var(--page); padding: 9px; border-radius: var(--radius); overflow-x: auto; }
 .answer .address { text-decoration: underline dotted; }

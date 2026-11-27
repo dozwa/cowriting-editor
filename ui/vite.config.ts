@@ -6,5 +6,6 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true, proxy: { '/bridge': 'http://127.0.0.1:1421' } },
   build: { target: 'es2022', chunkSizeWarningLimit: 1500 },
-  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'] },
+  // css: the stylesheet is read by the test of its rules; without this a test gets every .css file empty
+  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], css: true },
 })
