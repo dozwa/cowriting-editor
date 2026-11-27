@@ -71,6 +71,16 @@ A4 or US Letter. If a LaTeX is installed on your computer (XeLaTeX, LuaLaTeX, pd
 the export dialog offers it as well and remembers your choice. Page size, fonts and styles of a
 Word file are set in Word.
 
+**Type and layout of a PDF.** Under "Type and layout" in the export dialog you set what a call for
+papers or a faculty usually prescribes: the typeface of the text (one of those on your computer),
+its size (10, 11 or 12 pt), the margins, the line spacing, paragraphs with an indent instead of a
+space between them, ragged right instead of justified, and numbered headings. What you leave at
+"Standard" is as pandoc's template has it. The choice is remembered for the next export, on this
+computer. If your document sets one of these itself in its front matter (`fontsize: 11pt`,
+`geometry: margin=3cm`, `linestretch`, `mainfont`, …), that comes first, and the dialog says which.
+The export also tells the typesetter your document's language, so that words are hyphenated by its
+rules. pdfLaTeX cannot use the typefaces of your system; XeLaTeX, LuaLaTeX and Typst can.
+
 **Reference style.** Without a choice, citations and the reference list are in pandoc's default
 style (Chicago author-date). In the Sources tab you can choose a style file (`.csl`, as
 zotero.org/styles has them) for this document; like a bibliography file it is read where it lies

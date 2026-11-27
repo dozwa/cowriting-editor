@@ -514,7 +514,8 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     assert_eq!((named.name.as_str(), named.is_from_document, named.error.is_some()), ("house.csl", true, true), "named, and not there");
     // the chosen file vanishes: the export says so instead of failing somewhere inside pandoc
     std::fs::remove_file(folder.path("work.csl")).unwrap();
-    let failed = session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), text, None, &PdfChoice { engine: None, paper: Paper::A4 }).unwrap_err();
+    let failed =
+        session.export_document(FileFormat::Docx, &folder.path("thesis.docx"), text, None, &PdfChoice { engine: None, paper: Paper::A4, ..Default::default() }).unwrap_err();
     assert!(failed.contains("The reference style work.csl could not be read"), "{failed}");
     session.remove_style().unwrap();
     std::fs::remove_file(folder.path("notes.csl")).unwrap();
@@ -564,14 +565,16 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
 
     // a PDF with the editor's own Typst, on the paper the author chose; an engine that is not there is refused
     let tools = cowriting_app::export::local_tools();
-    assert!(session.export_document(FileFormat::Pdf, &folder.path("thesis.pdf"), text, None, &PdfChoice { engine: Some("no-such-tex".into()), paper: Paper::A4 }).is_err());
+    assert!(session
+        .export_document(FileFormat::Pdf, &folder.path("thesis.pdf"), text, None, &PdfChoice { engine: Some("no-such-tex".into()), paper: Paper::A4, ..Default::default() })
+        .is_err());
     if tools.pdf_engines.first().map(String::as_str) != Some("typst") {
         assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "Typst is not there: run scripts/fetch-tools.py");
         eprintln!("Typst is not there: the PDF export was not run");
         return;
     }
     for (paper, name, width) in [(Paper::A4, "a4.pdf", "595.27"), (Paper::Letter, "letter.pdf", "612 792")] {
-        session.export_document(FileFormat::Pdf, &folder.path(name), text, Some(&zotero), &PdfChoice { engine: None, paper }).unwrap();
+        session.export_document(FileFormat::Pdf, &folder.path(name), text, Some(&zotero), &PdfChoice { engine: None, paper, ..Default::default() }).unwrap();
         let pdf = std::fs::read(folder.path(name)).unwrap();
         assert!(pdf.starts_with(b"%PDF-"), "{name} is a PDF");
         assert!(String::from_utf8_lossy(&pdf).replace("MediaBox [", "MediaBox[").contains(&format!("/MediaBox[0 0 {width}")), "{name} is {width} points wide");
@@ -620,7 +623,7 @@ fn a_document_with_pictures_exports_with_them_wherever_they_lie() {
     for engine in engines.iter().filter(|engine| ["typst", "xelatex", "pdflatex"].contains(&engine.as_str())) {
         let name = format!("with-{engine}.pdf");
         let made = session
-            .export_document(FileFormat::Pdf, &folder.path(&name), &text, None, &PdfChoice { engine: Some(engine.clone()), paper: Paper::A4 })
+            .export_document(FileFormat::Pdf, &folder.path(&name), &text, None, &PdfChoice { engine: Some(engine.clone()), paper: Paper::A4, ..Default::default() })
             .unwrap_or_else(|why| panic!("{engine}: {why}"));
         found_all(&made);
         let pdf = std::fs::read(folder.path(&name)).unwrap();
@@ -635,7 +638,9 @@ fn a_document_with_pictures_exports_with_them_wherever_they_lie() {
         if format == FileFormat::Pdf && engine.is_none() {
             continue;
         }
-        let made = session.export_document(format, &folder.path(name), &lacking, None, &PdfChoice { engine, paper: Paper::A4 }).unwrap_or_else(|why| panic!("{name}: {why}"));
+        let made = session
+            .export_document(format, &folder.path(name), &lacking, None, &PdfChoice { engine, paper: Paper::A4, ..Default::default() })
+            .unwrap_or_else(|why| panic!("{name}: {why}"));
         assert!(made.warnings.iter().any(|warning| warning.contains("no-such-picture.png")), "{name}: {:?}", made.warnings);
         assert!(Path::new(&folder.path(name)).is_file());
     }
@@ -764,7 +769,9 @@ fn what_is_commented_out_stays_in_the_document_and_is_in_no_export() {
         made.push((format!("with-{engine}.pdf"), FileFormat::Pdf, Some(engine)));
     }
     for (name, format, engine) in made {
-        session.export_document(format, &folder.path(&name), text, None, &PdfChoice { engine, paper: Paper::A4 }).unwrap_or_else(|why| panic!("{name}: {why}"));
+        session
+            .export_document(format, &folder.path(&name), text, None, &PdfChoice { engine, paper: Paper::A4, ..Default::default() })
+            .unwrap_or_else(|why| panic!("{name}: {why}"));
         let read = text_of(&folder.path(&name), kind_of(&folder.path(&name))).unwrap_or_else(|why| panic!("{name}: {why}"));
         for shown in ["Shown before.", "Shown after.", "Shown last."] {
             assert!(read.contains(shown), "{name} has “{shown}”: {read}");

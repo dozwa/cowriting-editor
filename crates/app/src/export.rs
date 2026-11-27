@@ -64,6 +64,96 @@ pub struct PdfChoice {
     pub engine: Option<String>,
     #[serde(default)]
     pub paper: Paper,
+    /// How the text is set, where the author wants it other than the standard.
+    #[serde(default)]
+    pub layout: Layout,
+}
+
+/// How the text of a PDF is set: what a call for papers or a faculty usually prescribes. Whatever
+/// is left at its standard is not passed on, and pandoc's template decides.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Layout {
+    /// The typeface of the text, by the name the system knows it under; empty for the standard.
+    pub font: String,
+    /// In points: 10, 11 or 12, which is what LaTeX's standard class has.
+    pub font_size: Option<u8>,
+    /// The margin on all four sides, in centimetres.
+    pub margin_cm: Option<f32>,
+    /// 1 is single, 1.5 one and a half, 2 double.
+    pub line_spacing: Option<f32>,
+    /// Paragraphs begin with an indent and have no space between them; the standard is a space and no indent.
+    pub indent: bool,
+    /// Lines end where the words end; the standard is justified.
+    pub ragged: bool,
+    /// Headings are numbered: 1, 1.1, 1.1.1.
+    pub numbered: bool,
+}
+
+impl Layout {
+    /// The same layout with every value inside what the export can set.
+    pub fn within_limits(&self) -> Layout {
+        // a font's name is letters, digits and a few signs: nothing that could end the line it is written on
+        let font: String = self.font.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.' | '\'' | '+' | '&')).take(80).collect();
+        Layout {
+            font: font.trim().to_string(),
+            font_size: self.font_size.filter(|size| (10..=12).contains(size)),
+            margin_cm: self.margin_cm.filter(|margin| margin.is_finite()).map(|margin| (margin.clamp(0.5, 6.0) * 100.0).round() / 100.0),
+            line_spacing: self.line_spacing.filter(|spacing| spacing.is_finite()).map(|spacing| (spacing.clamp(0.8, 3.0) * 100.0).round() / 100.0),
+            ..self.clone()
+        }
+    }
+
+    /// What pandoc is told about the document besides its own front matter, as a metadata file
+    /// (`--metadata-file`): the language, and the layout where it is not the standard. What the
+    /// front matter sets itself comes first; pandoc sees to that. The names are those of pandoc's
+    /// templates, for Typst and for LaTeX; each reads its own and passes over the other's.
+    pub fn metadata(&self, language: &str) -> String {
+        let layout = self.within_limits();
+        let mut lines = vec![format!("lang: {}", if language == "de" { "de-DE" } else { "en-US" })];
+        if !layout.font.is_empty() {
+            lines.push(format!("mainfont: \"{}\"", layout.font));
+        }
+        if let Some(size) = layout.font_size {
+            lines.push(format!("fontsize: {size}pt"));
+        }
+        if let Some(margin) = layout.margin_cm {
+            // Typst takes the sides one by one, LaTeX the geometry package's words
+            lines.extend(["margin:".to_string(), format!("  x: {margin}cm"), format!("  y: {margin}cm"), format!("geometry: margin={margin}cm")]);
+        }
+        if let Some(spacing) = layout.line_spacing {
+            lines.push(format!("linestretch: {spacing}"));
+        }
+        if layout.numbered {
+            lines.extend(["section-numbering: \"1.1\"".to_string(), "numbersections: true".to_string()]);
+        }
+        if layout.indent {
+            lines.push("indent: true".into());
+        }
+        // what the templates have no name for is said in the typesetter's own words, after the template's settings
+        let mut typst: Vec<String> = Vec::new();
+        let mut latex: Vec<&str> = Vec::new();
+        if layout.indent {
+            // no space between paragraphs: the distance of two lines, which the template sets as 0.65em times the line spacing
+            typst.push(format!("#set par(first-line-indent: 1.5em, spacing: {}em)", ((0.65 * layout.line_spacing.unwrap_or(1.0)) * 1000.0).round() / 1000.0));
+        }
+        if layout.ragged {
+            typst.push("#set par(justify: false)".into());
+            latex.push("\\raggedright");
+        }
+        if !typst.is_empty() || !latex.is_empty() {
+            lines.push("include-before:".into());
+            for (format, code) in [("typst", typst.join("\n")), ("latex", latex.join("\n"))] {
+                if !code.is_empty() {
+                    lines.push("  - |".into());
+                    lines.push(format!("    ```{{={format}}}"));
+                    lines.extend(code.lines().map(|line| format!("    {line}")));
+                    lines.push("    ```".into());
+                }
+            }
+        }
+        format!("{}\n", lines.join("\n"))
+    }
 }
 
 /// Where programs are looked for. An app started from the Dock or the Start menu does not get the shell's PATH.
@@ -97,6 +187,26 @@ pub struct ExportTools {
     pub is_own: bool,
     /// Zotero is running with Better BibTeX: references come from the library by citekey.
     pub has_zotero: bool,
+    /// The typefaces on this computer that a PDF can be set in, as Typst names them; empty when it cannot say.
+    pub fonts: Vec<String>,
+}
+
+/// The typefaces Typst finds on this computer (`typst fonts`), sorted.
+fn fonts() -> Vec<String> {
+    let Some(typst) = find_program("typst") else { return Vec::new() };
+    let mut command = Command::new(typst);
+    command.arg("fonts").stdin(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // no console window
+    }
+    let listed = command.output().map(|output| String::from_utf8_lossy(&output.stdout).into_owned()).unwrap_or_default();
+    // a family whose name starts with a dot is the system's own and cannot be chosen by name
+    let mut fonts: Vec<String> = listed.lines().map(str::trim).filter(|name| !name.is_empty() && !name.starts_with('.')).map(String::from).collect();
+    fonts.sort_by_key(|name| name.to_lowercase());
+    fonts.dedup();
+    fonts
 }
 
 pub fn local_tools() -> ExportTools {
@@ -105,7 +215,13 @@ pub fn local_tools() -> ExportTools {
         pdf_engines: PDF_ENGINES.iter().filter(|engine| find_program(engine).is_some()).map(|engine| engine.to_string()).collect(),
         is_own: ["pandoc", "typst"].iter().all(|name| find_program(name).is_some_and(|found| own_dirs().iter().any(|dir| found.starts_with(dir)))),
         has_zotero: false,
+        fonts: Vec::new(),
     }
+}
+
+/// What is there to export with, and the typefaces to choose from: for the export dialog.
+pub fn local_tools_with_fonts() -> ExportTools {
+    ExportTools { fonts: fonts(), ..local_tools() }
 }
 
 /// What an export made.

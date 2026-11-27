@@ -27,8 +27,10 @@ export type Picture = { path: string; name: string; isInside: boolean }
 export type PicturesToMove = { inside: string[]; outside: string[] }
 
 export type FileFormat = 'pdf' | 'docx'
-export type ExportTools = { hasPandoc: boolean; pdfEngines: string[]; isOwn: boolean; hasZotero: boolean }
-export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter' }
+export type ExportTools = { hasPandoc: boolean; pdfEngines: string[]; isOwn: boolean; hasZotero: boolean; /** The typefaces on this computer a PDF can be set in. */ fonts: string[] }
+/** How the text of a PDF is set; whatever is empty, null or false is left to the standard. */
+export type PdfLayout = { font: string; fontSize: number | null; marginCm: number | null; lineSpacing: number | null; indent: boolean; ragged: boolean; numbered: boolean }
+export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout }
 export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[] }
 
 export type Use = 'adopted' | 'adapted' | 'rejected' | 'info'

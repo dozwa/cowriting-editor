@@ -749,7 +749,7 @@ impl Session {
         if let Some(Style { name, error: Some(why), .. }) = &style {
             return Err(format!("The reference style {name} {why}. Choose another in the Sources tab, or take it off there."));
         }
-        let args = export::pandoc_args(
+        let mut args = export::pandoc_args(
             format,
             target,
             &sidecar.folder,
@@ -758,7 +758,15 @@ impl Session {
             pdf.paper,
             style.as_ref().map(|s| s.path.as_str()),
         );
-        let warnings = export::run_pandoc(document_text, &sidecar.folder, &args)?;
+        // the document's language (for hyphenation) and, for a PDF, the layout the author chose: in a file of
+        // its own, so that what the document's front matter says comes first
+        let layout = if format == FileFormat::Pdf { pdf.layout.clone() } else { export::Layout::default() };
+        let metadata = std::env::temp_dir().join(format!("cowriting-export-{}-{}.yaml", std::process::id(), host.new_id()));
+        std::fs::write(&metadata, layout.metadata(&self.workspace.language)).map_err(|e| format!("The export's settings could not be written: {e}"))?;
+        args.extend(["--metadata-file".to_string(), metadata.to_string_lossy().into_owned()]);
+        let made = export::run_pandoc(document_text, &sidecar.folder, &args);
+        let _ = std::fs::remove_file(&metadata);
+        let warnings = made?;
         Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
     }
 
@@ -1287,7 +1295,7 @@ impl Session {
 
 /// What this computer has to export with, and whether Zotero can give the references.
 pub async fn export_tools() -> ExportTools {
-    ExportTools { has_zotero: cowriting_backends::lookup::has_better_bibtex().await, ..export::local_tools() }
+    ExportTools { has_zotero: cowriting_backends::lookup::has_better_bibtex().await, ..export::local_tools_with_fonts() }
 }
 
 fn orphans_of(workspace: &Workspace, text: &str) -> Vec<Orphan> {

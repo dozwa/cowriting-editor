@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
 import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView, StoredNotice, PicturesToMove } from './api'
 import { App, shownVersion } from './App'
+import { layoutInFrontMatter } from './dialogs'
 import type { Editor, EditorHandlers, Format, View } from './editor'
 import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
@@ -191,7 +192,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       watch.hints.unshift({ turn: `t${turns.length}`, persona: 'reviewer-2', who: 'Reviewer #2', line: 4, text: 'Why should a reader believe this?', ts: '2026-11-23T10:06:00.000Z' })
       return { kind: 'reviewed', hints: 1, ts: '2026-11-23T10:06:00.000Z' }
     },
-    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false }, '/work/thesis.pdf', '/work/thesis.docx'],
+    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx'],
     pickExport: async (_format, suggested) => suggested,
     exportDocument: async (format, target, documentText, pdf) => {
       calls.exports.push([format, target, documentText])
@@ -818,6 +819,55 @@ function windowStorage() {
   vi.stubGlobal('localStorage', { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) })
 }
 
+const STANDARD_LAYOUT = { font: '', fontSize: null, marginCm: null, lineSpacing: null, indent: false, ragged: false, numbered: false }
+
+test('the type and layout of a PDF can be set as a call for papers asks, are remembered, and the front matter comes first', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  const { api, calls } = standIn({ pdfEngines: ['typst', 'pdflatex'] })
+  const { unmount } = render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  // closed until something is set: the standard needs no attention
+  const layout = (await screen.findByText('Type and layout')).closest('details')!
+  expect(layout.open).toBe(false)
+  await user.click(screen.getByText('Type and layout'))
+
+  await user.type(screen.getByLabelText('Typeface of the text'), 'Times New Roman')
+  await user.selectOptions(screen.getByLabelText('Size'), '12')
+  await user.selectOptions(screen.getByLabelText('Margins'), '2.5')
+  await user.selectOptions(screen.getByLabelText('Line spacing'), '1.5')
+  await user.click(screen.getByLabelText(/Indent the first line/))
+  await user.click(screen.getByLabelText(/Number the headings/))
+  expect(screen.getByText(/Type and layout · set by you/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await screen.findByRole('status')
+  expect(calls.pdf[0]?.layout).toEqual({ font: 'Times New Roman', fontSize: 12, marginCm: 2.5, lineSpacing: 1.5, indent: true, ragged: false, numbered: true })
+
+  // a typeface the computer does not have, and an engine that cannot use the system's typefaces, are said
+  expect(screen.queryByText(/not among the typefaces/)).toBeNull()
+  await user.type(screen.getByLabelText('Typeface of the text'), ' Extra')
+  expect(screen.getByText(/“Times New Roman Extra” is not among the typefaces/)).toBeTruthy()
+  await user.selectOptions(screen.getByLabelText('Typeset with'), 'pdflatex')
+  expect(screen.getByText(/pdfLaTeX cannot use the typefaces of your system/)).toBeTruthy()
+  unmount()
+
+  // next time the layout is still there, and the part is open because something is set
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  expect(((await screen.findByLabelText('Margins')) as HTMLSelectElement).value).toBe('2.5')
+  expect((await screen.findByText(/Type and layout/)).closest('details')!.open).toBe(true)
+  await user.click(screen.getByRole('button', { name: 'Back to the standard' }))
+  expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('')
+  expect((screen.getByLabelText(/Indent the first line/) as HTMLInputElement).checked).toBe(false)
+})
+
+test('the layout a document sets in its front matter is named', () => {
+  expect(layoutInFrontMatter('---\ntitle: Thesis\nfontsize: 12pt\ngeometry: margin=3cm\nlinestretch: 1.5\n---\n\n# Text\n\nfontsize: no\n')).toEqual(['fontsize', 'geometry', 'linestretch'])
+  expect(layoutInFrontMatter('# No front matter\n\nfontsize: 12pt\n')).toEqual([])
+})
+
 test('a PDF is set with Typst on the chosen paper, and an installed LaTeX can be chosen and is remembered', async () => {
   const user = userEvent.setup()
   windowStorage()
@@ -831,12 +881,12 @@ test('a PDF is set with Typst on the chosen paper, and an installed LaTeX can be
   await user.selectOptions(screen.getByLabelText('Paper'), 'letter')
   await user.click(screen.getByRole('button', { name: 'Export' }))
   await screen.findByRole('status')
-  expect(calls.pdf).toEqual([{ engine: 'typst', paper: 'letter' }])
+  expect(calls.pdf).toEqual([{ engine: 'typst', paper: 'letter', layout: STANDARD_LAYOUT }])
 
   // the author's own LaTeX
   await user.selectOptions(screen.getByLabelText('Typeset with'), 'xelatex')
   await user.click(screen.getByRole('button', { name: 'Export' }))
-  await waitFor(() => expect(calls.pdf[1]).toEqual({ engine: 'xelatex', paper: 'letter' }))
+  await waitFor(() => expect(calls.pdf[1]).toEqual({ engine: 'xelatex', paper: 'letter', layout: STANDARD_LAYOUT }))
   // a Word file has neither choice
   await user.selectOptions(screen.getByLabelText('Format'), 'docx')
   expect(screen.queryByLabelText('Paper')).toBeNull()

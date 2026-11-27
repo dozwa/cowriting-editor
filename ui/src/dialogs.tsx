@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, PdfChoice } from './api'
+import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, PdfChoice, PdfLayout } from './api'
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
@@ -159,13 +159,31 @@ const engineNames = (): Record<string, string> => ({ typst: m.dialogs.typstEngin
 
 /** What the author chose last time, kept in this window's storage; a guess from the system's language the first time. */
 function rememberedPdf(): PdfChoice {
-  const fallback: PdfChoice = { engine: null, paper: /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4' }
+  const fallback: PdfChoice = { engine: null, paper: /^en-(US|CA)\b/.test(navigator.language) ? 'letter' : 'a4', layout: STANDARD_LAYOUT }
   try {
     const kept = JSON.parse(localStorage.getItem('cowriting.pdf') ?? 'null') as Partial<PdfChoice> | null
-    return { engine: typeof kept?.engine === 'string' ? kept.engine : null, paper: kept?.paper === 'letter' || kept?.paper === 'a4' ? kept.paper : fallback.paper }
+    const layout = (kept?.layout ?? {}) as Partial<PdfLayout>
+    const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+    return {
+      engine: typeof kept?.engine === 'string' ? kept.engine : null,
+      paper: kept?.paper === 'letter' || kept?.paper === 'a4' ? kept.paper : fallback.paper,
+      layout: { font: typeof layout.font === 'string' ? layout.font : '', fontSize: number(layout.fontSize), marginCm: number(layout.marginCm), lineSpacing: number(layout.lineSpacing), indent: layout.indent === true, ragged: layout.ragged === true, numbered: layout.numbered === true },
+    }
   } catch {
     return fallback
   }
+}
+
+/** The layout pandoc's template gives a PDF when nothing is chosen. */
+const STANDARD_LAYOUT: PdfLayout = { font: '', fontSize: null, marginCm: null, lineSpacing: null, indent: false, ragged: false, numbered: false }
+
+/** The layout fields a document's front matter sets itself, by the name it uses: those come first, whatever the dialog says. */
+const FRONT_MATTER_LAYOUT: Record<string, keyof PdfLayout> = { mainfont: 'font', fontsize: 'fontSize', margin: 'marginCm', geometry: 'marginCm', linestretch: 'lineSpacing', indent: 'indent', 'section-numbering': 'numbered', numbersections: 'numbered' }
+
+/** The names among them that the text's front matter holds. */
+export function layoutInFrontMatter(text: string): string[] {
+  const front = /^---\r?\n([\s\S]*?)\r?\n(---|\.\.\.)\s*(\r?\n|$)/.exec(text)?.[1] ?? ''
+  return front.split(/\r?\n/).map(line => /^([A-Za-z-]+)\s*:/.exec(line)?.[1] ?? '').filter(name => name in FRONT_MATTER_LAYOUT)
 }
 
 /** The document as a PDF or a Word file, made by pandoc, with the references behind its citekeys. */
@@ -211,6 +229,12 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       // not remembered, then
     }
   }
+  const layout = pdf.layout
+  const lay = (change: Partial<PdfLayout>) => choose({ layout: { ...layout, ...change } })
+  const isOwnLayout = JSON.stringify(layout) !== JSON.stringify(STANDARD_LAYOUT)
+  const inDocument = layoutInFrontMatter(getText())
+  const fonts = tools?.fonts ?? []
+  const numberOrNull = (value: string) => (value === '' ? null : Number(value))
   const t = m.dialogs
   const cannot = tools === undefined ? '' : !tools.hasPandoc ? t.noPandoc : format === 'pdf' && engines.length === 0 ? t.noPdfEngine : ''
   return (
@@ -241,6 +265,48 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
             </label>
           )}
         </div>
+      )}
+      {format === 'pdf' && engines.length > 0 && (
+        <details className="layout" open={isOwnLayout}>
+          <summary>{t.layout}{isOwnLayout ? ` · ${t.layoutOwn}` : ''}</summary>
+          <div className="row">
+            <label>
+              {t.layoutFont}
+              <input list="pdf-fonts" value={layout.font} placeholder={t.layoutStandard} onChange={e => lay({ font: e.target.value })} />
+              <datalist id="pdf-fonts">{fonts.map(name => <option key={name} value={name} />)}</datalist>
+            </label>
+            <label>
+              {t.layoutSize}
+              <select value={layout.fontSize ?? ''} onChange={e => lay({ fontSize: numberOrNull(e.target.value) })}>
+                <option value="">{t.layoutStandard}</option>
+                {[10, 11, 12].map(size => <option key={size} value={size}>{size} pt</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              {t.layoutMargins}
+              <select value={layout.marginCm ?? ''} onChange={e => lay({ marginCm: numberOrNull(e.target.value) })}>
+                <option value="">{t.layoutStandard}</option>
+                {[1.5, 2, 2.5, 3, 3.5, 4].map(margin => <option key={margin} value={margin}>{t.layoutCm(margin)}</option>)}
+              </select>
+            </label>
+            <label>
+              {t.layoutSpacing}
+              <select value={layout.lineSpacing ?? ''} onChange={e => lay({ lineSpacing: numberOrNull(e.target.value) })}>
+                <option value="">{t.layoutStandard}</option>
+                {[1, 1.15, 1.5, 2].map(spacing => <option key={spacing} value={spacing}>{t.layoutLines(spacing)}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="check"><input type="checkbox" checked={layout.indent} onChange={e => lay({ indent: e.target.checked })} /> {t.layoutIndent}</label>
+          <label className="check"><input type="checkbox" checked={layout.ragged} onChange={e => lay({ ragged: e.target.checked })} /> {t.layoutRagged}</label>
+          <label className="check"><input type="checkbox" checked={layout.numbered} onChange={e => lay({ numbered: e.target.checked })} /> {t.layoutNumbered}</label>
+          {layout.font !== '' && fonts.length > 0 && !fonts.some(name => name.toLowerCase() === layout.font.trim().toLowerCase()) && <p className="hint">{t.layoutFontMissing(layout.font)}</p>}
+          {layout.font !== '' && engine === 'pdflatex' && <p className="hint">{t.layoutFontPdflatex}</p>}
+          {inDocument.length > 0 && <p className="muted">{t.layoutInDocument(inDocument.join(', '))}</p>}
+          {isOwnLayout && <button className="link" onClick={() => lay(STANDARD_LAYOUT)}>{t.layoutReset}</button>}
+        </details>
       )}
       {format === 'docx' && <p className="muted">{t.wordNote}</p>}
       {tools !== undefined && (

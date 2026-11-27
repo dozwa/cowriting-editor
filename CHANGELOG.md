@@ -31,6 +31,12 @@ to a new heading with its version and date; the release workflow does that (see 
   the document (the picture itself is never moved or changed), or name it where it is. Not yet
   looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
+- **Type and layout of a PDF.** The export dialog has a part "Type and layout": typeface of the
+  text, size, margins, line spacing, indented paragraphs, ragged right, numbered headings. It
+  works with Typst and with an installed LaTeX and is remembered for the next export. What the
+  document's front matter sets comes first. The export now also passes the document's language
+  on, for hyphenation, to PDF and Word. Not yet: typefaces for headings and code, page numbers,
+  columns, named presets, and the layout of a Word file. (#13)
 - **Hints can be ticked off.** Every list item and table row of an answer has a box to mark it
   as done, with "Mark all" and "Unmark all" for the whole answer and a count of what is left.
   The ticks are kept beside the log (`marks.json`) and survive closing the document; they are a
