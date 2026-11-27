@@ -17,6 +17,7 @@ export const formatbar: typeof pattern = {
     table: { name: 'Tabelle', writes: '| Spalte | Spalte |' },
     citation: { name: 'Quellenangabe', writes: '[@schlüssel]. Der Tab „Quellen“ findet den Schlüssel' },
     footnote: { name: 'Fußnote', writes: '^[Anmerkung]' },
+    comment: { name: 'Auskommentieren', writes: '<!-- Text, der in der Datei bleibt und nicht exportiert wird -->' },
   },
   intro: 'Markdown ist reiner Text mit ein paar Zeichen, die sagen, was etwas ist: eine Überschrift, eine Liste, ein Zitatblock. Die Zeichen werden getippt oder von den Schaltflächen über dem Text geschrieben. Die Datei bleibt in jedem Programm lesbar.',
   syntax: {
@@ -31,6 +32,7 @@ export const formatbar: typeof pattern = {
     table: { what: 'Tabelle', typed: '| Gruppe | Mittel |\n|--------|--------|\n| A      | 4,2    |', note: '' },
     citation: { what: 'Quellenangabe', typed: '[@smith2020]\n[@smith2020, S. 12; @lee2019]', note: 'Der Schlüssel ist der aus Ihrem Literaturverzeichnis; der Tab „Quellen“ findet ihn.' },
     footnote: { what: 'Fußnote', typed: 'Eine Behauptung.^[Die Anmerkung, dort geschrieben, wo sie hingehört.]', note: '' },
+    comment: { what: 'Kommentar', typed: '<!-- eine Notiz an mich oder eine alte Formulierung -->', note: 'Bleibt in der Datei, wird nicht mitgezählt und steht in keinem Export. Die KI liest ihn weiterhin.' },
     frontMatter: { what: 'Über das Dokument', typed: '---\ntitle: Gehpausen\nbibliography: refs.bib\n---', note: 'Nur ganz oben. Der Export liest Titel, Autor und Literaturverzeichnis von hier.' },
   },
   more: 'Mehr dazu, in Ihrem Browser:',

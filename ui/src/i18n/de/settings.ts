@@ -165,6 +165,7 @@ export const settings: typeof pattern = {
     footnote: 'Fußnote',
     image: 'Bild',
     table: 'Tabelle',
+    comment: 'Auskommentieren',
   },
   // the two keys whose names differ between keyboards, as they are printed on the key
   ctrlKey: 'Strg',

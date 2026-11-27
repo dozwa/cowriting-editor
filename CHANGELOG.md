@@ -13,6 +13,12 @@ to a new heading with its version and date; the release workflow does that (see 
 
 ## On `dev`, in no release
 
+### Added
+
+- **Comment out.** A button in the markdown bar (Cmd or Ctrl with Shift and C) puts `<!-- -->`
+  around what is selected, or around the line the cursor is in, and takes it off again. Text in a
+  comment stays in the file and is in no PDF or Word export; the AI still reads it. (#6)
+
 ### Fixed
 
 - **PDF export with Typst and pictures.** Every export with Typst failed as soon as the document

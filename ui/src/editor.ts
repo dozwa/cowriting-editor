@@ -82,7 +82,7 @@ const livePreview = ViewPlugin.fromClass(
 )
 
 /** What a format button writes into the text. */
-export type Format = 'title' | 'heading' | 'subheading' | 'bold' | 'italic' | 'bullets' | 'numbers' | 'quote' | 'link' | 'image' | 'table' | 'citation' | 'footnote'
+export type Format = 'title' | 'heading' | 'subheading' | 'bold' | 'italic' | 'bullets' | 'numbers' | 'quote' | 'link' | 'image' | 'table' | 'citation' | 'footnote' | 'comment'
 
 /** How the text is shown: with line numbers or without; styled in place, or as the markdown source it is. */
 /** `language` is the one the text is written in ('en', 'de'): the spelling check goes by it. */
@@ -135,6 +135,50 @@ function put(view: EditorView, text: string, select: string) {
   view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: at, head: at + select.length }, userEvent: 'input.format', scrollIntoView: true })
 }
 
+/** The marks of a comment, which is in the file and in no export. */
+const [COMMENT_OPEN, COMMENT_CLOSE, COMMENT_EXAMPLE] = ['<!--', '-->', 'comment']
+
+/**
+ * A comment around what is selected, or around the line the cursor is in; a second time takes the marks off.
+ * Comments cannot lie inside each other (the first `-->` ends them all), so marks inside the selection go: it becomes one comment.
+ */
+function comment(view: EditorView) {
+  const { state } = view
+  const text = state.doc.toString()
+  let { from, to } = state.selection.main
+  /** The comment these two places both lie in, marks included. */
+  const around = (from: number, to: number): [number, number] | null => {
+    const open = text.lastIndexOf(COMMENT_OPEN, from)
+    const close = open === -1 ? -1 : text.indexOf(COMMENT_CLOSE, open + COMMENT_OPEN.length)
+    return close !== -1 && to <= close + COMMENT_CLOSE.length ? [open, close + COMMENT_CLOSE.length] : null
+  }
+  let found = around(from, to)
+  if (found === null && from === to) {
+    // nothing selected: the line, without the space around it
+    const line = state.doc.lineAt(from)
+    from = line.from + (line.text.length - line.text.trimStart().length)
+    to = Math.max(from, line.from + line.text.trimEnd().length)
+    found = from === to ? null : around(from, to)
+  }
+  const dispatch = (at: number, until: number, insert: string, selectFrom: number, selectTo: number) =>
+    view.dispatch({ changes: { from: at, to: until, insert }, selection: { anchor: selectFrom, head: selectTo }, userEvent: 'input.format', scrollIntoView: true })
+  if (found !== null) {
+    const inner = text.slice(found[0] + COMMENT_OPEN.length, found[1] - COMMENT_CLOSE.length).replace(/^ /, '').replace(/ $/, '')
+    // the example a first press wrote goes with its marks
+    if (inner === COMMENT_EXAMPLE) dispatch(found[0], found[1], '', found[0], found[0])
+    else dispatch(found[0], found[1], inner, found[0], found[0] + inner.length)
+    return
+  }
+  // a comment the selection cuts through is taken whole, or half of its marks would be left behind
+  if (from !== to) {
+    const [first, last] = [around(from, from), around(to, to)]
+    if (first !== null && from < first[1]) from = first[0]
+    if (last !== null && to > last[0]) to = last[1]
+  }
+  const inner = from === to ? COMMENT_EXAMPLE : text.slice(from, to).replace(/<!-- ?| ?-->/g, '')
+  dispatch(from, to, `${COMMENT_OPEN} ${inner} ${COMMENT_CLOSE}`, from + COMMENT_OPEN.length + 1, from + COMMENT_OPEN.length + 1 + inner.length)
+}
+
 function format(view: EditorView, kind: Format) {
   const { state } = view
   const { from, to, empty } = state.selection.main
@@ -145,6 +189,7 @@ function format(view: EditorView, kind: Format) {
   else if (kind === 'link') put(view, `[${empty ? 'link text' : chosen}](https://)`, 'https://')
   else if (kind === 'image') put(view, `![${empty ? 'description' : chosen}](picture.png)`, 'picture.png')
   else if (kind === 'footnote') put(view, `^[${empty ? 'note' : chosen}]`, empty ? 'note' : chosen)
+  else if (kind === 'comment') comment(view)
   else if (kind === 'citation') {
     view.dispatch({ changes: { from, to, insert: '[@]' }, selection: { anchor: from + 2 }, userEvent: 'input.format', scrollIntoView: true })
   } else if (kind === 'table') {

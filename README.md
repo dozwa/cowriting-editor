@@ -56,11 +56,15 @@ first. Licences of the two programs: `src-tauri/tools/`.
 ## Writing markdown
 
 Above the text is a row of buttons that write markdown for you: title and headings, bold, italic,
-lists, quotation, link, picture, table, citation and footnote. Each puts the marks around what you
+lists, quotation, link, picture, table, citation, footnote and comment. Each puts the marks around what you
 selected, or writes an example to type over; a button's tooltip shows the markdown it writes. At
 the bottom of the window you can hide the buttons, turn on **line numbers** (the AI's answers name
 lines), and switch to **Source**, which shows the text exactly as it is saved, every mark in
 place. The line between text and side panel can be dragged; a double-click puts it back.
+
+**Comment out** puts `<!-- -->` around what you selected, or around the line the cursor is in: a
+sentence you are not sure about, a note to yourself. It stays in the file, is not counted as words
+and is in no export. The AI still reads it.
 
 "How markdown works", at the end of the row, shows the marks worth knowing. Its two links open
 commonmark.org/help and pandoc's manual in your browser. With zotero.org/styles (from the Sources

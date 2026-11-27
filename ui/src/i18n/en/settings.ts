@@ -163,6 +163,7 @@ export const settings = {
     footnote: 'Footnote',
     image: 'Picture',
     table: 'Table',
+    comment: 'Comment out',
   },
   // the two keys whose names differ between keyboards, as they are printed on the key
   ctrlKey: 'Ctrl',

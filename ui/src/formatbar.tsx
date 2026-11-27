@@ -48,6 +48,9 @@ export const FORMATS: { kind: Format; name: string; writes: string; symbol: Reac
     format('citation', <span className="letters">[@]</span>),
     format('footnote', <span className="letters">a<sup>1</sup></span>),
   ],
+  [
+    format('comment', icon(<><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" /><path d="M6.5 8h3" strokeDasharray="1 1.5" /></>)),
+  ],
 ]
 
 /** Buttons that write markdown for the author, so nobody has to know the marks to start. */
@@ -71,7 +74,7 @@ export function FormatBar({ keys, onFormat, onHelp }: { keys?: Partial<Record<Fo
 }
 
 /** The marks worth knowing, in the order they are shown; what the author types for each is in the catalogue. */
-const SYNTAX = ['headings', 'paragraph', 'emphasis', 'bullets', 'numbers', 'quote', 'link', 'image', 'table', 'citation', 'footnote', 'frontMatter'] as const
+const SYNTAX = ['headings', 'paragraph', 'emphasis', 'bullets', 'numbers', 'quote', 'link', 'image', 'table', 'citation', 'footnote', 'comment', 'frontMatter'] as const
 
 /** What markdown is and the marks worth knowing, with the way to the full guides. */
 export function MarkdownHelp({ onOpen, onClose }: { onOpen(which: Guide): void; onClose(): void }) {

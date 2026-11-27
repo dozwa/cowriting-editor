@@ -141,6 +141,7 @@ export const ACTIONS: { group: string; actions: { id: Action; name: string; keys
       action('footnote', 'Mod-Alt-f'),
       action('image', ''),
       action('table', ''),
+      action('comment', 'Mod-Shift-c'),
     ],
   },
 ]

@@ -737,3 +737,33 @@ async fn an_answer_the_author_stops_is_logged_as_far_as_it_was_read() {
     let next = session.ask(backend.as_ref(), ask("And now?"), &mut |_| {}).await.unwrap();
     assert_eq!((next.answer.as_str(), next.cut_off), ("Never said.", None));
 }
+
+#[test]
+fn what_is_commented_out_stays_in_the_document_and_is_in_no_export() {
+    use cowriting_app::export::{find_program, local_tools};
+    use cowriting_app::linked::{kind_of, text_of};
+    use cowriting_app::{FileFormat, Paper, PdfChoice};
+    let folder = Folder::new("export-comments");
+    // in a line, a paragraph of its own, and one that goes over an empty line
+    let text = "# Comments\n\nShown before. <!-- HIDDENINLINE --> Shown after.\n\n<!-- HIDDENBLOCK -->\n\n<!-- HIDDENFIRST\n\nHIDDENSECOND -->\n\nShown last.\n";
+    std::fs::write(folder.path("thesis.md"), text).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    if find_program("pandoc").is_none() {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "pandoc is not there: run scripts/fetch-tools.py");
+        eprintln!("pandoc is not installed: the export with comments was not run");
+        return;
+    }
+    let mut made = vec![("thesis.docx".to_string(), FileFormat::Docx, None)];
+    for engine in local_tools().pdf_engines.into_iter().filter(|engine| ["typst", "xelatex", "pdflatex"].contains(&engine.as_str())) {
+        made.push((format!("with-{engine}.pdf"), FileFormat::Pdf, Some(engine)));
+    }
+    for (name, format, engine) in made {
+        session.export_document(format, &folder.path(&name), text, None, &PdfChoice { engine, paper: Paper::A4 }).unwrap_or_else(|why| panic!("{name}: {why}"));
+        let read = text_of(&folder.path(&name), kind_of(&folder.path(&name))).unwrap_or_else(|why| panic!("{name}: {why}"));
+        for shown in ["Shown before.", "Shown after.", "Shown last."] {
+            assert!(read.contains(shown), "{name} has “{shown}”: {read}");
+        }
+        assert!(!read.contains("HIDDEN") && !read.contains("<!--") && !read.contains("-->"), "{name} leaves the comments out: {read}");
+    }
+    assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
+}

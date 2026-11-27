@@ -16,6 +16,7 @@ export const formatbar = {
     table: { name: 'Table', writes: '| Column | Column |' },
     citation: { name: 'Citation', writes: '[@key]. The Sources tab finds the key' },
     footnote: { name: 'Footnote', writes: '^[note]' },
+    comment: { name: 'Comment out', writes: '<!-- text that stays in the file and is not exported -->' },
   },
   intro: 'Markdown is plain text with a few marks that say what something is: a heading, a list, a quotation. You type the marks, or let the buttons above the text write them. The file stays readable in any program.',
   // the marks worth knowing: `typed` is what the author types, an empty `note` is not shown
@@ -31,6 +32,7 @@ export const formatbar = {
     table: { what: 'Table', typed: '| Group | Mean |\n|-------|------|\n| A     | 4.2  |', note: '' },
     citation: { what: 'Citation', typed: '[@smith2020]\n[@smith2020, p. 12; @lee2019]', note: 'The key is the one in your bibliography; the Sources tab finds it.' },
     footnote: { what: 'Footnote', typed: 'A claim.^[The note, written where it belongs.]', note: '' },
+    comment: { what: 'Comment', typed: '<!-- a note to myself, or an old wording -->', note: 'Stays in the file, is not counted and is in no export. The AI still reads it.' },
     frontMatter: { what: 'About the document', typed: '---\ntitle: Walking breaks\nbibliography: refs.bib\n---', note: 'Only at the very top. The export reads title, author and bibliography from here.' },
   },
   more: 'More, in your browser:',

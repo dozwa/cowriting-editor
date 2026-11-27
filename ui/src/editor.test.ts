@@ -60,6 +60,32 @@ test('a heading, list or quotation marks every selected line, replaces the mark 
   expect(editing('[]').after('title')).toBe('# []')
 })
 
+test('a comment goes around what is selected or around the line, and comes off again', () => {
+  const selected = editing('Keep this. [Not sure about this.] And this.')
+  expect(selected.after('comment')).toBe('Keep this. <!-- [Not sure about this.] --> And this.')
+  expect(selected.after('comment')).toBe('Keep this. [Not sure about this.] And this.')
+  // nothing selected: the line the cursor is in, without the space it is indented by
+  const line = editing('One.\n  An old wor[]ding.\nThree.')
+  expect(line.after('comment')).toBe('One.\n  <!-- [An old wording.] -->\nThree.')
+  expect(line.after('comment')).toBe('One.\n  [An old wording.]\nThree.')
+  // the cursor anywhere in a comment takes its marks off, over several lines too
+  expect(editing('A <!-- note\nto my[]self --> here.').after('comment')).toBe('A [note\nto myself] here.')
+  expect(editing('[<!-- all of it -->]').after('comment')).toBe('[all of it]')
+  expect(editing('<!--tight-->[]').after('comment')).toBe('[tight]')
+  // an empty line gets an example to type over, which a second press takes away
+  const empty = editing('One.\n[]')
+  expect(empty.after('comment')).toBe('One.\n<!-- [comment] -->')
+  expect(empty.after('comment')).toBe('One.\n[]')
+})
+
+test('comments do not lie inside each other: a selection that holds one becomes one comment', () => {
+  expect(editing('[One. <!-- two --> Three.]').after('comment')).toBe('<!-- [One. two Three.] -->')
+  expect(editing('[One. <!-- two] --> Three.').after('comment')).toBe('<!-- [One. two] --> Three.')
+  // a comment that only touches the selection is left alone
+  expect(editing('<!-- one -->[ two ]<!-- three -->').after('comment')).toBe('<!-- one --><!-- [ two ] --><!-- three -->')
+  expect(editing('One. <!-- two --> Th[]ree.').after('comment')).toBe('<!-- [One. two Three.] -->')
+})
+
 test('a table is a block of its own, with a first cell to type over', () => {
   const table = '| [Column] | Column |\n|--------|--------|\n| cell   | cell   |\n| cell   | cell   |\n'
   expect(editing('[]').after('table')).toBe(table)
