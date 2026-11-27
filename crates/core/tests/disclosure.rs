@@ -34,3 +34,30 @@ fn a_heading_in_latex_is_set_ragged_and_the_german_one_on_the_log_is_short() {
         assert!(headings.len() >= 5 && headings.iter().all(|line| line.starts_with("\\subsection*{\\raggedright ")), "{headings:?}");
     }
 }
+
+#[test]
+fn the_table_in_latex_is_as_wide_as_the_line() {
+    for text in [register(Lang::De, DocFormat::Tex), register(Lang::En, DocFormat::Tex)] {
+        let open = text.lines().find(|line| line.contains("\\begin{tabular}")).unwrap();
+        // every column is its share of the line less the space LaTeX puts on both of its sides, and the shares are the whole line
+        let columns: Vec<&str> = open.split("p{\\dimexpr").skip(1).collect();
+        assert!(
+            columns.len() == 5 && columns.iter().all(|column| column.ends_with("\\linewidth-2\\tabcolsep\\relax}") || column.ends_with("\\linewidth-2\\tabcolsep\\relax}}")),
+            "{open}"
+        );
+        let shares: f64 = columns.iter().map(|column| column.split_once("\\linewidth").unwrap().0.parse::<f64>().unwrap()).sum();
+        assert!((shares - 1.0).abs() < 1e-9, "{open}");
+        // it starts at the margin, and no cell is justified or keeps its first word in one piece
+        assert!(open.starts_with("{\\footnotesize\\noindent\\begin{tabular}"), "{open}");
+        let rows: Vec<&str> = text.lines().filter(|line| line.ends_with("\\tabularnewline")).collect();
+        assert_eq!(rows.len(), 8, "the head and seven purposes");
+        assert!(rows.iter().all(|row| row.split(" & ").count() == 5 && row.split(" & ").all(|cell| cell.starts_with("\\raggedright\\hspace{0pt}"))), "{rows:?}");
+        assert!(text.contains("\\end{tabular}}\n"));
+    }
+    // a model's name can be broken where it has no space
+    let log = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/logs/full.jsonl"))
+        .unwrap()
+        .replace("claude-opus-5-5", "hf.co/some_one/model:latest");
+    let named = disclosure(&parse_log(&log), "thesis.md", Lang::En, DocFormat::Tex, Profile::Editor);
+    assert!(named.contains("hf.co/\\allowbreak{}some\\_\\allowbreak{}one/\\allowbreak{}model:\\allowbreak{}latest"), "{named}");
+}

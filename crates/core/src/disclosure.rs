@@ -208,6 +208,14 @@ fn log_files(event: &GuardEntry, profile: Profile) -> Vec<&str> {
 const TEX_SPECIALS: &[(char, &str)] =
     &[('\\', r"\textbackslash{}"), ('&', r"\&"), ('%', r"\%"), ('$', r"\$"), ('#', r"\#"), ('_', r"\_"), ('{', r"\{"), ('}', r"\}"), ('~', r"\textasciitilde{}"), ('^', r"\^{}")];
 
+/// The shares of the line the editor's table gives its columns in LaTeX: purpose, tool and model, extent, use, chapters.
+const TEX_COLUMNS: [&str; 5] = [".23", ".24", ".18", ".2", ".15"];
+
+/// A model's name may be broken after a colon, a slash or an underscore: it has no spaces, and a long one would leave its column.
+fn breakable(escaped: &str) -> String {
+    escaped.replace(':', ":\\allowbreak{}").replace('/', "/\\allowbreak{}").replace("\\_", "\\_\\allowbreak{}")
+}
+
 /// Character by character, so the braces an escape introduces are not escaped again.
 pub fn tex_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -535,24 +543,40 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 Profile::Plugin => format!("\\subsection*{{{}}}", e(heading)),
                 Profile::Editor => format!("\\subsection*{{\\raggedright {}}}", e(heading)),
             };
+            out.extend([format!("\\section*{{{}}}", e(&title)), String::new(), e(&intro), String::new()]);
+            // The plugin's table is 0.9 of the line plus the space between its columns: wider than the text block.
+            // The editor's fills the line exactly, in smaller type, with ragged cells whose first word may be hyphenated.
+            let (open, cell, row_end, close) = match profile {
+                Profile::Plugin => {
+                    ("\\begin{tabular}{p{.22\\linewidth}p{.18\\linewidth}p{.2\\linewidth}p{.2\\linewidth}p{.1\\linewidth}}".to_string(), "", " \\\\", "\\end{tabular}")
+                }
+                Profile::Editor => (
+                    format!(
+                        "{{\\footnotesize\\noindent\\begin{{tabular}}{{{}}}",
+                        TEX_COLUMNS.map(|share| format!("p{{\\dimexpr{share}\\linewidth-2\\tabcolsep\\relax}}")).concat()
+                    ),
+                    "\\raggedright\\hspace{0pt}",
+                    " \\tabularnewline",
+                    "\\end{tabular}}",
+                ),
+            };
             out.extend([
-                format!("\\section*{{{}}}", e(&title)),
-                String::new(),
-                e(&intro),
-                String::new(),
-                "\\begin{tabular}{p{.22\\linewidth}p{.18\\linewidth}p{.2\\linewidth}p{.2\\linewidth}p{.1\\linewidth}}".to_string(),
+                open,
                 "\\hline".to_string(),
-                format!("{} \\\\", head.iter().map(|h| format!("\\textbf{{{}}}", e(h))).collect::<Vec<_>>().join(" & ")),
+                format!("{}{row_end}", head.iter().map(|h| format!("{cell}\\textbf{{{}}}", e(h))).collect::<Vec<_>>().join(" & ")),
                 "\\hline".to_string(),
             ]);
             for r in &rows {
                 let purpose = format!("{}{}", r.purpose, if r.is_language { " (1)" } else { "" });
-                let cells = [purpose.as_str(), &r.tool, &r.extent, &r.use_, &r.chapters].map(e);
-                out.push(format!("{} \\\\", cells.join(" & ")));
+                let mut cells = [purpose.as_str(), &r.tool, &r.extent, &r.use_, &r.chapters].map(e);
+                if profile == Profile::Editor {
+                    cells[1] = breakable(&cells[1]);
+                }
+                out.push(format!("{}{row_end}", cells.map(|text| format!("{cell}{text}")).join(" & ")));
             }
             out.extend([
                 "\\hline".to_string(),
-                "\\end{tabular}".to_string(),
+                close.to_string(),
                 String::new(),
                 format!("\\noindent(1) {}", e(&lang_note)),
                 String::new(),
