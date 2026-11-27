@@ -2,15 +2,19 @@
 
 What changed, for people who use the editor. Two things are kept apart here:
 
-- **In the repository, in no release** is what `main` holds beyond the last release. Nobody has it
-  unless they build the editor themselves.
+- **On `dev`, in no release** is what the branch `dev` holds beyond the last release. Nobody has
+  it unless they build the editor themselves.
 - **Releases** are the installers on the [releases page](https://github.com/dozwa/cowriting-editor/releases).
-  A change is in a release only when it stands under that release's heading.
+  A change is in a release only when it stands under that release's heading. The branch `main` is
+  the state of the last one.
 
 When a release is made, the entries it takes move from the first section to a new heading with
-its version and date (see `RELEASING.md`). Numbers like #7 are issues on GitHub.
+its version and date (see `DEVELOPING.md`). Numbers like #7 are issues on GitHub.
 
-## In the repository, in no release
+What stands under "Fixed" and "Changed" below was pushed to `main` before there was a `dev`. It
+is in no release all the same.
+
+## On `dev`, in no release
 
 ### Fixed
 
@@ -46,8 +50,9 @@ its version and date (see `RELEASING.md`). Numbers like #7 are issues on GitHub.
   An alpha is built by its tag, `v0.1.1-alpha`, as before under the name CoWriting Editor. The
   footer shows such a version as it is. See `RELEASING.md`.
 - One script sets the version in every file, and CI checks that they agree.
-- `DEVELOPING.md` says how to work with the dev app and how to make an alpha.
-- CI checks and tests every push and builds the dev app only when it is started by hand.
+- **Two branches.** Work is on `dev`; `main` is the state of the alpha and moves only when a
+  tried state of `dev` is merged into it and tagged. `DEVELOPING.md` has the commands.
+- CI checks and tests every push and builds the dev app only when it is started by hand on `dev`.
 - The Windows `.msi` and the Linux `.rpm`, which were never published, are no longer built.
 - The release build leaves out signing secrets that are not set.
 - The export test has a document with pictures, and the tests read the stylesheets.

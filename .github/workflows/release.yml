@@ -1,10 +1,11 @@
 name: Release
 
-# A tag like v0.1.1-alpha builds the installers of the released app ("CoWriting Editor", not the
-# dev app) for the three systems and puts them into a draft release, marked as a pre-release when
-# the version is an alpha. The tag has to be the version the files hold, and a dev version is not
-# released. With the signing secrets set (see RELEASING.md) the macOS and Windows installers are
-# signed; without them the same installers are built unsigned.
+# A tag like v0.1.1-alpha on `main` builds the installers of the released app ("CoWriting Editor",
+# not the dev app) for the three systems and puts them into a draft release, marked as a
+# pre-release when the version is an alpha. The tag has to be the version the files hold, no dev
+# version, and on a commit of `main`: an alpha is what `main` holds. With the signing secrets set
+# (see RELEASING.md) the macOS and Windows installers are signed; without them the same installers
+# are built unsigned.
 on:
   push:
     tags: ["v*"]
@@ -21,14 +22,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Linux packages the window needs
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libdbus-1-dev
-      - name: The tag is the version in the files, and no dev version
+      - name: The tag is the version in the files, no dev version, and on main
         shell: bash
-        run: python3 scripts/set-version.py --check "$GITHUB_REF_NAME"
+        run: |
+          python3 scripts/set-version.py --check "$GITHUB_REF_NAME"
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD || { echo "::error::$GITHUB_REF_NAME is not on main. Merge the tried state of dev into main and tag there (DEVELOPING.md)."; exit 1; }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4

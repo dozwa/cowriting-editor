@@ -2,13 +2,13 @@
 
 There are two apps, built from the same code:
 
-| | Dev app | Alpha |
+| | Dev app (branch `dev`) | Alpha (branch `main`) |
 |---|---|---|
 | For | the developer alone | testers outside |
 | Name | CoWriting Editor Dev | CoWriting Editor |
 | Identifier | `io.github.dozwa.cowriting-editor.dev` | `io.github.dozwa.cowriting-editor` |
 | Version | `0.1.1-dev` | `0.1.1-alpha` |
-| Built by | CI started by hand, or `tauri build` | the tag `v0.1.1-alpha` |
+| Built by | CI started by hand on `dev`, or `tauri build` | the tag `v0.1.1-alpha` on `main` |
 | Found | on the CI run, for 90 days, with access to the repository | on the releases page, as a pre-release |
 
 Both can be installed side by side. Each has its own settings, its own keys in the system's key
@@ -22,25 +22,23 @@ The commands for both, day to day, are in `DEVELOPING.md`.
 
 ## Versions
 
-`main` holds a dev version: the next alpha's number with `-dev` behind it. After `0.1.1-alpha`
+`dev` holds a dev version: the next alpha's number with `-dev` behind it; `main` holds the
+version of the alpha that is out. After `0.1.1-alpha`
 comes `0.1.2-dev`, then `0.1.2-alpha`, and so on. `python3 scripts/set-version.py <version>` writes
 a version into every file that holds it; `--check` (run by CI) says whether they agree.
 
 ## From the dev app to an alpha
 
-Build the dev app (Actions → CI → Run workflow, or `gh workflow run ci.yml`), try that state, and
-when it is good:
+Work is on the branch `dev`. A state of it that was built as the dev app and tried is merged into
+`main`, given the alpha's version there and tagged; the commands are in `DEVELOPING.md`.
 
-1. `python3 scripts/set-version.py 0.1.1-alpha`
-2. In `CHANGELOG.md`, move what the alpha takes from "In the repository, in no release" to a new
-   heading under "Releases", with the version and the date. What stays behind is in no release.
-3. Commit, `git tag v0.1.1-alpha`, and push the commit and the tag.
-4. `python3 scripts/set-version.py 0.1.2-dev`, commit and push: `main` is a dev version again.
+The tag runs `.github/workflows/release.yml`: it checks that the tag is the version in the files,
+no dev version and on `main`, builds the installers for macOS, Windows and Linux, with pandoc and
+Typst inside, and puts them into a **draft** pre-release on GitHub. Nothing is published until
+you publish the draft. A version without `-alpha` is built the same way as a full release.
 
-The tag runs `.github/workflows/release.yml`: it checks that the tag is the version in the files
-and no dev version, builds the installers for macOS, Windows and Linux, with pandoc and Typst
-inside, and puts them into a **draft** pre-release on GitHub. Nothing is published until you
-publish the draft. A version without `-alpha` is built the same way as a full release.
+In `CHANGELOG.md`, what the release takes moves from "On `dev`, in no release" to a new heading
+under "Releases", with the version and the date. What stays behind is in no release.
 
 ## What is not done yet
 

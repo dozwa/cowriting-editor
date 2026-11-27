@@ -1,13 +1,14 @@
 name: CI
 
-# A push or a pull request is checked and tested. The app is built only when the workflow is
-# started by hand (Actions → CI → Run workflow, or `gh workflow run ci.yml`), and what it builds
-# is the dev app: "CoWriting Editor Dev", with its own settings, for the developer alone. Its
-# installers hang on the run and are gone after 90 days. An alpha for testers is built by its tag
-# (release.yml, RELEASING.md).
+# Work is on the branch `dev`; `main` is the state of the alpha that is out. A push to either, or
+# a pull request, is checked and tested. The app is built only when the workflow is started by
+# hand on `dev` (Actions → CI → Run workflow → Branch: dev, or `gh workflow run ci.yml --ref dev`),
+# and what it builds is the dev app: "CoWriting Editor Dev", with its own settings, for the
+# developer alone. Its installers hang on the run and are gone after 90 days. An alpha for testers
+# is built by its tag on `main` (release.yml, DEVELOPING.md).
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
@@ -50,6 +51,12 @@ jobs:
       - run: cargo test --workspace
         env:
           COWRITING_NEED_TOOLS: 1
+      - name: The dev app is built from a dev version
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          version=$(python3 scripts/set-version.py --check)
+          case "$version" in *-dev) ;; *) echo "::error::This is $version, not a dev version: start the workflow on the branch dev (gh workflow run ci.yml --ref dev). An alpha is built by its tag."; exit 1 ;; esac
       - name: The dev app, unsigned
         if: github.event_name == 'workflow_dispatch'
         run: ui/node_modules/.bin/tauri build

@@ -280,8 +280,8 @@ ui/node_modules/.bin/tauri build        # unsigned installer of the dev app for 
 ```
 
 What you build is "CoWriting Editor Dev": it installs beside a released CoWriting Editor and keeps
-its own settings and keys. How to work with the dev app and how a tested state becomes an alpha is in
-`DEVELOPING.md`, signing and the release workflow in `RELEASING.md`, and what changed since the
+its own settings and keys. Work is on the branch `dev`; `main` is the state of the alpha that is out. How the two
+are steered is in `DEVELOPING.md`, signing and the release workflow in `RELEASING.md`, and what changed since the
 last release in `CHANGELOG.md`.
 
 To run the interface in an ordinary browser against the real Rust code (for development and for
