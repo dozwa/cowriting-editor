@@ -42,6 +42,10 @@ pub enum How {
 pub fn command_for(system: &str, path: &str, how: How) -> (String, Vec<String>) {
     let folder = Path::new(path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
     let one = |program: &str, args: &[&str]| (program.to_string(), args.iter().map(|a| a.to_string()).collect());
+    // The editor joins its own folders on with "/", so a path on Windows mixes both separators. Windows itself
+    // takes that, but Explorer reads the path on its own and then shows nothing: it gets backslashes only.
+    let native = path.replace('/', "\\");
+    let path = if system == "windows" { native.as_str() } else { path };
     match (system, how) {
         ("macos", How::Folder) => one("open", &["-R", path]),
         ("macos", How::Open) => one("open", &[path]),

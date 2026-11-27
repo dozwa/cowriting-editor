@@ -36,4 +36,11 @@ fn each_system_gets_the_path_as_one_argument() {
     assert_eq!(command_for("linux", path, How::Open).1, [path]);
     assert_eq!(command_for("windows", r"C:\a b\x.pdf", How::Folder).1, [r"/select,C:\a b\x.pdf"]);
     assert_eq!(command_for("windows", r"C:\a b\x.pdf", How::Open).1.last().unwrap(), r"C:\a b\x.pdf");
+    // the editor's own folders are joined on with "/": Explorer finds the file only when every separator is Windows' own
+    let mixed = r"C:\Users\a b\proben/.cowriting/beispiel.md/disclosure/ai-register.de.tex";
+    let native = r"C:\Users\a b\proben\.cowriting\beispiel.md\disclosure\ai-register.de.tex";
+    assert_eq!(command_for("windows", mixed, How::Folder), ("explorer".to_string(), vec![format!("/select,{native}")]));
+    assert_eq!(command_for("windows", mixed, How::Open).1, ["url.dll,FileProtocolHandler", native]);
+    // elsewhere a backslash is a character of the name like any other
+    assert_eq!(command_for("macos", "/home/a\\b/x.pdf", How::Open).1, ["/home/a\\b/x.pdf"]);
 }
