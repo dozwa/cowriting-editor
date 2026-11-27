@@ -127,7 +127,18 @@ impl Bridge {
                 Ok(json!(cowriting_core::words::count_selection(&text("text"), args["from"].as_u64().unwrap_or(0) as usize, args["to"].as_u64().unwrap_or(0) as usize)))
             }
             "picture" => self.session()?.picture(&text("path")).map(|picture| json!(picture)),
-            "copy_picture" => self.session()?.copy_picture(&text("path")).map(|picture| json!(picture)),
+            "copy_picture" => {
+                let session = self.session()?;
+                if let Some(into) = args["into"].as_str().filter(|into| *into != session.pictures_folder()) {
+                    session.set_pictures_folder(into)?;
+                }
+                session.copy_picture(&text("path")).map(|picture| json!(picture))
+            }
+            "paste_picture" => {
+                let content: Vec<u8> = serde_json::from_value(args["content"].clone()).map_err(|e| e.to_string())?;
+                self.session()?.paste_picture(&text("kind"), &content).map(|picture| json!(picture))
+            }
+            "pictures_folder" => Ok(json!(self.session()?.pictures_folder())),
             "unlink_file" => self.session()?.unlink_file(&text("path")).map(|_| json!(self.session().unwrap().project_view())),
             "set_prompt" => self.session()?.set_prompt(&text("id"), &text("prompt")).map(|_| Value::Null),
             "set_brief" => self.session()?.set_brief(&text("key"), &text("body")).map(|_| Value::Null),

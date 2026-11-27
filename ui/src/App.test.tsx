@@ -11,7 +11,7 @@ import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
 
 /** What the stand-in editor was told, for the tests to read. */
-type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; finds: number[]; view: View | null; /** What the real editor says when the selection changes. */ select(from: number, to: number): void }
+type Seen = { jumps: number[]; formats: Format[]; pictures: string[]; finds: number[]; view: View | null; cursors: [number, number][]; /** What the real editor says when the selection changes. */ select(from: number, to: number): void; /** What the real editor says when a picture is pasted or dropped. */ picture(file: File): void }
 
 /** A text field in place of the real editor, which needs a browser's layout. */
 const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Seen => {
@@ -28,10 +28,12 @@ const plainEditor = (parent: HTMLElement, handlers: EditorHandlers): Editor & Se
   const jumps: number[] = []
   const formats: Format[] = []
   const pictures: string[] = []
-  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), find: () => void lastEditor.finds.push(1), setView: view => void (lastEditor.view = view), focus: () => {}, destroy: () => field.remove(), select: (from, to) => handlers.onSelect?.(from, to), jumps, formats, pictures, finds: [], view: null }
+  lastEditor = { getText: () => field.value, setText: text => void (field.value = text), insert: text => (field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'), handlers.onChange()), jumpToLine: line => void jumps.push(line), format: (kind, picture) => void (picture === undefined ? formats.push(kind) : pictures.push(picture)), find: () => void lastEditor.finds.push(1), setView: view => void (lastEditor.view = view), cursorAt: (x, y) => void lastEditor.cursors.push([x, y]), picture: file => handlers.onPicture?.(file), focus: () => {}, destroy: () => field.remove(), select: (from, to) => handlers.onSelect?.(from, to), jumps, formats, pictures, finds: [], cursors: [], view: null }
   return lastEditor
 }
 let lastEditor: Editor & Seen
+/** What the app's window calls when files are dropped on it; set by the stand-in. */
+let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 
 function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]> } = {}) {
   const turns: TurnRow[] = []
@@ -62,6 +64,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     return [row]
   }
   const figure = { palette: { H: '#6b4226' }, sprite: ['.HH.', 'HSSH'], prompt: 'You are an expert. Your perspective: the weak points.', isPromptEdited: false }
+  let folder = 'images'
   let project: ProjectView = { files: [], overrides: {}, folder: '/home/me/.config/cowriting-editor/projects/thesis.md-1' }
   const experts: Expert[] = [
     { id: 'reviewer-2', name: 'Reviewer #2', short: 'Reviewer #2', role: 'Weaknesses, limitations, tough questions', category: 'feedback', isCustom: false, isMember: true, brief: '', ...figure },
@@ -108,7 +111,17 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       const name = path.slice(path.lastIndexOf('/') + 1)
       return path.startsWith('/work/') ? { path: path.slice('/work/'.length), name, isInside: true } : { path: `..${path}`, name, isInside: false }
     },
-    copyPicture: async path => (calls.pictures.push(`copied ${path}`), { path: `images/${path.slice(path.lastIndexOf('/') + 1)}`, name: path.slice(path.lastIndexOf('/') + 1), isInside: true }),
+    copyPicture: async (path, into) => {
+      calls.pictures.push(`copied ${path}`)
+      folder = into ?? folder
+      return { path: `${folder}/${path.slice(path.lastIndexOf('/') + 1)}`, name: path.slice(path.lastIndexOf('/') + 1), isInside: true }
+    },
+    pastePicture: async (kind, content) => (calls.pictures.push(`pasted ${kind} of ${content.length} bytes`), { path: `${folder}/picture-2026-11-27.${kind}`, name: `picture-2026-11-27.${kind}`, isInside: true }),
+    picturesFolder: async () => folder,
+    onFilesDropped: dropped => {
+      dropFiles = dropped
+      return () => void (dropFiles = () => {})
+    },
     linkFile: async (path, personas) => {
       calls.project.push(['link', path, personas])
       if (path.endsWith('.pdf')) throw `${path} cannot be read as text.`
@@ -944,6 +957,42 @@ test('Cmd or Ctrl with F opens the find bar, wherever the cursor is', async () =
   await user.click(screen.getByPlaceholderText(/Ask about your text/))
   await user.keyboard('{Control>}f{/Control}')
   expect(lastEditor.finds).toEqual([1])
+})
+
+test('a picture from the clipboard is saved beside the document and named in the text, and is not taken for pasted text', async () => {
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  act(() => lastEditor.picture(new File([new Uint8Array([137, 80, 78, 71, 1, 2, 3])], 'image.png', { type: 'image/png' })))
+  await waitFor(() => expect(lastEditor.pictures).toEqual(['images/picture-2026-11-27.png']))
+  expect(calls.pictures).toEqual(['pasted png of 7 bytes'])
+  expect(calls.pasted).toEqual([])
+  // a kind the export cannot use is refused in plain words, and nothing is written
+  act(() => lastEditor.picture(new File([new Uint8Array([1])], 'photo.heic', { type: 'image/heic' })))
+  expect((await screen.findByRole('alert')).textContent).toContain('“image/heic” cannot be used by the export')
+  expect(lastEditor.pictures.length).toBe(1)
+})
+
+test('pictures dropped on the window go where they are dropped, and one outside the folder is asked about with a folder to name', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  act(() => dropFiles(['/work/figures/plot.png', '/home/me/logo.png'], 320, 240))
+  await waitFor(() => expect(lastEditor.pictures).toEqual(['figures/plot.png']))
+  expect(lastEditor.cursors).toEqual([[320, 240]])
+  const dialog = within(await screen.findByRole('dialog', { name: 'Where the picture lies' }))
+  const folder = dialog.getByLabelText(/Folder for this project/) as HTMLInputElement
+  expect(folder.value).toBe('images')
+  await user.clear(folder)
+  expect((dialog.getByRole('button', { name: 'Copy it beside the document' }) as HTMLButtonElement).disabled).toBe(true)
+  await user.type(folder, 'figures')
+  await user.click(dialog.getByRole('button', { name: 'Copy it beside the document' }))
+  await waitFor(() => expect(lastEditor.pictures).toEqual(['figures/plot.png', 'figures/logo.png']))
+  expect(calls.pictures).toEqual(['copied /home/me/logo.png'])
+  // the folder is the project's from now on: the next question starts with it
+  act(() => dropFiles(['/home/me/other.png'], 10, 10))
+  expect(((await screen.findByLabelText(/Folder for this project/)) as HTMLInputElement).value).toBe('figures')
 })
 
 test('a document that names pictures from its folder asks what becomes of them before it moves', async () => {

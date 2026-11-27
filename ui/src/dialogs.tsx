@@ -5,16 +5,21 @@ import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
 /** A chosen picture lies outside the document's folder: copy it beside the document, or name it where it is. */
-export function PictureDialog({ name, linkedAs, onCopy, onLink, onClose }: { name: string; linkedAs: string; onCopy(): void; onLink(): void; onClose(): void }) {
+export function PictureDialog({ name, linkedAs, folder, onCopy, onLink, onClose }: { name: string; linkedAs: string; /** The project's folder for copies. */ folder: string; onCopy(into: string): void; onLink(): void; onClose(): void }) {
   const t = m.dialogs
+  const [into, setInto] = useState(folder)
   return (
     <Dialog title={t.pictureTitle} onClose={onClose}>
       <p>{t.pictureOutside(name)}</p>
       <p className="muted">{t.pictureChoice(linkedAs)}</p>
+      <label>
+        {t.pictureFolder}
+        <input value={into} onChange={e => setInto(e.target.value)} spellCheck={false} />
+      </label>
       <div className="actions">
         <button onClick={onClose}>{t.pictureCancel}</button>
         <button onClick={onLink}>{t.pictureLink}</button>
-        <button className="primary" onClick={onCopy}>{t.pictureCopy}</button>
+        <button className="primary" disabled={into.trim() === ''} onClick={() => onCopy(into.trim())}>{t.pictureCopy}</button>
       </div>
     </Dialog>
   )

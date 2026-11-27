@@ -31,6 +31,11 @@ to a new heading with its version and date; the release workflow does that (see 
   the document (the picture itself is never moved or changed), or name it where it is. Not yet
   looked at in a running window; a picture on another drive (Windows) is named by its full path. (#5)
 
+- **Pictures by drop and from the clipboard.** A picture file dropped on the text is placed
+  where it is dropped, with the same question as the button for a picture outside the
+  document's folder. A picture pasted from the clipboard is saved into the pictures folder as
+  `picture-<date>.png` and named in the text. The folder's name can be set in the dialog and is
+  kept for the project. Dropping on the app's window was not yet tried in a running window. (#31)
 - **The count of a selection.** While text is selected, the top bar shows its words and
   characters in place of the document's, counted by the same rules; the document's numbers are
   in the tooltip. With several selections at once, the main one is counted. (#30)

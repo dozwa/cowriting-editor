@@ -79,6 +79,9 @@ pub struct Project {
     /// This project's own provider and model. A key is never kept here: it is in the system's key store, by provider.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ai: Option<ProjectAi>,
+    /// The folder beside the document that copies of pictures go into, when it is not `images`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pictures_folder: Option<String>,
     /// What a newer version of the editor wrote here and this one does not know: kept as it is.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,

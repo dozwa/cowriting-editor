@@ -207,3 +207,32 @@ test('replacing one match or all of them is the author\'s own edit: one step to 
   expect(editor.getText()).toBe('participants were recruited. The subjects agreed. Each subject signed.')
   expect(pasted).toEqual([])
 })
+
+test('a picture that is pasted or dropped is handed on and not typed in, and text that brings a picture of itself stays text', () => {
+  const pictures: File[] = []
+  const pasted: string[] = []
+  const parent = document.createElement('div')
+  document.body.append(parent)
+  const editor = createEditor(parent, { onChange: () => {}, onPaste: text => void pasted.push(text), onPicture: file => void pictures.push(file) })
+  editor.setText('One line.\nAnother line.')
+  const view = EditorView.findFromDOM(parent.querySelector<HTMLElement>('.cm-editor')!)!
+  const picture = new File([new Uint8Array([137, 80, 78, 71])], 'shot.png', { type: 'image/png' })
+  /** An event as a browser sends it: what it carries is read from `clipboardData` or `dataTransfer`. */
+  const carrying = (kind: 'paste' | 'drop', files: File[], text: string) => {
+    const event = new Event(kind, { bubbles: true, cancelable: true })
+    const carried = { files, getData: (type: string) => (type === 'text/plain' ? text : ''), types: text === '' ? ['Files'] : ['text/plain', 'Files'] }
+    Object.defineProperty(event, kind === 'paste' ? 'clipboardData' : 'dataTransfer', { value: carried })
+    Object.defineProperties(event, { clientX: { value: 0 }, clientY: { value: 0 } })
+    view.contentDOM.dispatchEvent(event)
+    return event
+  }
+  expect(carrying('paste', [picture], '').defaultPrevented).toBe(true)
+  expect(carrying('drop', [picture], '').defaultPrevented).toBe(true)
+  expect(pictures).toEqual([picture, picture])
+  expect([editor.getText(), pasted]).toEqual(['One line.\nAnother line.', []])
+  // a table copied from a spreadsheet comes as text and as a picture of it: the text is meant
+  carrying('paste', [picture], 'a\tb')
+  // a file that is no picture is not the editor's to place
+  carrying('drop', [new File(['x'], 'notes.txt', { type: 'text/plain' })], '')
+  expect(pictures.length).toBe(2)
+})

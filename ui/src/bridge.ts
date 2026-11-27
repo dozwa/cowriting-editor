@@ -41,7 +41,11 @@ export const bridgeApi: Api = {
   pickLinkedFile: async () => null,
   pickPicture: () => Promise.reject('The bridge chooses no pictures. Type the path into the text.'),
   picture: path => call('picture', { path }),
-  copyPicture: path => call('copy_picture', { path }),
+  copyPicture: (path, into) => call('copy_picture', { path, into: into ?? null }),
+  pastePicture: (kind, content) => call('paste_picture', { kind, content }),
+  picturesFolder: () => call('pictures_folder'),
+  // a browser hands a dropped file to the page, without its path: the editor takes it like a pasted picture
+  onFilesDropped: () => () => {},
   linkFile: (path, personas) => call('link_file', { path, personas }),
   unlinkFile: path => call('unlink_file', { path }),
   setProject: () => Promise.reject('The bridge keeps general settings only.'),

@@ -209,6 +209,13 @@ function format(view: EditorView, kind: Format, picture?: string) {
   view.focus()
 }
 
+/** The picture in what was pasted or dropped, when that is a picture and not text that happens to come with one. */
+function pictureIn(carried: DataTransfer | null): File | null {
+  const picture = [...(carried?.files ?? [])].find(file => file.type.startsWith('image/') || file.type === 'application/pdf')
+  // text copied from a word processor comes with a picture of itself: there the text is what is meant
+  return picture === undefined || (carried?.getData('text/plain') ?? '') !== '' ? null : picture
+}
+
 export type Editor = {
   getText(): string
   setText(text: string): void
@@ -221,6 +228,8 @@ export type Editor = {
   /** Opens the bar for finding and replacing, with the cursor in it. */
   find(): void
   setView(view: View): void
+  /** Puts the cursor at a point of the window, for what is dropped there. Outside the text it stays where it is. */
+  cursorAt(x: number, y: number): void
   focus(): void
   destroy(): void
 }
@@ -229,6 +238,8 @@ export type EditorHandlers = {
   onChange(): void
   /** Text was pasted or dropped into the document; `line` is where it starts now, 1-based. */
   onPaste(pasted: string, line: number): void
+  /** A picture was pasted from the clipboard, or dropped where a browser hands the page the file itself. The cursor is where it belongs. */
+  onPicture?(file: File): void
   /** What is selected changed: from where to where, in the editor's positions; the same twice for a bare cursor. */
   onSelect?(from: number, to: number): void
 }
@@ -254,6 +265,25 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
         numbering.of([]),
         styling.of(livePreview),
         EditorView.lineWrapping,
+        // a picture from the clipboard or dropped as a file is no text: it is handed on, and nothing is typed here
+        EditorView.domEventHandlers({
+          paste(event) {
+            const picture = pictureIn(event.clipboardData)
+            if (picture === null || handlers.onPicture === undefined) return false
+            event.preventDefault()
+            handlers.onPicture(picture)
+            return true
+          },
+          drop(event, view) {
+            const picture = pictureIn(event.dataTransfer)
+            if (picture === null || handlers.onPicture === undefined) return false
+            event.preventDefault()
+            const at = view.posAtCoords({ x: event.clientX, y: event.clientY })
+            if (at !== null) view.dispatch({ selection: { anchor: at } })
+            handlers.onPicture(picture)
+            return true
+          },
+        }),
         spelling.of(attributes(true, 'en')),
         EditorView.updateListener.of(update => {
           if (update.selectionSet || update.docChanged) handlers.onSelect?.(update.state.selection.main.from, update.state.selection.main.to)
@@ -287,6 +317,10 @@ export function createEditor(parent: HTMLElement, handlers: EditorHandlers): Edi
       view.dispatch({
         effects: [numbering.reconfigure(isNumbered ? lineNumbers() : []), styling.reconfigure(source ? EditorView.editorAttributes.of({ class: 'cm-source' }) : livePreview), spelling.reconfigure(attributes(spellcheck, language))],
       }),
+    cursorAt: (x, y) => {
+      const at = view.posAtCoords({ x, y })
+      if (at !== null) view.dispatch({ selection: { anchor: at } })
+    },
     focus: () => view.focus(),
     destroy: () => view.destroy(),
   }

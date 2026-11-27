@@ -14,6 +14,7 @@ function standIn() {
   const api = {
     recordSeen: async (seen: Seen[]) => void recorded.push(seen),
     recentDiagnostics: async () => '',
+    onFilesDropped: () => () => 'stopped',
     saveDocument: async (_text: string) => ((time += 12), []),
     scope: async (_text: string) => ((time += 3), null),
     ask: async (_input: { text: string }) => {
@@ -67,5 +68,13 @@ test('without an app to hand it to, nothing is kept', () => {
   seeError('anything')
   const { recorded } = standIn()
   flushDiagnostics()
+  expect(recorded).toEqual([])
+})
+
+test('listening for dropped files answers at once with the way to end it, not with a promise of one', () => {
+  const { api, recorded } = standIn()
+  const stop = api.onFilesDropped(() => {})
+  expect(typeof stop).toBe('function')
+  expect(stop()).toBe('stopped')
   expect(recorded).toEqual([])
 })

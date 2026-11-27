@@ -90,7 +90,7 @@ fn a_copy_goes_into_images_beside_the_document_and_the_picture_stays_as_it_is() 
     assert_eq!(std::fs::read(&source).unwrap(), original, "the picture itself is untouched");
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), "# Pictures\n");
     // copy_beside is what the session calls
-    assert_eq!(copy_beside(&folder.path(""), &source).unwrap().path, "<images/my plot.png>");
+    assert_eq!(copy_beside(&folder.path(""), "images", &source).unwrap().path, "<images/my plot.png>");
 }
 
 #[test]
@@ -221,4 +221,60 @@ fn a_shared_picture_is_still_there_for_the_document_that_stays() {
     session.move_with_pictures(&folder.path("elsewhere/chapter.md"), &text, Along::Copy).unwrap();
     assert_eq!(std::fs::read(folder.path("paper/plot.png")).unwrap(), std::fs::read(fixture()).unwrap(), "other.md still finds its picture");
     assert_eq!(std::fs::read(folder.path("elsewhere/plot.png")).unwrap(), std::fs::read(fixture()).unwrap());
+}
+
+// ------------------------------------------------------------ pictures without a file, and the folder's name
+
+use cowriting_app::picture::{folder_name, save_beside};
+
+#[test]
+fn a_picture_from_the_clipboard_is_saved_beside_the_document_under_a_name_made_of_the_day() {
+    let folder = Folder::new("pasted");
+    std::fs::write(folder.path("thesis.md"), "# Results\n").unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    let shot = std::fs::read(fixture()).unwrap();
+    let saved = session.paste_picture("png", &shot).unwrap();
+    let day = &saved.name["picture-".len().."picture-2026-11-27".len()];
+    assert_eq!((saved.path.clone(), saved.is_inside), (format!("images/picture-{day}.png"), true));
+    assert_eq!(std::fs::read(folder.path(&saved.path)).unwrap(), shot);
+    // the same picture again is the same file; another one of that day gets a number
+    assert_eq!(session.paste_picture("PNG", &shot).unwrap().path, saved.path);
+    assert_eq!(session.paste_picture(".png", b"another picture").unwrap().path, format!("images/picture-{day}-2.png"));
+    // what the export cannot use, and nothing at all, are refused; no file is left of either
+    assert!(session.paste_picture("heic", &shot).unwrap_err().contains("cannot be used by the export"));
+    assert!(session.paste_picture("png", &[]).unwrap_err().contains("empty"));
+    assert_eq!(std::fs::read_dir(folder.path("images")).unwrap().count(), 2);
+    // save_beside is what the session calls
+    assert_eq!(save_beside(&folder.path(""), "images", "png", &shot, day).unwrap().path, saved.path);
+}
+
+#[test]
+fn the_pictures_folder_can_be_named_for_a_project_and_is_one_plain_folder_beside_the_document() {
+    let folder = Folder::new("folder-name");
+    let elsewhere = Folder::new("folder-name-elsewhere");
+    std::fs::write(folder.path("thesis.md"), "# Results\n").unwrap();
+    std::fs::copy(fixture(), elsewhere.path("plot.png")).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    assert_eq!(session.pictures_folder(), "images");
+    session.set_pictures_folder(" figures ").unwrap();
+    assert_eq!(session.pictures_folder(), "figures");
+    assert_eq!(session.copy_picture(&elsewhere.path("plot.png")).unwrap().path, "figures/plot.png");
+    assert!(session.paste_picture("png", b"a shot").unwrap().path.starts_with("figures/picture-"));
+    assert!(Path::new(&folder.path("figures/plot.png")).is_file() && !Path::new(&folder.path("images")).exists());
+
+    // it is kept with the project: there after the editor was closed, and when other settings of the project are saved
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("thesis.md")).unwrap();
+    session.set_overrides(cowriting_core::project::Project { ai_language: Some("de".into()), ..Default::default() }).unwrap();
+    assert_eq!(session.pictures_folder(), "figures");
+    // back to the standard, which is not written down
+    session.set_pictures_folder("images").unwrap();
+    assert_eq!(session.project_view().overrides.pictures_folder, None);
+
+    // a name that would lead out of the document's folder, or hide the folder, is refused and changes nothing
+    for odd in ["", "..", "../shared", "a/b", "a\\b", ".hidden", "C:pictures", "what?"] {
+        assert!(folder_name(odd).is_err(), "{odd:?}");
+        assert!(session.set_pictures_folder(odd).is_err(), "{odd:?}");
+    }
+    assert_eq!(folder_name("Abbildungen 2026").unwrap(), "Abbildungen 2026");
+    assert_eq!(session.pictures_folder(), "images");
 }

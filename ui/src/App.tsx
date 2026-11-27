@@ -67,6 +67,9 @@ function foundNotice(rows: AiTextRow[]): string {
   return m.app.found(words, rows.every(row => row.source === 'paste'), rows.every(row => row.kind === 'correction'))
 }
 
+/** The kinds of picture the export can use, by what a browser calls them, with their file ending. */
+const PICTURE_KINDS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/webp': 'webp', 'application/pdf': 'pdf' }
+
 export function App({ api, makeEditor = createEditor }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const editor = useRef<Editor | null>(null)
@@ -299,6 +302,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setDirty(false)
       setLog(await api.logView(opened.text))
       setMarks(await api.hintMarks())
+      setPicturesFolder(await api.picturesFolder())
       setParty(await api.party())
       setProject(await api.project())
       // a document can have an AI of its own: what holds now is asked for again
@@ -331,6 +335,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
         }
       },
       onPaste: (text, line) => void pastedRef.current(text, line),
+      onPicture: file => void pastePictureRef.current(file),
       // what is selected is counted once the selection rests; a bare cursor shows the document's count again
       onSelect: (from, to) => {
         window.clearTimeout(selecting.current)
@@ -515,6 +520,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
 
   // the picture button: the author chooses the file, and the editor writes its path as seen from the document
   const [chosenPicture, setChosenPicture] = useState<{ file: string; seen: Picture } | null>(null)
+  const [picturesFolder, setPicturesFolder] = useState('images')
+  const pastePictureRef = useRef<(file: File) => Promise<void>>(async () => {})
+  const dropFilesRef = useRef<(paths: string[], x: number, y: number) => Promise<void>>(async () => {})
   const insertPicture = async () => {
     if (doc === null) return
     try {
@@ -528,14 +536,44 @@ export function App({ api, makeEditor = createEditor }: Props) {
       fail(e)
     }
   }
-  const copyPicture = async (file: string) => {
+  const copyPicture = async (file: string, into: string) => {
     setChosenPicture(null)
     try {
-      editor.current?.format('image', (await api.copyPicture(file)).path)
+      editor.current?.format('image', (await api.copyPicture(file, into)).path)
+      setPicturesFolder(await api.picturesFolder())
     } catch (e) {
       fail(e)
     }
   }
+  // a picture from the clipboard has no file: it is saved into the project's pictures folder and named in the text
+  const pastePicture = async (file: File) => {
+    const kind = PICTURE_KINDS[file.type]
+    if (kind === undefined) return fail(m.app.notAPicture(file.type))
+    try {
+      const saved = await api.pastePicture(kind, Array.from(new Uint8Array(await file.arrayBuffer())))
+      editor.current?.format('image', saved.path)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  pastePictureRef.current = pastePicture
+  // files dropped on the app's window: each picture as the button would take it, where it was dropped
+  const dropFiles = async (paths: string[], x: number, y: number) => {
+    if (doc === null || dialogRef.current !== null) return
+    editor.current?.cursorAt(x, y)
+    for (const file of paths) {
+      try {
+        const seen = await api.picture(file)
+        if (seen.isInside) editor.current?.format('image', seen.path)
+        // one question at a time: a picture outside the folder is asked about, and the rest of the drop waits for another
+        else return setChosenPicture({ file, seen })
+      } catch (e) {
+        return fail(e)
+      }
+    }
+  }
+  dropFilesRef.current = dropFiles
+  useEffect(() => api.onFilesDropped((paths, x, y) => void dropFilesRef.current(paths, x, y)), [api])
   const format = (kind: Format) => (kind === 'image' ? void insertPicture() : editor.current?.format(kind))
 
   // the shortcuts, as the author set them; they rest while a dialog is open
@@ -837,7 +875,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       {settingsDialog}
       {otherDialogs}
       {moving !== null && <MovePicturesDialog inside={moving.pictures.inside} outside={moving.pictures.outside} onCopy={() => void moveWith('copy')} onLeave={() => void moveWith('leave')} onClose={() => setMoving(null)} />}
-      {chosenPicture !== null && <PictureDialog name={chosenPicture.seen.name} linkedAs={chosenPicture.seen.path} onCopy={() => void copyPicture(chosenPicture.file)} onLink={() => (editor.current?.format('image', chosenPicture.seen.path), setChosenPicture(null))} onClose={() => setChosenPicture(null)} />}
+      {chosenPicture !== null && <PictureDialog name={chosenPicture.seen.name} linkedAs={chosenPicture.seen.path} folder={picturesFolder} onCopy={into => void copyPicture(chosenPicture.file, into)} onLink={() => (editor.current?.format('image', chosenPicture.seen.path), setChosenPicture(null))} onClose={() => setChosenPicture(null)} />}
       {dialog === 'markdown' && <MarkdownHelp onOpen={which => void api.openGuide(which).catch(fail)} onClose={() => setDialog(null)} />}
       {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
       {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} onClose={() => setDialog(null)} />}

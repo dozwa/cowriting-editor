@@ -7,8 +7,24 @@ use std::path::Path;
 
 /// What the export can put into a PDF or a Word file.
 pub const KINDS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "svg", "webp", "pdf"];
-/// The folder beside the document that copies go into.
+/// The folder beside the document that copies go into, unless the project names another.
 pub const FOLDER: &str = "images";
+
+/// A name the author gives the pictures' folder: one folder beside the document, by a plain name.
+pub fn folder_name(wanted: &str) -> Result<String, String> {
+    let name = wanted.trim();
+    let is_plain = !name.is_empty()
+        && name.chars().count() <= 60
+        && !name.starts_with('.')
+        && !name.ends_with('.')
+        && !name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+        && !name.chars().any(char::is_control);
+    if is_plain {
+        Ok(name.to_string())
+    } else {
+        Err(format!("“{wanted}” cannot be the pictures' folder: it needs a plain name, such as images or figures, without slashes and not starting with a dot."))
+    }
+}
 
 /// A picture as the document would name it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -78,26 +94,45 @@ pub fn check(file: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Copies the picture into `images/` beside the document and returns it as the document names it then.
-/// A file of that name with other content is kept: the copy gets a number. The same picture is not copied twice.
-pub fn copy_beside(folder: &str, file: &str) -> Result<Picture, String> {
+/// Copies the picture into the folder `into` beside the document (`images`, unless the project names another)
+/// and returns it as the document names it then. A file of that name with other content is kept: the copy
+/// gets a number. The same picture is not copied twice.
+pub fn copy_beside(folder: &str, into: &str, file: &str) -> Result<Picture, String> {
     check(file)?;
     let content = std::fs::read(file).map_err(|e| format!("{file} could not be read: {e}"))?;
     let source = Path::new(file);
     let (stem, kind) = (source.file_stem().and_then(|s| s.to_str()).unwrap_or("picture"), source.extension().and_then(|s| s.to_str()).unwrap_or("png"));
-    let target_folder = Path::new(folder).join(FOLDER);
-    std::fs::create_dir_all(&target_folder).map_err(|e| format!("The folder {FOLDER} could not be made beside the document: {e}"))?;
+    put_beside(folder, into, stem, kind, &content)
+}
+
+/// Saves a picture that came without a file, from the clipboard or dropped into a browser, into the
+/// folder `into` beside the document, under a name made of the day: `picture-2026-11-27.png`, then `-2`, `-3`.
+pub fn save_beside(folder: &str, into: &str, kind: &str, content: &[u8], day: &str) -> Result<Picture, String> {
+    let kind = kind.trim_start_matches('.').to_ascii_lowercase();
+    if !KINDS.contains(&kind.as_str()) {
+        return Err(format!("A picture of the kind “{kind}” cannot be used by the export. It takes PNG, JPEG, GIF, SVG, WebP and PDF."));
+    }
+    if content.is_empty() {
+        return Err("The picture is empty.".into());
+    }
+    put_beside(folder, into, &format!("picture-{day}"), &kind, content)
+}
+
+fn put_beside(folder: &str, into: &str, stem: &str, kind: &str, content: &[u8]) -> Result<Picture, String> {
+    let into = folder_name(into)?;
+    let target_folder = Path::new(folder).join(&into);
+    std::fs::create_dir_all(&target_folder).map_err(|e| format!("The folder {into} could not be made beside the document: {e}"))?;
     for n in 1..1000 {
         let name = if n == 1 { format!("{stem}.{kind}") } else { format!("{stem}-{n}.{kind}") };
         let target = target_folder.join(&name);
         match std::fs::read(&target) {
             Ok(there) if there != content => continue,
             Ok(_) => {}
-            Err(_) => std::fs::write(&target, &content).map_err(|e| format!("The picture could not be copied to {}: {e}", target.display()))?,
+            Err(_) => std::fs::write(&target, content).map_err(|e| format!("The picture could not be copied to {}: {e}", target.display()))?,
         }
-        return Ok(Picture { path: written(&format!("{FOLDER}/{name}")), name, is_inside: true });
+        return Ok(Picture { path: written(&format!("{into}/{name}")), name, is_inside: true });
     }
-    Err(format!("There are too many pictures named {stem} in {FOLDER}."))
+    Err(format!("There are too many pictures named {stem} in {into}."))
 }
 
 // ------------------------------------------------------------ when the document moves

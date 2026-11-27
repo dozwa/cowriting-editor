@@ -899,7 +899,30 @@ impl Session {
 
     /// Copies a picture into `images/` beside the document; the picture itself stays where and as it is.
     pub fn copy_picture(&self, path: &str) -> Result<picture::Picture, String> {
-        picture::copy_beside(&self.workspace.sidecar.folder, path)
+        picture::copy_beside(&self.workspace.sidecar.folder, &self.pictures_folder(), path)
+    }
+
+    /// The folder beside the document that copies of pictures go into: `images`, or what the author named for this project.
+    pub fn pictures_folder(&self) -> String {
+        Project::load(self.workspace.host.as_ref(), &self.workspace.sidecar)
+            .pictures_folder
+            .and_then(|name| picture::folder_name(&name).ok())
+            .unwrap_or_else(|| picture::FOLDER.to_string())
+    }
+
+    /// Names the folder for this project's pictures. What is in the old folder stays there, and the text is not touched.
+    pub fn set_pictures_folder(&self, name: &str) -> Result<(), String> {
+        let name = picture::folder_name(name)?;
+        self.change_project(|project| {
+            project.pictures_folder = (name != picture::FOLDER).then_some(name);
+            Ok(())
+        })
+    }
+
+    /// Saves a picture that came without a file (from the clipboard) beside the document, and returns it as the document names it.
+    pub fn paste_picture(&self, kind: &str, content: &[u8]) -> Result<picture::Picture, String> {
+        let day: String = self.workspace.host.now().chars().take(10).collect();
+        picture::save_beside(&self.workspace.sidecar.folder, &self.pictures_folder(), kind, content, &day)
     }
 
     /// Where the editor keeps the text of a linked Word file or PDF: in the project's folder, under the file's name.

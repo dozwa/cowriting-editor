@@ -6,8 +6,12 @@ import type { Api } from './api'
 
 export type Seen = { kind: 'call' | 'view' | 'error'; name: string; ok: boolean; ms: number; count: number; message: string }
 
-/** Calls that are not recorded: the recording itself. */
-const UNSEEN = new Set(['recordSeen', 'recentDiagnostics'])
+/**
+ * Calls that are not recorded and are handed through as they are: the recording itself, and what
+ * is no command but a listening that answers at once with the way to end it. Wrapped like a command,
+ * that answer would come as a promise, and the window that waits for a function would not come up.
+ */
+const UNSEEN = new Set(['recordSeen', 'recentDiagnostics', 'onFilesDropped'])
 /** What waits is handed over this long after the first entry; a failure at once. */
 const WAIT_MS = 5000
 const MOST_WAITING = 50

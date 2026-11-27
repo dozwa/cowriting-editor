@@ -20,6 +20,7 @@ export const app = {
   saved: 'saved',
   notSaved: 'not saved',
   words: (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'word' : 'words'}`,
+  notAPicture: (kind: string) => `A picture of the kind “${kind}” cannot be used by the export. It takes PNG, JPEG, GIF, SVG, WebP and PDF.`,
   chars: (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'character' : 'characters'}`,
   // while text is selected: its count in place of the document's, which the tooltip still names
   selectedCount: (words: number, chars: number) => `Selected: ${words.toLocaleString('en')} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString('en')} ${chars === 1 ? 'character' : 'characters'}`,

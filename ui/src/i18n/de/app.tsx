@@ -19,6 +19,7 @@ export const app: typeof pattern = {
   saved: 'gespeichert',
   notSaved: 'nicht gespeichert',
   words: (n: number) => `${n.toLocaleString('de')} ${n === 1 ? 'Wort' : 'Wörter'}`,
+  notAPicture: (kind: string) => `Ein Bild der Art „${kind}“ kann der Export nicht verwenden. Er nimmt PNG, JPEG, GIF, SVG, WebP und PDF.`,
   chars: (n: number) => `${n.toLocaleString('de')} Zeichen`,
   selectedCount: (words: number, chars: number) => `Markiert: ${words.toLocaleString('de')} ${words === 1 ? 'Wort' : 'Wörter'} · ${chars.toLocaleString('de')} Zeichen`,
   selectedDetail: (withoutSpaces: number, allWords: number, allChars: number) =>

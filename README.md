@@ -105,7 +105,13 @@ one step to undo. A match in marks the preview hides, such as a link's address, 
 The **Picture** button lets you choose the file (PNG, JPEG, GIF, SVG, WebP or PDF) and writes its
 path as it lies from your document. A picture that is not in the document's folder can be copied
 into a folder `images` beside the document, so that both move together, or named where it is;
-the picture itself is never moved or changed.
+the picture itself is never moved or changed. The dialog that asks lets you name that folder
+(`figures`, `Abbildungen`); the name is kept for the project.
+
+A picture can also be **dropped** on the text, which places it where you drop it and otherwise
+works as the button does, or **pasted** from the clipboard (a screenshot, a figure copied from
+another program). A pasted picture has no file yet: it is saved into the project's pictures
+folder as `picture-<date>.png` and named in the text. Neither is taken for pasted text.
 
 **Comment out** puts `<!-- -->` around what you selected, or around the line the cursor is in: a
 sentence you are not sure about, a note to yourself. It stays in the file, is not counted as words

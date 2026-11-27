@@ -9,7 +9,8 @@ export const dialogs = {
   // a chosen picture that lies outside the document's folder
   pictureTitle: 'Where the picture lies',
   pictureOutside: (name: string) => `${name} is not in your document's folder. When you move or share the document, the picture would stay behind.`,
-  pictureChoice: (linkedAs: string) => `A copy goes into the folder “images” beside your document; the picture itself stays where and as it is. Without a copy the document names it where it lies: ${linkedAs}`,
+  pictureChoice: (linkedAs: string) => `A copy goes into a folder beside your document; the picture itself stays where and as it is. Without a copy the document names it where it lies: ${linkedAs}`,
+  pictureFolder: 'Folder for this project’s pictures, beside the document',
   pictureCopy: 'Copy it beside the document',
   pictureLink: 'Name it where it is',
   pictureCancel: 'Cancel',

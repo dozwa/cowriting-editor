@@ -387,8 +387,25 @@ fn picture(editor: State<Editor>, path: String) -> Result<cowriting_app::picture
 
 /// Copies a picture the author chose into `images/` beside the open document.
 #[tauri::command]
-fn copy_picture(editor: State<Editor>, path: String) -> Result<cowriting_app::picture::Picture, String> {
-    editor.session()?.copy_picture(&path)
+fn copy_picture(editor: State<Editor>, path: String, into: Option<String>) -> Result<cowriting_app::picture::Picture, String> {
+    let session = editor.session()?;
+    // the author named the folder in the dialog: it is this project's from now on
+    if let Some(into) = into.filter(|into| *into != session.pictures_folder()) {
+        session.set_pictures_folder(&into)?;
+    }
+    session.copy_picture(&path)
+}
+
+/// Saves a picture from the clipboard into the project's pictures folder. `kind` is its file ending.
+#[tauri::command]
+fn paste_picture(editor: State<Editor>, kind: String, content: Vec<u8>) -> Result<cowriting_app::picture::Picture, String> {
+    editor.session()?.paste_picture(&kind, &content)
+}
+
+/// The folder beside the document that this project's pictures are copied into.
+#[tauri::command]
+fn pictures_folder(editor: State<Editor>) -> Result<String, String> {
+    Ok(editor.session()?.pictures_folder())
 }
 
 #[tauri::command]
@@ -923,6 +940,8 @@ fn main() {
             link_file,
             picture,
             copy_picture,
+            paste_picture,
+            pictures_folder,
             unlink_file,
             set_project,
             set_prompt,

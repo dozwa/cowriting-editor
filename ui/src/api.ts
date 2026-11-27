@@ -1,6 +1,7 @@
 // Everything the window asks of the app. The window itself has no file or network access:
 // the document, the log and the API key are only touched on the Rust side.
 import { Channel, invoke } from '@tauri-apps/api/core'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { confirm, open, save } from '@tauri-apps/plugin-dialog'
 import { m } from './i18n'
 import type { Seen } from './diagnostics'
@@ -266,7 +267,21 @@ export const api = {
   /** How the open document would name that picture. */
   picture: (path: string) => invoke<Picture>('picture', { path }),
   /** Copies the picture into `images/` beside the document; the picture itself stays as it is. */
-  copyPicture: (path: string) => invoke<Picture>('copy_picture', { path }),
+  copyPicture: (path: string, into?: string) => invoke<Picture>('copy_picture', { path, into: into ?? null }),
+  /** Saves a picture that came without a file (from the clipboard) into the project's pictures folder. `kind` is its file ending. */
+  pastePicture: (kind: string, content: number[]) => invoke<Picture>('paste_picture', { kind, content }),
+  /** The folder beside the document that this project's pictures are copied into. */
+  picturesFolder: () => invoke<string>('pictures_folder'),
+  /**
+   * Tells `dropped` when files are dropped on the window: their paths, and where, in the window's own
+   * measure. The app's window gets drops from the system, not from the page. Returns what ends the listening.
+   */
+  onFilesDropped: (dropped: (paths: string[], x: number, y: number) => void): (() => void) => {
+    const listening = getCurrentWebview().onDragDropEvent(event => {
+      if (event.payload.type === 'drop') dropped(event.payload.paths, event.payload.position.x / window.devicePixelRatio, event.payload.position.y / window.devicePixelRatio)
+    })
+    return () => void listening.then(stop => stop())
+  },
   /** Asks the author for a file to link; null when they cancel. */
   pickLinkedFile: async (): Promise<string | null> => {
     const path = await open({ multiple: false, directory: false })
