@@ -61,3 +61,18 @@ fn the_table_in_latex_is_as_wide_as_the_line() {
     let named = disclosure(&parse_log(&log), "thesis.md", Lang::En, DocFormat::Tex, Profile::Editor);
     assert!(named.contains("hf.co/\\allowbreak{}some\\_\\allowbreak{}one/\\allowbreak{}model:\\allowbreak{}latest"), "{named}");
 }
+
+#[test]
+fn a_latex_file_says_first_which_fonts_pdflatex_needs() {
+    use cowriting_core::disclosure::prompts_appendix;
+    for (lang, word) in [(Lang::En, "Without lmodern"), (Lang::De, "Ohne lmodern")] {
+        let appendix = prompts_appendix(&full_log(), "thesis.md", lang, DocFormat::Tex, true, Profile::Editor);
+        for text in [register(lang, DocFormat::Tex), appendix] {
+            let lines: Vec<&str> = text.lines().collect();
+            assert!(lines[..3].iter().all(|line| line.starts_with("% ")) && lines[3].starts_with("\\section*{"), "{:?}", &lines[..4]);
+            assert!(lines[0].contains("\\usepackage[T1]{fontenc}") && lines[0].contains("\\usepackage{lmodern}") && lines[1].contains(word) && lines[2].contains("XeLaTeX"));
+        }
+        // the markdown file has no such note
+        assert!(register(lang, DocFormat::Md).starts_with("# "));
+    }
+}

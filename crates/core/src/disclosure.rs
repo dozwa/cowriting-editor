@@ -216,6 +216,24 @@ fn breakable(escaped: &str) -> String {
     escaped.replace(':', ":\\allowbreak{}").replace('/', "/\\allowbreak{}").replace("\\_", "\\_\\allowbreak{}")
 }
 
+/// What the editor's LaTeX files say first, as comments: which fonts pdfLaTeX needs for them.
+/// Without outline fonts it sets „ “ ß and the like from bitmaps, and text copied from the PDF has other characters in their place.
+fn tex_note(lang: Lang) -> Vec<String> {
+    let lines: [&str; 3] = match lang {
+        Lang::De => [
+            "% Mit pdfLaTeX: \\usepackage[T1]{fontenc} und \\usepackage{lmodern} in die Präambel (inputenc: utf8).",
+            "% Ohne lmodern werden Anführungszeichen, ß und Umlaute beim Kopieren aus dem PDF zu anderen Zeichen.",
+            "% XeLaTeX und LuaLaTeX brauchen beides nicht.",
+        ],
+        Lang::En => [
+            "% With pdfLaTeX: put \\usepackage[T1]{fontenc} and \\usepackage{lmodern} into the preamble (inputenc: utf8).",
+            "% Without lmodern, quotation marks and accented letters become other characters in text copied from the PDF.",
+            "% XeLaTeX and LuaLaTeX need neither.",
+        ],
+    };
+    lines.iter().map(|line| line.to_string()).collect()
+}
+
 /// Character by character, so the braces an escape introduces are not escaped again.
 pub fn tex_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -543,6 +561,9 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 Profile::Plugin => format!("\\subsection*{{{}}}", e(heading)),
                 Profile::Editor => format!("\\subsection*{{\\raggedright {}}}", e(heading)),
             };
+            if profile == Profile::Editor {
+                out.extend(tex_note(lang));
+            }
             out.extend([format!("\\section*{{{}}}", e(&title)), String::new(), e(&intro), String::new()]);
             // The plugin's table is 0.9 of the line plus the space between its columns: wider than the text block.
             // The editor's fills the line exactly, in smaller type, with ragged cells whose first word may be hyphenated.
@@ -679,6 +700,9 @@ pub fn prompts_appendix(entries: &[LogEntry], name: &str, lang: Lang, format: Do
         }
         DocFormat::Tex => {
             let e = tex_escape;
+            if profile == Profile::Editor {
+                out.extend(tex_note(lang));
+            }
             out.extend([format!("\\section*{{{}}}", e(&title)), String::new(), e(&intro), String::new(), "\\begin{enumerate}".to_string()]);
             for t in &all {
                 out.push(format!("  \\item \\textbf{{{}}} \\\\", e(&heading(t))));
