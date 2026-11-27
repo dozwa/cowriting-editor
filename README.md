@@ -277,7 +277,7 @@ detected, and the disclosure says so.
 For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the log
 (`ai-log/YYYY-MM.jsonl`), the document as it was at each question (`snapshots/`), the AI's notes
 (`notes/`, the only place it can write), the disclosure (`disclosure/`), the last reference check
-(`verify.json`), the hints you ticked off (`marks.json`) and the references an export took from Zotero (`export/references.json`). What you tell the
+(`verify.json`), and the hints you ticked off (`marks.json`). What you tell the
 experts is in `party.md`, experts you made in `party/<id>.md`, both in the project's folder (see Projects): plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.
 

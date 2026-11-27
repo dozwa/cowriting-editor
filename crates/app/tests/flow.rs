@@ -548,20 +548,18 @@ fn an_export_is_a_pdf_or_word_file_with_the_references_behind_the_citekeys() {
     assert!(refused.contains("refs.bib") && refused.contains("line"), "{refused}");
     assert!(!Path::new(&folder.path("second.docx")).exists());
     std::fs::write(folder.path("refs.bib"), bib).unwrap();
-    // the export wrote the Word file and the references it took from Zotero, and left everything else as it was
-    assert_eq!(
-        folder.files(),
-        [
-            ".cowriting/thesis.md/doc.json",
-            ".cowriting/thesis.md/export/references.json",
-            ".cowriting/thesis.md/sources.json",
-            "pubmed.nbib",
-            "refs.bib",
-            "thesis.docx",
-            "thesis.md"
-        ]
-    );
+    // the export wrote the Word file and left everything else as it was: what it took from Zotero is kept nowhere
+    assert_eq!(folder.files(), [".cowriting/thesis.md/doc.json", ".cowriting/thesis.md/sources.json", "pubmed.nbib", "refs.bib", "thesis.docx", "thesis.md"]);
     assert_eq!(std::fs::read_to_string(folder.path("thesis.md")).unwrap(), text);
+
+    // a document that was never put to the AI gets no folder for its record from an export, whatever Zotero gave (#35)
+    let fresh = Folder::new("export-fresh");
+    std::fs::write(fresh.path("paper.md"), text).unwrap();
+    std::fs::write(fresh.path("refs.bib"), bib).unwrap();
+    let (unasked, _) = Session::open(Arc::new(DiskHost), &fresh.path("paper.md")).unwrap();
+    let made = unasked.export_document(FileFormat::Docx, &fresh.path("paper.docx"), text, Some(&zotero), &PdfChoice::default()).unwrap();
+    assert_eq!(made.from_zotero, 1);
+    assert_eq!(fresh.files(), ["paper.docx", "paper.md", "refs.bib"]);
 
     // a PDF with the editor's own Typst, on the paper the author chose; an engine that is not there is refused
     let tools = cowriting_app::export::local_tools();

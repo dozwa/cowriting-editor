@@ -738,11 +738,10 @@ impl Session {
                 "A PDF needs a program that typesets it, and none is installed: a LaTeX distribution (TeX Live, MacTeX, MiKTeX) or Typst. Word export works without.".into()
             );
         }
-        let kept = sidecar.export_references_json();
-        if let Some(csl) = zotero {
-            sidecar.ensure(host, document_text).map_err(error)?;
-            host.write(&kept, csl).map_err(|e| format!("The references could not be saved: {e}"))?;
-        }
+        // what Zotero gave is pandoc's to read for this one export: in a temporary file, so that an export
+        // makes no folder for the AI's record beside a document that was never put to the AI
+        let kept = std::env::temp_dir().join(format!("cowriting-export-{}-{}.json", std::process::id(), host.new_id()));
+        let kept = kept.to_string_lossy().into_owned();
         let used = export::references(&export::bibliography_of(&self.workspace, document_text), document_text, zotero.map(|csl| (kept.as_str(), csl)));
         // a style the document names is pandoc's to read; one chosen here is handed over, if it can be read
         let style = load_style(host, sidecar, document_text).filter(|style| !style.is_from_document);
@@ -764,8 +763,12 @@ impl Session {
         let metadata = std::env::temp_dir().join(format!("cowriting-export-{}-{}.yaml", std::process::id(), host.new_id()));
         std::fs::write(&metadata, layout.metadata(&self.workspace.language)).map_err(|e| format!("The export's settings could not be written: {e}"))?;
         args.extend(["--metadata-file".to_string(), metadata.to_string_lossy().into_owned()]);
-        let made = export::run_pandoc(document_text, &sidecar.folder, &args);
+        let made = match zotero.map(|csl| std::fs::write(&kept, csl)) {
+            Some(Err(e)) => Err(format!("The references from Zotero could not be handed to the export: {e}")),
+            _ => export::run_pandoc(document_text, &sidecar.folder, &args),
+        };
         let _ = std::fs::remove_file(&metadata);
+        let _ = std::fs::remove_file(&kept);
         let warnings = made?;
         Ok(DocumentExport { path: target.to_string(), cited: cited_keys(document_text).len(), from_zotero: used.from_zotero, missing: used.missing, warnings })
     }

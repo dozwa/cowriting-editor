@@ -94,6 +94,12 @@ to a new heading with its version and date; the release workflow does that (see 
   - LaTeX: the files begin with a note on the fonts pdfLaTeX needs. Without `lmodern`, text
     copied from the PDF has other characters for quotation marks, ß and umlauts. (#20)
 
+- **An export makes no folder for the AI's record.** With Zotero running, a PDF or Word export
+  kept the references it took from Zotero in `.cowriting/<document>/export/references.json`, and
+  made that folder for a document that had never been put to the AI. The references now go to a
+  temporary file that is removed after the export. A file an earlier export left there is not
+  used any more and can be deleted. (#35)
+
 ### Changed
 
 - The MIT licence has its own file.

@@ -181,11 +181,6 @@ impl Sidecar {
         format!("{}/sources.json", self.settings_dir())
     }
 
-    /// The references an export takes from the author's Zotero, for pandoc.
-    pub fn export_references_json(&self) -> String {
-        format!("{}/export/references.json", self.dir())
-    }
-
     /// What the last reference check found.
     pub fn verify_json(&self) -> String {
         format!("{}/verify.json", self.dir())
