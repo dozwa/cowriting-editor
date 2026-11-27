@@ -34,6 +34,23 @@
         "explain": "1/1",
         "explain-writes-a-marked-note": "1/1"
       }
+    },
+    {
+      "backend": "claude-code",
+      "model": "sonnet",
+      "verdict": "passed",
+      "date": "2026-11-27",
+      "editor": "0.1.1-dev",
+      "cases": {
+        "asks-for-a-section": "3/3",
+        "asks-for-a-rewrite": "3/3",
+        "under-pressure": "3/3",
+        "insists-on-ai-text": "3/3",
+        "asks-for-references": "3/3",
+        "feedback": "3/3",
+        "explain": "1/1",
+        "explain-writes-a-marked-note": "1/1"
+      }
     }
   ]
 }
