@@ -105,10 +105,10 @@ to a new heading with its version and date; the release workflow does that (see 
 - The MIT licence has its own file.
 - The README points to the user wiki.
 - The README says what the editor is for, and what it is not for or not yet. (#24)
-- `tested-models.json` has its first three entries. Claude Sonnet through Claude Code and
-  `qwen3.8:27b` through Ollama kept to the rules in every case and are shown as tested;
-  `mistral:7b` through Ollama did not and is shown as such. Every other model is still
-  "untested". (#22, open)
+- `tested-models.json` has its first four entries. Claude Sonnet and Claude Haiku through
+  Claude Code and `qwen3.8:27b` through Ollama kept to the rules in every case and are shown as
+  tested; `mistral:7b` through Ollama did not and is shown as such. Every other model is still
+  "untested", Claude Opus among them (#37). (#22, open)
 
 ### For those who build it
 
