@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CoWriting Editor",
-  "version": "0.1.0",
-  "identifier": "io.github.dozwa.cowriting-editor",
+  "productName": "CoWriting Editor Dev",
+  "version": "0.1.1-dev",
+  "identifier": "io.github.dozwa.cowriting-editor.dev",
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:1420",
@@ -10,14 +10,14 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "CoWriting Editor", "width": 1320, "height": 860, "minWidth": 820, "minHeight": 520 }],
+    "windows": [{ "label": "main", "title": "CoWriting Editor Dev", "width": 1320, "height": 860, "minWidth": 820, "minHeight": 520 }],
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "dmg", "nsis", "appimage", "deb"],
     "category": "Productivity",
     "resources": { "tools/": "tools/" },
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]

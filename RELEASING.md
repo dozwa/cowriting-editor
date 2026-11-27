@@ -1,16 +1,51 @@
 # Releasing
 
-`git tag v0.2.0 && git push origin v0.2.0` runs `.github/workflows/release.yml`: it builds the
-installers for macOS, Windows and Linux, with pandoc and Typst inside, and puts them into a
-**draft** release on GitHub. Nothing is published until you publish the draft.
+There are two apps, built from the same code:
 
-Set the version in `Cargo.toml` (`[workspace.package]`) and `src-tauri/tauri.conf.json` first.
+| | Dev app | Alpha |
+|---|---|---|
+| For | the developer alone | testers outside |
+| Name | CoWriting Editor Dev | CoWriting Editor |
+| Identifier | `io.github.dozwa.cowriting-editor.dev` | `io.github.dozwa.cowriting-editor` |
+| Version | `0.1.1-dev` | `0.1.1-alpha` |
+| Built by | CI started by hand, or `tauri build` | the tag `v0.1.1-alpha` |
+| Found | on the CI run, for 90 days, with access to the repository | on the releases page, as a pre-release |
 
-In `CHANGELOG.md`, move what the release takes from "In the repository, in no release" to a new
-heading under "Releases", with the version and the date. What stays behind is in no release.
+Both can be installed side by side. Each has its own settings, its own keys in the system's key
+store and its own defaults; a document's `.cowriting` folder is the same for both.
+
+**The dev app is the standard.** `src-tauri/tauri.conf.json` describes it, so `tauri dev`, a plain
+`tauri build` and CI all make the dev app. Only the release workflow lays
+`src-tauri/tauri.release.conf.json` over it, which gives the released name and identifier.
+
+## Versions
+
+`main` holds a dev version: the next alpha's number with `-dev` behind it. After `0.1.1-alpha`
+comes `0.1.2-dev`, then `0.1.2-alpha`, and so on. `python3 scripts/set-version.py <version>` writes
+a version into every file that holds it; `--check` (run by CI) says whether they agree.
+
+## From the dev app to an alpha
+
+Build the dev app (Actions → CI → Run workflow, or `gh workflow run ci.yml`), try that state, and
+when it is good:
+
+1. `python3 scripts/set-version.py 0.1.1-alpha`
+2. In `CHANGELOG.md`, move what the alpha takes from "In the repository, in no release" to a new
+   heading under "Releases", with the version and the date. What stays behind is in no release.
+3. Commit, `git tag v0.1.1-alpha`, and push the commit and the tag.
+4. `python3 scripts/set-version.py 0.1.2-dev`, commit and push: `main` is a dev version again.
+
+The tag runs `.github/workflows/release.yml`: it checks that the tag is the version in the files
+and no dev version, builds the installers for macOS, Windows and Linux, with pandoc and Typst
+inside, and puts them into a **draft** pre-release on GitHub. Nothing is published until you
+publish the draft. A version without `-alpha` is built the same way as a full release.
 
 ## What is not done yet
 
+- **The dev app and the alpha as two apps have not been built yet.** The configuration is read
+  and checked, but no installer of either was made since: the first run of each workflow will show
+  whether the bundlers take a version like `0.1.1-dev`. The Windows `.msi` and the Linux `.rpm`
+  were never published and are no longer built; an `.msi` cannot carry such a version.
 - **The release workflow ran once, for v0.1.0.** Windows and Linux built; the macOS job failed on
   the empty signing secrets, which is repaired but not run again. The macOS image of v0.1.0 was
   built, signed and notarised by hand.

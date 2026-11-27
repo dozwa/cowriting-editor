@@ -4,7 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
 import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView } from './api'
-import { App } from './App'
+import { App, shownVersion } from './App'
 import type { Editor, EditorHandlers, Format, View } from './editor'
 import { type Preferences, STANDARD } from './preferences'
 import { linkLines } from './text'
@@ -1205,6 +1205,9 @@ test('a bug is reported from a button everybody sees, in three parts, and goes o
   await screen.findByText('thesis.md')
   // the footer says which version this is, and that it is an alpha
   expect(within(screen.getByRole('contentinfo')).getByText('alpha 0.1.0')).toBeTruthy()
+  // a version that says what it is stands as it is: the dev app and an alpha are told apart at a glance
+  const alpha = (version: string) => `alpha ${version}`
+  expect([shownVersion('0.1.1-dev', alpha), shownVersion('0.1.1-alpha', alpha), shownVersion('0.1.0', alpha)]).toEqual(['0.1.1-dev', '0.1.1-alpha', 'alpha 0.1.0'])
 
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Report a bug' }))
   const dialog = within(screen.getByRole('dialog', { name: 'Report a bug' }))

@@ -547,7 +547,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       {m.app.reportBug}
     </button>
   )
-  const version = settings !== null && <span className="version" title={m.app.alphaTitle}>{m.app.alpha(settings.version)}</span>
+  const version = settings !== null && <span className="version" title={m.app.alphaTitle}>{shownVersion(settings.version, m.app.alpha)}</span>
   const isScripted = settings?.backend.startsWith('fake:') ?? false
   const notice = [
     settings === null || isScripted ? '' : MODEL_NOTICE[settings.modelStatus],
@@ -756,4 +756,9 @@ export function App({ api, makeEditor = createEditor }: Props) {
       {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} onClose={() => setDialog(null)} />}
     </div>
   )
+}
+
+/** The version in the footer. One that says what it is ("0.1.1-dev", "0.1.1-alpha") stands as it is; a bare number is called an alpha. */
+export function shownVersion(version: string, alpha: (version: string) => string): string {
+  return version.includes('-') ? version : alpha(version)
 }

@@ -1,8 +1,10 @@
 name: CI
 
-# A push or a pull request is checked and tested. The app itself is built only when the workflow is
-# started by hand (Actions → CI → Run workflow, or `gh workflow run ci.yml`): a version is out already,
-# and installers are made when someone asks for them. A release is built by its tag (release.yml).
+# A push or a pull request is checked and tested. The app is built only when the workflow is
+# started by hand (Actions → CI → Run workflow, or `gh workflow run ci.yml`), and what it builds
+# is the dev app: "CoWriting Editor Dev", with its own settings, for the developer alone. Its
+# installers hang on the run and are gone after 90 days. An alpha for testers is built by its tag
+# (release.yml, RELEASING.md).
 on:
   push:
     branches: [main]
@@ -39,6 +41,8 @@ jobs:
         run: |
           npm run build
           npm test
+      - name: One version in every file
+        run: python3 scripts/set-version.py --check
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - name: pandoc and Typst, for the export and the installer
@@ -46,13 +50,17 @@ jobs:
       - run: cargo test --workspace
         env:
           COWRITING_NEED_TOOLS: 1
-      - name: Unsigned build
+      - name: The dev app, unsigned
         if: github.event_name == 'workflow_dispatch'
         run: ui/node_modules/.bin/tauri build
+      - id: commit
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'workflow_dispatch'
         with:
-          name: cowriting-editor-${{ matrix.os }}
+          name: cowriting-editor-dev-${{ steps.commit.outputs.short }}-${{ matrix.os }}
           path: |
             target/release/bundle/dmg/*.dmg
             target/release/bundle/nsis/*.exe

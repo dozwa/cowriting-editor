@@ -23,7 +23,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tauri::ipc::Channel;
 use tauri::{Manager, State};
 
-const KEY_SERVICE: &str = "io.github.dozwa.cowriting-editor";
+/// The name the keys are kept under in the system's key store: the app's identifier, so the dev app
+/// (`….cowriting-editor.dev`) and a released one each have their own. Set when the app starts.
+static KEY_SERVICE_NAME: OnceLock<String> = OnceLock::new();
+
+fn key_service() -> &'static str {
+    KEY_SERVICE_NAME.get().map_or("io.github.dozwa.cowriting-editor", String::as_str)
+}
 
 #[derive(Default)]
 struct Editor {
@@ -167,7 +173,7 @@ fn settings_here(app: &tauri::AppHandle, session: Option<&Session>) -> BackendSe
 /// The key the system's key store holds for a backend. An environment variable serves where there is no key store.
 fn api_key(backend: &str) -> Option<String> {
     let from_environment = || if backend == "anthropic" { std::env::var("ANTHROPIC_API_KEY").ok() } else { None };
-    keyring::Entry::new(KEY_SERVICE, backend).ok().and_then(|entry| entry.get_password().ok()).or_else(from_environment).filter(|key| !key.trim().is_empty())
+    keyring::Entry::new(key_service(), backend).ok().and_then(|entry| entry.get_password().ok()).or_else(from_environment).filter(|key| !key.trim().is_empty())
 }
 
 #[derive(Serialize)]
@@ -262,7 +268,7 @@ fn get_settings(app: tauri::AppHandle, editor: State<Editor>) -> SettingsView {
 fn set_settings(app: tauri::AppHandle, settings: BackendSettings, api_key: Option<String>) -> Result<(), String> {
     SettingsFile::save_backend(&settings_file(&app)?, &settings)?;
     if let Some(key) = api_key.map(|k| k.trim().to_string()).filter(|k| !k.is_empty()) {
-        keyring::Entry::new(KEY_SERVICE, &settings.backend)
+        keyring::Entry::new(key_service(), &settings.backend)
             .and_then(|entry| entry.set_password(&key))
             .map_err(|e| format!("The key could not be put into the system's key store: {e}"))?;
     }
@@ -275,7 +281,7 @@ fn set_api_key(backend: String, api_key: String) -> Result<(), String> {
     if !["anthropic", "openai-compatible"].contains(&backend.as_str()) || api_key.trim().is_empty() {
         return Err("A key needs a provider that takes one.".into());
     }
-    keyring::Entry::new(KEY_SERVICE, &backend)
+    keyring::Entry::new(key_service(), &backend)
         .and_then(|entry| entry.set_password(api_key.trim()))
         .map_err(|e| format!("The key could not be put into the system's key store: {e}"))
 }
@@ -829,6 +835,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Editor::default())
         .setup(|app| {
+            let _ = KEY_SERVICE_NAME.set(app.config().identifier.clone());
             // pandoc and Typst ship in the app's resources
             if let Ok(resources) = tauri::Manager::path(app).resource_dir() {
                 cowriting_app::export::set_tools_dir(resources.join("tools"));

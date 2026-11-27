@@ -275,9 +275,13 @@ cd ui && npm install && cd ..
 python3 scripts/fetch-tools.py           # pandoc and Typst for this system, checked against pinned sums
 cargo test                              # core, backends, the flow on a real folder
 (cd ui && npm test)                     # the window, with the app replaced by a stand-in
-ui/node_modules/.bin/tauri dev          # run it
-ui/node_modules/.bin/tauri build        # unsigned installer for this system
+ui/node_modules/.bin/tauri dev          # run it: the dev app, with settings of its own
+ui/node_modules/.bin/tauri build        # unsigned installer of the dev app for this system
 ```
+
+What you build is "CoWriting Editor Dev": it installs beside a released CoWriting Editor and keeps
+its own settings and keys. How a tested state becomes an alpha is in `RELEASING.md`; what changed
+since the last release is in `CHANGELOG.md`.
 
 To run the interface in an ordinary browser against the real Rust code (for development and for
 browser automation; localhost only, one document, never shipped):

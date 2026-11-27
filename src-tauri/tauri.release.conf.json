@@ -1,0 +1,7 @@
+{
+  "productName": "CoWriting Editor",
+  "identifier": "io.github.dozwa.cowriting-editor",
+  "app": {
+    "windows": [{ "label": "main", "title": "CoWriting Editor", "width": 1320, "height": 860, "minWidth": 820, "minHeight": 520 }]
+  }
+}

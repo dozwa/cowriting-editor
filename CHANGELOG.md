@@ -41,7 +41,13 @@ its version and date (see `RELEASING.md`). Numbers like #7 are issues on GitHub.
 
 ### For those who build it
 
-- CI checks and tests every push and builds the installers only when it is started by hand.
+- **A dev app and an alpha.** What is built by default is "CoWriting Editor Dev", version
+  `0.1.1-dev`: it installs beside a released CoWriting Editor and has its own settings and keys.
+  An alpha is built by its tag, `v0.1.1-alpha`, as before under the name CoWriting Editor. The
+  footer shows such a version as it is. See `RELEASING.md`.
+- One script sets the version in every file, and CI checks that they agree.
+- CI checks and tests every push and builds the dev app only when it is started by hand.
+- The Windows `.msi` and the Linux `.rpm`, which were never published, are no longer built.
 - The release build leaves out signing secrets that are not set.
 - The export test has a document with pictures, and the tests read the stylesheets.
 
