@@ -55,6 +55,7 @@ pub const SOURCES: Kind = Kind::new("the list of bibliography files (sources.jso
 pub const PARTY: Kind = Kind::new("the list of experts (party.json)", &[]);
 pub const MARKS: Kind = Kind::new("the hints marked as done (marks.json)", &[]);
 pub const SETTINGS: Kind = Kind::new("the editor's settings (settings.json)", &[]);
+pub const LAYOUT: Kind = Kind::new("a layout kept under a name (layouts/*.json)", &[]);
 pub const STATE: Kind = Kind::new("what the editor remembers between starts (state.json)", &[]);
 
 /// Something about a stored file that the author should know.

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, PageNumbers, PdfChoice, PdfLayout } from './api'
+import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, KeptLayout, PageNumbers, PdfChoice, PdfLayout } from './api'
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
@@ -247,6 +247,12 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   const [format, setFormat] = useState<FileFormat>('pdf')
   const [pdf, setPdf] = useState<PdfChoice>(lastPdfChoice)
   const [made, setMade] = useState<DocumentExport | null>(null)
+  const [kept, setKept] = useState<KeptLayout[]>([])
+  /** The kept layout that was used or kept last here, by name; '' for none. */
+  const [keptName, setKeptName] = useState('')
+  /** The name being typed for a layout to keep; null while none is asked for. */
+  const [naming, setNaming] = useState<string | null>(null)
+  const [savedTo, setSavedTo] = useState('')
   const [isWorking, setWorking] = useState(false)
   const [error, setError] = useState('')
 
@@ -256,7 +262,15 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       // the project's own choice comes before what was chosen last on this computer
       if (kept !== null) setPdf(pdfChoiceFrom(kept))
     }, e => setError(String(e)))
+    // a list that cannot be read leaves the dialog as it is without it
+    api.layouts().then(setKept, () => {})
   }, [api])
+
+  /** Does something with the kept layouts and shows what went wrong. */
+  const withKept = (work: () => Promise<void>) => {
+    setSavedTo('')
+    void work().then(() => setError(''), e => setError(String(e)))
+  }
 
   const write = async () => {
     if (setup === null) return
@@ -347,6 +361,62 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       {(format === 'pdf' ? engines.length > 0 : pdf.wordTemplate === '') && (
         <details className="layout" open={isOwnLayout}>
           <summary>{t.layout}{isOwnLayout ? ` · ${t.layoutOwn}` : ''}</summary>
+          <div className="row kept-layouts">
+            <label>
+              {t.keptLayouts}
+              <select
+                value={keptName}
+                onChange={e => {
+                  const chosen = kept.find(one => one.name === e.target.value)
+                  setKeptName(chosen?.name ?? '')
+                  setSavedTo('')
+                  if (chosen !== undefined) choose({ paper: chosen.paper, layout: chosen.layout })
+                }}
+              >
+                <option value="">{kept.length === 0 ? t.keptNone : t.keptChoose}</option>
+                {kept.map(one => <option key={one.name} value={one.name}>{one.name}</option>)}
+              </select>
+            </label>
+            <button onClick={() => setNaming(keptName)}>{t.keptKeep}</button>
+            <button onClick={() => withKept(async () => {
+              const taken = await api.importLayout()
+              if (taken === null) return
+              setKept(taken[1])
+              setKeptName(taken[0])
+              const chosen = taken[1].find(one => one.name === taken[0])
+              if (chosen !== undefined) choose({ paper: chosen.paper, layout: chosen.layout })
+            })}>{t.keptFromFile}</button>
+          </div>
+          {naming !== null && (
+            <form className="row" onSubmit={e => {
+              e.preventDefault()
+              withKept(async () => {
+                setKept(await api.keepLayout(naming.trim(), pdf))
+                setKeptName(naming.trim())
+                setNaming(null)
+              })
+            }}>
+              <label>
+                {t.keptName}
+                <input autoFocus value={naming} maxLength={60} onChange={e => setNaming(e.target.value)} />
+              </label>
+              <button type="submit" disabled={naming.trim() === ''}>{kept.some(one => one.name === naming.trim()) ? t.keptReplace : t.keptKeepNow}</button>
+              <button type="button" className="link" onClick={() => setNaming(null)}>{t.keptCancel}</button>
+            </form>
+          )}
+          {keptName !== '' && naming === null && (
+            <div className="row">
+              <button className="link" onClick={() => withKept(async () => {
+                const target = await api.exportLayout(keptName)
+                if (target !== null) setSavedTo(target)
+              })}>{t.keptToFile(keptName)}</button>
+              <button className="link" onClick={() => withKept(async () => {
+                setKept(await api.removeLayout(keptName))
+                setKeptName('')
+              })}>{t.keptRemove(keptName)}</button>
+            </div>
+          )}
+          {savedTo !== '' && <p className="muted" role="status">{t.keptSavedTo(<code>{savedTo}</code>)}</p>}
           <div className="row">
             <label>
               {t.layoutFont}

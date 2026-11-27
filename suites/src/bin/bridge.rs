@@ -37,7 +37,9 @@ impl Bridge {
     }
 
     fn open(&self) -> Result<Value, String> {
-        let (session, mut opened) = Session::open(Arc::new(DiskHost), &self.document.lock().unwrap().clone())?;
+        // with COWRITING_SETTINGS the projects' settings and the kept layouts are in that folder, as in the app
+        let projects = std::env::var("COWRITING_SETTINGS").ok().filter(|folder| !folder.trim().is_empty()).map(|folder| format!("{folder}/projects"));
+        let (session, mut opened) = Session::open_in(Arc::new(DiskHost), &self.document.lock().unwrap().clone(), projects.as_deref())?;
         *self.session.lock().unwrap() = Some(Arc::new(session));
         let mut notices = self.notices.lock().unwrap();
         notices.append(&mut opened.notices);
@@ -198,6 +200,16 @@ impl Bridge {
                     session.export_target(cowriting_app::FileFormat::Docx),
                     session.export_choice()
                 ]))
+            }
+            "layouts" => Ok(json!(self.session()?.layouts())),
+            "keep_layout" => {
+                let pdf = serde_json::from_value(args["pdf"].clone()).map_err(|e| e.to_string())?;
+                let session = self.session()?;
+                session.keep_layout(&text("name"), &pdf).map(|_| json!(session.layouts()))
+            }
+            "remove_layout" => {
+                let session = self.session()?;
+                session.remove_layout(&text("name")).map(|_| json!(session.layouts()))
             }
             "keep_export_choice" => {
                 let pdf = serde_json::from_value(args["pdf"].clone()).map_err(|e| e.to_string())?;

@@ -801,6 +801,43 @@ async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Resul
     Ok((export_tools().await, target(FileFormat::Pdf), target(FileFormat::Docx), session.export_choice()))
 }
 
+/// The layouts kept under a name on this computer.
+#[tauri::command]
+fn layouts(editor: State<Editor>) -> Result<Vec<cowriting_app::layouts::KeptLayout>, String> {
+    Ok(editor.session()?.layouts())
+}
+
+/// Keeps the paper and the layout of a choice under a name, and gives back all that are kept.
+#[tauri::command]
+fn keep_layout(editor: State<Editor>, name: String, pdf: PdfChoice) -> Result<Vec<cowriting_app::layouts::KeptLayout>, String> {
+    let session = editor.session()?;
+    session.keep_layout(&name, &pdf)?;
+    Ok(session.layouts())
+}
+
+#[tauri::command]
+fn remove_layout(editor: State<Editor>, name: String) -> Result<Vec<cowriting_app::layouts::KeptLayout>, String> {
+    let session = editor.session()?;
+    session.remove_layout(&name)?;
+    Ok(session.layouts())
+}
+
+/// Takes a layout from a file somebody passed on; gives back the name it is kept under, and all that are kept.
+#[tauri::command]
+fn import_layout(editor: State<Editor>, path: String) -> Result<(String, Vec<cowriting_app::layouts::KeptLayout>), String> {
+    let session = editor.session()?;
+    let name = session.import_layout(&path)?;
+    Ok((name, session.layouts()))
+}
+
+/// Writes a kept layout to a file the author chose, to pass it on.
+#[tauri::command]
+fn export_layout(editor: State<Editor>, name: String, target: String) -> Result<(), String> {
+    editor.session()?.export_layout(&name, &target)?;
+    editor.written.add(&target);
+    Ok(())
+}
+
 /// Keeps how the open project's exports are set.
 #[tauri::command]
 fn keep_export_choice(editor: State<Editor>, pdf: PdfChoice) -> Result<(), String> {
@@ -995,6 +1032,11 @@ fn main() {
             check_references,
             export_setup,
             keep_export_choice,
+            layouts,
+            keep_layout,
+            remove_layout,
+            import_layout,
+            export_layout,
             export_document,
             show_written
         ])

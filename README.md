@@ -89,6 +89,12 @@ starts with what you chose last. If your document sets one of these itself in it
 comes first, and the dialog says which. The export also tells the typesetter your document's
 language, so that words are hyphenated by its rules.
 
+**Kept layouts.** "Keep this layout…" keeps the paper and the layout under a name of your choice
+("Thesis, faculty of medicine"), and "Kept layouts" sets them again in any project. Each is one
+small file in the editor's own folder (`layouts/<name>.json`). To pass one on, save it as a file
+from the dialog; whoever gets it takes it in with "From a file…". The typesetter and a Word
+template are not part of it.
+
 A typeface this computer does not have is named in the dialog, and again after the export: Typst
 then sets the text in another one, a LaTeX stops and says so. That matters for a layout that came
 from another computer.

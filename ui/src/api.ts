@@ -57,6 +57,8 @@ export type PdfLayout = {
   ragged: boolean
   numbered: boolean
 }
+/** A layout kept under a name on this computer, to use in any project and to pass on as a file. */
+export type KeptLayout = { name: string; paper: PdfChoice['paper']; layout: PdfLayout }
 /** What is chosen for an export; the paper and the layout hold for a Word file too. `wordTemplate` is a Word file of the author's whose styles a Word export takes in place of the layout, or empty. */
 export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout; wordTemplate: string }
 export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[]; /** Typefaces the layout names that this computer does not have: the PDF has another one in their place. */ missingFonts: string[] }
@@ -348,6 +350,23 @@ export const api = {
   exportSetup: () => invoke<[ExportTools, string, string, PdfChoice | null]>('export_setup'),
   /** Keeps how this project's exports are set, with the project's settings. */
   keepExportChoice: (pdf: PdfChoice) => invoke<void>('keep_export_choice', { pdf }),
+  /** The layouts kept under a name on this computer. */
+  layouts: () => invoke<KeptLayout[]>('layouts'),
+  /** Keeps the paper and the layout of a choice under a name; gives back all that are kept. */
+  keepLayout: (name: string, pdf: PdfChoice) => invoke<KeptLayout[]>('keep_layout', { name, pdf }),
+  removeLayout: (name: string) => invoke<KeptLayout[]>('remove_layout', { name }),
+  /** Asks for a layout's file that somebody passed on and takes it in: the name it is kept under and all that are kept; null when the author cancels. */
+  importLayout: async (): Promise<[string, KeptLayout[]] | null> => {
+    const picked = await open({ multiple: false, filters: [{ name: 'Layout', extensions: ['json'] }] })
+    return typeof picked === 'string' ? invoke<[string, KeptLayout[]]>('import_layout', { path: picked }) : null
+  },
+  /** Asks where a kept layout goes as a file, and writes it there; the file's path, or null when the author cancels. */
+  exportLayout: async (name: string): Promise<string | null> => {
+    const target = await save({ filters: [{ name: 'Layout', extensions: ['json'] }], defaultPath: `${name}.json` })
+    if (target === null) return null
+    await invoke<void>('export_layout', { name, target })
+    return target
+  },
   /** Asks the author where the export goes; null when they cancel. */
   pickExport: (format: FileFormat, suggested: string) => save({ filters: [{ name: format === 'pdf' ? 'PDF' : 'Word', extensions: [format] }], defaultPath: suggested }),
   exportDocument: (format: FileFormat, target: string, documentText: string, pdf: PdfChoice) => invoke<DocumentExport>('export_document', { format, target, documentText, pdf }),

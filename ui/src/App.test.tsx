@@ -3,7 +3,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
-import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, PdfChoice, SourcesView, StoredNotice, PicturesToMove } from './api'
+import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, KeptLayout, PdfChoice, SourcesView, StoredNotice, PicturesToMove } from './api'
 import { App, shownVersion } from './App'
 import { layoutInFrontMatter } from './dialogs'
 import type { Editor, EditorHandlers, Format, View } from './editor'
@@ -35,8 +35,9 @@ let lastEditor: Editor & Seen
 /** What the app's window calls when files are dropped on it; set by the stand-in. */
 let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[] } = {}) {
   let exportChoice: PdfChoice | null = options.exportChoice ?? null
+  let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
   const turns: TurnRow[] = []
   let release = () => {}
   const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
@@ -212,6 +213,18 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     },
     exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx', exportChoice],
     keepExportChoice: async pdf => void (exportChoice = pdf),
+    layouts: async () => keptLayouts,
+    keepLayout: async (name, pdf) => {
+      if (name.includes('/')) throw 'A layout\'s name is made of letters, digits, spaces and a few signs.'
+      return (keptLayouts = [...keptLayouts.filter(one => one.name !== name), { name, paper: pdf.paper, layout: pdf.layout }].sort((a, b) => a.name.localeCompare(b.name)))
+    },
+    removeLayout: async name => (keptLayouts = keptLayouts.filter(one => one.name !== name)),
+    // a colleague's file, as the system's dialog would hand it over
+    importLayout: async () => {
+      keptLayouts = [...keptLayouts, { name: 'Medicine', paper: 'letter', layout: { ...STANDARD_LAYOUT, marginCm: 3.5, twoColumns: true } }]
+      return ['Medicine', keptLayouts]
+    },
+    exportLayout: async name => `/shared/${name}.json`,
     pickExport: async (_format, suggested) => suggested,
     pickWordTemplate: async () => '/templates/faculty.docx',
     exportDocument: async (format, target, documentText, pdf) => {
@@ -981,6 +994,50 @@ test('a Word file takes the layout as its styles, or a template of the author\'s
   await user.selectOptions(screen.getByLabelText('Format'), 'docx')
   await user.click(screen.getByRole('button', { name: 'Take it off' }))
   expect(screen.getByText(/^Type and layout/)).toBeTruthy()
+})
+
+test('a layout is kept under a name, used again, passed on as a file and taken in from one', async () => {
+  const user = userEvent.setup()
+  windowStorage()
+  const { api, calls } = standIn({ keptLayouts: [{ name: 'Abstract', paper: 'a4', layout: { ...STANDARD_LAYOUT, fontSize: 10, twoColumns: true } }] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  await user.click(await screen.findByText('Type and layout'))
+
+  // set one by hand and keep it; a name that cannot be a file's is refused and said
+  await user.selectOptions(screen.getByLabelText('Margins'), '2.5')
+  await user.click(screen.getByRole('button', { name: 'Keep this layout…' }))
+  await user.type(screen.getByLabelText('Name of the layout'), 'a/b')
+  await user.click(screen.getByRole('button', { name: 'Keep' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('name is made of letters')
+  await user.clear(screen.getByLabelText('Name of the layout'))
+  await user.type(screen.getByLabelText('Name of the layout'), 'Thesis')
+  await user.click(screen.getByRole('button', { name: 'Keep' }))
+  await waitFor(() => expect((screen.getByLabelText('Kept layouts') as HTMLSelectElement).value).toBe('Thesis'))
+  expect(screen.queryByRole('alert')).toBeNull()
+
+  // another kept one sets the paper and the whole layout, and the project keeps it
+  await user.selectOptions(screen.getByLabelText('Kept layouts'), 'Abstract')
+  expect((screen.getByLabelText('Size') as HTMLSelectElement).value).toBe('10')
+  expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('')
+  expect((screen.getByLabelText('Two columns') as HTMLInputElement).checked).toBe(true)
+  expect((await api.exportSetup())[3]?.layout.fontSize).toBe(10)
+
+  // passed on as a file, and one from a colleague taken in and used at once
+  await user.click(screen.getByRole('button', { name: 'Save “Abstract” as a file to pass on…' }))
+  expect((await screen.findByText(/Saved as/)).textContent).toContain('/shared/Abstract.json')
+  await user.click(screen.getByRole('button', { name: 'From a file…' }))
+  await waitFor(() => expect((screen.getByLabelText('Kept layouts') as HTMLSelectElement).value).toBe('Medicine'))
+  expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('3.5')
+  expect((screen.getByLabelText('Paper') as HTMLSelectElement).value).toBe('letter')
+  await user.click(screen.getByRole('button', { name: 'Remove “Medicine”' }))
+  await waitFor(() => expect(within(screen.getByLabelText('Kept layouts')).queryByRole('option', { name: 'Medicine' })).toBeNull())
+  // removing a kept layout does not change what is set
+  expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('3.5')
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await screen.findByText(/Written to/)
+  expect(calls.pdf[0]).toMatchObject({ paper: 'letter', layout: { marginCm: 3.5, twoColumns: true } })
 })
 
 test('the layout a document sets in its front matter is named', () => {

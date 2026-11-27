@@ -5,6 +5,7 @@
 pub mod diagnostics;
 pub mod export;
 pub mod feedback;
+pub mod layouts;
 pub mod linked;
 pub mod picture;
 pub mod preferences;

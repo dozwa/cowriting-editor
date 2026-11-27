@@ -50,6 +50,8 @@ to a new heading with its version and date; the release workflow does that (see 
   hyphenation, to PDF and Word. A typeface the layout names and the computer does not have is
   named before the export and again after it, when Typst has set the text in another one.
   (#13, #34)
+- **Kept layouts.** A paper and layout can be kept under a name, used again in any project,
+  saved as a file to pass on, and taken in from such a file. (#34)
 - **The layout of a Word file.** A Word export has the paper and what is set under "Type and
   layout" in its own styles, page setup, header and footer: typefaces, size, line spacing,
   margins, columns, indented paragraphs, numbered headings, page numbers. Or it takes all that
