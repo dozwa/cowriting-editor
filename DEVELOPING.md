@@ -108,6 +108,12 @@ then merged into `dev` by hand.
 
 ## Where the branches stand now
 
-`dev` was made on 2026-11-27. At that time `main` already held the fixes made since the alpha
-0.1.0 (they were pushed before there was a `dev`), so until the next alpha `main` is ahead of
-what testers have. The first merge of `dev` into `main` makes `v0.1.1-alpha`, and from then on `main` is the alpha.
+`dev` was made on 2026-11-27 and holds everything done since: ten fixes, the changelog, the dev
+app and these workflows. `main` was set back that day to where it stood before those fixes, which
+had been pushed to it when there was no `dev` yet. It is the alpha 0.1.0 plus four commits that
+change no behaviour of the app (the licence file, the README, the releasing notes and a repair of
+the release build).
+
+Until the first merge of `dev`, `main` still has the old workflows: there CI builds the app on
+every push, and cannot be started by hand from the Actions page. `gh workflow run ci.yml --ref dev`
+is the way to the dev app until then. The first merge of `dev` into `main` makes `v0.1.1-alpha`.
