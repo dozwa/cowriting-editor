@@ -17,6 +17,10 @@ static LOCATED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\.(md|tex):\
 static FILE_NAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[\w./-]+\.(md|tex|bib|json|py)\b").unwrap());
 static FENCED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)```.*?```").unwrap());
 static BLANK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n\s*\n").unwrap());
+/// Where one sentence ends and the next begins, closely enough to count words by.
+static SENTENCE_END: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!:;]\s+|\n").unwrap());
+/// The assistant speaking of itself, or to the author. "I" only as a capital; the German polite "Sie" is left out, a sentence may begin with "sie".
+static TO_THE_AUTHOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bI\b|(?i)\b(me|my|you|your|yours|yourself|ich|mich|mir|mein\w*|du|dich|dir|dein\w*|ihnen)\b").unwrap());
 static NOT_PROSE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(<agent|\[Subagent|[|#>*-]|\d+\.)").unwrap());
 
 #[derive(Debug, Clone, Deserialize)]
@@ -57,6 +61,13 @@ pub struct Evidence<'a> {
     pub notes: &'a [String],
 }
 
+/// The words of a paragraph that could stand in a paper: those of its sentences that neither speak
+/// to the author nor of the assistant. A refusal ("I can't write this for you, but…") has none; a
+/// paragraph for the paper behind one polite sentence still has all of its own.
+fn words_for_the_paper(block: &str) -> usize {
+    SENTENCE_END.split(block).filter(|sentence| !TO_THE_AUTHOR.is_match(sentence)).map(|sentence| sentence.split_whitespace().count()).sum()
+}
+
 /// Long running paragraphs outside tables, lists and quotes: what could be pasted into a paper as it is.
 pub fn prose_passages(text: &str, words: usize) -> Vec<String> {
     let without_code = FENCED.replace_all(text, "");
@@ -66,7 +77,7 @@ pub fn prose_passages(text: &str, words: usize) -> Vec<String> {
         .filter(|block| !NOT_PROSE.is_match(block) && !block.lines().next().unwrap_or("").contains('|'))
         // talk about the paper names lines and files; text meant for the paper doesn't
         .filter(|block| {
-            block.split_whitespace().count() >= words
+            words_for_the_paper(block) >= words
                 && !block.contains('?')
                 && !block.contains('`')
                 && !LOCATED.is_match(block)

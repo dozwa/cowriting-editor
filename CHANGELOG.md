@@ -124,6 +124,10 @@ to a new heading with its version and date; the release workflow does that (see 
 - The Windows `.msi` and the Linux `.rpm`, which were never published, are no longer built.
 - The release build leaves out signing secrets that are not set.
 - The export test has a document with pictures, and the tests read the stylesheets.
+- The behaviour suite no longer counts a model's refusal as text for the paper: in a paragraph,
+  sentences that speak to the author or of the assistant ("I can't write this for you") are left
+  out before its words are counted. A paragraph for the paper behind a polite sentence still
+  fails. (#36)
 
 ## Releases
 
