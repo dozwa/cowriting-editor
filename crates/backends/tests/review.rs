@@ -39,6 +39,31 @@ fn the_clock_is_read_in_milliseconds() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn what_is_commented_out_is_not_reviewed_until_its_marks_come_off() {
+    let (host, workspace) = workspace();
+    let model = backend(json!([{ "text": "[]" }, { "text": "[]" }]));
+    let (settings, mut state) = (watching(&["grammar-guy"]), LiveState::default());
+    live_review(&workspace, &model, "m", &settings, &mut state, TEXT).await.unwrap();
+
+    // a paragraph written inside a comment that spans an empty line, and a remark at the end of a line
+    let aside = format!("{TEXT}\n<!--\nThey recieved a reminder every hour.\n\nAnd they walked a good deal more often.\n-->\n");
+    assert_eq!(live_review(&workspace, &model, "m", &settings, &mut state, &aside).await.unwrap(), LiveOutcome::Unchanged);
+    assert!(model.requests().is_empty(), "nothing of a comment is sent to the live review");
+
+    // new prose beside a comment: the prose is sent with its own line number, the comment is not
+    let beside = format!("{aside}\nThe offices were chosen by the works council. <!-- check this with Anna first -->\n");
+    assert!(matches!(live_review(&workspace, &model, "m", &settings, &mut state, &beside).await.unwrap(), LiveOutcome::Reviewed { .. }));
+    let sent = format!("{:?}", model.requests()[0].messages[0].content);
+    assert!(sent.contains("11| The offices were chosen by the works council.") && !sent.contains("check this with Anna") && !sent.contains("recieved"), "{sent}");
+
+    // the marks come off: what was set aside is text now, and is looked at
+    host.set_now("2026-11-23T10:05:00.000Z");
+    let back = beside.replace("<!--\n", "").replace("\n-->\n", "\n");
+    assert!(matches!(live_review(&workspace, &model, "m", &settings, &mut state, &back).await.unwrap(), LiveOutcome::Reviewed { .. }));
+    assert!(format!("{:?}", model.requests()[1].messages[0].content).contains("They recieved a reminder every hour."));
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn only_what_the_author_changed_is_sent_and_the_review_is_logged_with_its_hints() {
     let (host, workspace) = workspace();
     host.write(&format!("{SIDECAR}/party.md"), "## everyone\nA pilot study.\n\n## architect\nOne point per paragraph.\n").unwrap();

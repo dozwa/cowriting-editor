@@ -180,7 +180,9 @@ pub async fn live_review(
         state.baseline = Some(document.to_string());
         return Ok(LiveOutcome::Unchanged);
     };
-    let changed = changed_paragraphs(&baseline, document, Format::Markdown);
+    // what is commented out is not the text that will be read: it is not reviewed, and taking a
+    // comment's marks off makes its text new
+    let changed = changed_paragraphs(&crate::text::without_comments(&baseline), &crate::text::without_comments(document), Format::Markdown);
     if changed.is_empty() {
         return Ok(LiveOutcome::Unchanged);
     }

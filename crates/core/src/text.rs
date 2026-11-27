@@ -12,6 +12,14 @@ pub fn squash(s: &str) -> String {
     WHITESPACE.replace_all(s, " ").trim().to_string()
 }
 
+static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<!--.*?-->").unwrap());
+
+/// Markdown without what is commented out (`<!-- … -->`). The line ends inside a comment stay, so
+/// every line that is left keeps its number.
+pub fn without_comments(text: &str) -> String {
+    COMMENT.replace_all(text, |found: &regex::Captures| found[0].chars().filter(|c| *c == '\n').collect::<String>()).into_owned()
+}
+
 /// The first `units` UTF-16 units, as JavaScript's `slice(0, units)`; a pair is never split.
 pub fn slice_utf16(s: &str, units: usize) -> &str {
     let mut used = 0;

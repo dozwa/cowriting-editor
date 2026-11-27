@@ -17,7 +17,9 @@ to a new heading with its version and date; the release workflow does that (see 
 
 - **Comment out.** A button in the markdown bar (Cmd or Ctrl with Shift and C) puts `<!-- -->`
   around what is selected, or around the line the cursor is in, and takes it off again. Text in a
-  comment stays in the file and is in no PDF or Word export; the AI still reads it. (#6)
+  comment stays in the file and is in no PDF or Word export. The live review does not look at
+  it, and a citation that is only in a comment does not count as cited; the AI you ask still
+  reads the document as it is, comments included. (#6, #29)
 - **Characters beside the words.** The top bar shows the number of characters with spaces, and
   the number without them when the pointer rests on it. Counted is what a reader reads: front
   matter, code, comments, citation keys, markdown's marks, the addresses of links, and pictures

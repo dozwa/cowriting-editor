@@ -305,3 +305,17 @@ fn a_project_can_be_written_with_an_ai_of_its_own_and_the_others_keep_the_genera
     thesis.set_overrides(Project::default()).unwrap();
     assert_eq!(thesis.settings_here(general.clone()), general);
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_ai_reads_the_document_as_it_is_with_what_is_commented_out() {
+    // decided for #29: a comment may be the very passage the author asks about, and the log records
+    // what the AI was given; the document is not thinned out on its way there
+    let folder = Folder::new("comments");
+    let text = format!("{TEXT}\n<!-- a passage set aside: the offices differ in size -->\n");
+    std::fs::write(folder.path("work/thesis.md"), &text).unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &folder.path("work/thesis.md")).unwrap();
+    let backend = FakeBackend::from_json(r#"{"replies": [{"tools": [{"name": "read_document"}]}, {"text": "Read."}]}"#).unwrap();
+    session.ask(&backend, Ask { document_text: text.clone(), ..ask("What about the passage I set aside?", None) }, &mut |_| {}).await.unwrap();
+    let given = format!("{:?}", backend.requests()[1].messages);
+    assert!(given.contains("a passage set aside: the offices differ in size"), "{given}");
+}

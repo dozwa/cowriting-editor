@@ -119,6 +119,15 @@ fn only_citations_in_the_prose_count_as_cited() {
 }
 
 #[test]
+fn a_key_that_is_only_in_a_comment_is_not_cited_as_it_is_in_no_export() {
+    let text =
+        "Breaks help [@smith2020]. <!-- see also @hidden2001 -->\n\n<!--\nA paragraph set aside [@aside1999].\n\nAnd its second half, @smith2020.\n-->\n\nAs @lee2021 found.\n";
+    assert_eq!(cited_keys(text).into_iter().collect::<Vec<_>>(), ["lee2021", "smith2020"]);
+    // a comment that is never closed comments nothing out: pandoc exports that text too
+    assert_eq!(cited_keys("An open mark <!-- and @still2020 cited.\n").into_iter().collect::<Vec<_>>(), ["still2020"]);
+}
+
+#[test]
 fn the_ai_can_search_the_authors_references_and_change_none_of_them() {
     let host = MemoryHost::default();
     let sidecar = Sidecar::for_document("/work/thesis.md");

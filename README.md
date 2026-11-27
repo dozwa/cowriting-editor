@@ -75,7 +75,10 @@ the picture itself is never moved or changed.
 
 **Comment out** puts `<!-- -->` around what you selected, or around the line the cursor is in: a
 sentence you are not sure about, a note to yourself. It stays in the file, is not counted as words
-and is in no export. The AI still reads it.
+and is in no export. The live review passes over it, and a citation that stands only in a comment
+is not counted as cited (the export would not have it either). When you ask the AI, it reads the
+document as it is, comments included: you may be asking about just that passage, and the log
+records what the AI was given.
 
 The top bar counts the **words and characters** of your text (with spaces; the count without them
 is shown when the pointer rests on it). Front matter, code, comments, citation keys and markdown's

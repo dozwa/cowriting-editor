@@ -678,11 +678,13 @@ pub fn load_bibliography(host: &dyn Host, sidecar: &Sidecar, document_text: &str
 
 static CITED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?-u)(?:^|[\s\[;-])@([\w:.-]*\w)").unwrap());
 
-/// The citekeys the document cites (`@key`), code and front matter left out.
+/// The citekeys the document cites (`@key`). Code, front matter and what is commented out are
+/// left out: a key that is only in a comment is in no export.
 pub fn cited_keys(document_text: &str) -> BTreeSet<String> {
     static CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)```.*?(```|\z)|`[^`\n]*`").unwrap());
     let text = FRONT_MATTER.replace(document_text, "");
     let text = CODE.replace_all(&text, " ");
+    let text = crate::text::without_comments(&text);
     CITED.captures_iter(&text).map(|found| found[1].to_string()).collect()
 }
 
