@@ -802,7 +802,29 @@ fn export_disclosure(editor: State<Editor>, options: ExportOptions) -> Result<Ex
     Ok(exported)
 }
 
+/// macOS: lets the window mark misspelled words, and keeps it from correcting them.
+///
+/// The window is WebKit's, and WebKit underlines only while "Check Spelling While Typing" is on for the app
+/// (`WebContinuousSpellCheckingEnabled` in the app's defaults). That is off until an app's Edit menu switches it
+/// on, and this app has no such item: the editor asked for the check and nothing was marked. Whether a text is
+/// checked is still the "Spelling check" setting, which the editor puts on its text as an attribute.
+/// Correcting while typing is switched off the same way, so that the system never changes the author's words.
+/// Both are set only while the app's defaults say nothing: what the author chose in the context menu stays.
+/// It has to happen before the window is made, since WebKit reads the defaults once.
+#[cfg(target_os = "macos")]
+fn let_spelling_be_marked() {
+    use objc2_foundation::{ns_string, NSUserDefaults};
+    let defaults = NSUserDefaults::standardUserDefaults();
+    for (key, value) in [(ns_string!("WebContinuousSpellCheckingEnabled"), true), (ns_string!("WebAutomaticSpellingCorrectionEnabled"), false)] {
+        if defaults.objectForKey(key).is_none() {
+            defaults.setBool_forKey(value, key);
+        }
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "macos")]
+    let_spelling_be_marked();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Editor::default())
@@ -896,4 +918,32 @@ fn main() {
                 send_session(app);
             }
         });
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use objc2_foundation::{ns_string, NSUserDefaults};
+
+    #[test]
+    fn spelling_is_marked_and_not_corrected_unless_the_author_chose_otherwise() {
+        let defaults = NSUserDefaults::standardUserDefaults();
+        let (marking, correcting) = (ns_string!("WebContinuousSpellCheckingEnabled"), ns_string!("WebAutomaticSpellingCorrectionEnabled"));
+        defaults.removeObjectForKey(marking);
+        defaults.removeObjectForKey(correcting);
+        super::let_spelling_be_marked();
+        assert!(defaults.boolForKey(marking), "WebKit is told to mark spelling");
+        assert!(defaults.objectForKey(correcting).is_some() && !defaults.boolForKey(correcting), "and not to correct it");
+        // the author switched marking off and correcting on, in the context menu: the next start leaves both
+        defaults.setBool_forKey(false, marking);
+        defaults.setBool_forKey(true, correcting);
+        super::let_spelling_be_marked();
+        assert!(!defaults.boolForKey(marking) && defaults.boolForKey(correcting));
+        // the test program has defaults of its own, under its file's name: nothing of them is left behind
+        let own = std::env::current_exe().unwrap().file_name().unwrap().to_string_lossy().into_owned();
+        defaults.removePersistentDomainForName(&objc2_foundation::NSString::from_str(&own));
+        defaults.synchronize();
+        if let Some(home) = std::env::var_os("HOME") {
+            let _ = std::fs::remove_file(std::path::Path::new(&home).join("Library/Preferences").join(format!("{own}.plist")));
+        }
+    }
 }
