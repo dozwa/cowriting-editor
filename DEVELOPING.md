@@ -6,13 +6,14 @@
 | For | the developer alone | testers outside |
 | App | CoWriting Editor Dev | CoWriting Editor |
 | Version | `0.1.1-dev` | `0.1.1-alpha` |
-| Built | when asked for | when its tag is pushed |
+| Built | when asked for | when `dev` is merged into it |
 
 Both apps install side by side and keep their own settings and keys. Signing and the details of
 the release workflow are in `RELEASING.md`.
 
 **Nothing is committed to `main` directly.** It moves only when a tried state of `dev` is merged
-into it and becomes an alpha.
+into it, and **every merge into `main` makes an alpha**: the version, the tag, the installers and
+the next dev version follow by themselves.
 
 ## Day to day: on `dev`
 
@@ -42,81 +43,71 @@ access to the repository.
 
 ## From `dev` to `main`: making an alpha
 
-Only from a state that was built as the dev app and tried. With `<tried>` its commit (or `dev`
-itself, when nothing came after):
+Only from a state that was built as the dev app and tried.
 
-```
-git switch main
-git merge --no-ff --no-commit <tried>
-python3 scripts/set-version.py 0.1.1-alpha
-# CHANGELOG.md: move what the alpha takes to a new heading under "Releases", with the date
-git commit -am "Alpha 0.1.1"
-git tag v0.1.1-alpha
-git push origin main v0.1.1-alpha       # the tag starts the release workflow
-```
+1. Open a pull request from `dev` into `main` (`gh pr create --base main --head dev`). CI checks
+   and tests it.
+2. Merge it with **"Create a merge commit"** (`gh pr merge --merge`). Not squashed and not
+   rebased: the release workflow refuses those, because the two branches would no longer know
+   what they share.
 
-The release workflow builds the installers and puts them into a **draft** pre-release. Testers
-see nothing until the draft is published on GitHub: look at the installers first, write the
-notes, then publish.
+The merge starts `.github/workflows/release.yml`, which does the rest:
 
-Then `dev` takes the alpha back and goes on under the next number:
+- **On `main`:** `0.1.1-dev` becomes `0.1.1-alpha` in every file, the entries under "On `dev`, in
+  no release" in `CHANGELOG.md` move under a heading "0.1.1, alpha" with the date, and that is
+  committed as "Alpha 0.1.1" and tagged `v0.1.1-alpha`.
+- **The installers** of CoWriting Editor are built for macOS, Windows and Linux and put into a
+  **draft** pre-release, with those changelog entries as its notes.
+- **On `dev`:** `main` is merged back and the version becomes `0.1.2-dev`.
 
-```
-git switch dev
-git merge main
-python3 scripts/set-version.py 0.1.2-dev
-git commit -am "dev is 0.1.2-dev"
-git push
-```
+Testers see nothing until the draft is published on GitHub: look at the installers first, then
+publish. Afterwards `git pull` on `dev` before going on: the workflow has added commits to it.
 
-Merging `main` back each time is what keeps the next merge into `main` free of conflicts in the
-version and the changelog.
+To release an older state than the tip of `dev`, make the pull request from a branch at that
+commit (`git switch -c alpha <commit> && git push -u origin alpha`).
+
+The number is the one `dev` holds. For a larger step, set it on `dev` before the pull request:
+`python3 scripts/set-version.py 0.2.0-dev` makes the next alpha `0.2.0-alpha`.
+
+`python3 scripts/release.py alpha` on `main` and `python3 scripts/release.py dev` on `dev` are
+what the workflow runs. Neither pushes, so in a clone they show what a merge would do.
 
 ## What keeps the two apart
 
 - **The standard is dev.** `src-tauri/tauri.conf.json` is the dev app, so no command makes an
   alpha by accident. Only the release workflow lays `src-tauri/tauri.release.conf.json` over it.
-- **A tag has to match.** The release workflow stops when the tag is not `v` plus the version in
-  the files, when that version ends in `-dev`, or when the tagged commit is not on `main`.
+- **Only `main` releases.** The release workflow runs on a push to `main` and on nothing else; a
+  tag pushed by hand builds nothing. A version that is tagged already is not released twice.
+- **Only a real merge releases.** A squashed or rebased merge of `dev` is refused, and nothing is
+  tagged or built.
 - **The dev app has a dev version.** CI started by hand stops when the version does not end in
   `-dev`.
 - **One version everywhere.** `python3 scripts/set-version.py --check` says which version the
   files hold and whether they agree; CI runs it on every push.
-- **Never tag to try something.** A tag that starts with `v` builds a release. To try a state,
-  build the dev app.
+- **Never merge into `main` to try something.** To try a state, build the dev app.
 
 ## Repairing an alpha that is out
 
-When testers need a fix and `dev` is not ready to be released, the fix goes onto `main` through a
-short branch, as the next alpha:
+When testers need a fix and `dev` is not ready to be released, the fix goes into `main` through a
+short branch, under the next number, which is set by hand here:
 
 ```
-git switch -c fix main
+git switch -c fix origin/main
 # fix, test, commit (or: git cherry-pick <commit from dev>)
-git switch main && git merge --no-ff --no-commit fix
 python3 scripts/set-version.py 0.1.2-alpha
-# CHANGELOG.md: a heading for 0.1.2 with the fix
-git commit -am "Alpha 0.1.2" && git tag v0.1.2-alpha
-git push origin main v0.1.2-alpha
+# CHANGELOG.md: a heading "### 0.1.2, alpha (date)" under "Releases", with the fix
+git commit -am "Alpha 0.1.2: <what was repaired>"
+git push -u origin fix
+gh pr create --base main --head fix && gh pr merge --merge
 ```
 
-Then `dev` takes the fix. Both branches have changed the version since they last met, which
-would be a conflict in five files; giving `dev` the alpha's version first makes the two agree:
-
-```
-git switch dev
-python3 scripts/set-version.py 0.1.2-alpha
-git commit -am "dev takes the alpha's version for the merge"
-git merge main
-python3 scripts/set-version.py 0.1.3-dev    # the number after the one just used
-git commit -am "dev is 0.1.3-dev"
-git push
-```
-
-If both wrote into `CHANGELOG.md`, that one conflict is left to settle by hand.
+The workflow tags `v0.1.2-alpha`, builds it, merges `main` into `dev` and sets `dev` to
+`0.1.3-dev`, so that no two builds share a number. If both branches wrote into the same lines of
+`CHANGELOG.md`, that last step stops and says so; the alpha is built all the same, and `main` is
+then merged into `dev` by hand.
 
 ## Where the branches stand now
 
 `dev` was made on 2026-11-27. At that time `main` already held the fixes made since the alpha
 0.1.0 (they were pushed before there was a `dev`), so until the next alpha `main` is ahead of
-what testers have. From `v0.1.1-alpha` on, `main` is the alpha.
+what testers have. The first merge of `dev` into `main` makes `v0.1.1-alpha`, and from then on `main` is the alpha.

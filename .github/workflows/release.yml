@@ -1,20 +1,57 @@
 name: Release
 
-# A tag like v0.1.1-alpha on `main` builds the installers of the released app ("CoWriting Editor",
-# not the dev app) for the three systems and puts them into a draft release, marked as a
-# pre-release when the version is an alpha. The tag has to be the version the files hold, no dev
-# version, and on a commit of `main`: an alpha is what `main` holds. With the signing secrets set
-# (see RELEASING.md) the macOS and Windows installers are signed; without them the same installers
-# are built unsigned.
+# `main` is the state of the alpha, so a merge into `main` makes one. When `dev` is merged (by a
+# pull request), this workflow
+#   1. turns the dev version into the alpha's (0.1.1-dev → 0.1.1-alpha), moves the changelog's
+#      entries under a heading of that version, commits that to `main` and tags it v0.1.1-alpha;
+#   2. builds the installers of the released app ("CoWriting Editor", not the dev app) for the
+#      three systems and puts them into a draft pre-release;
+#   3. merges `main` back into `dev` and sets `dev` to the next dev version (0.1.2-dev).
+# Nothing is published: the draft is looked at and published by hand. A push to `main` whose
+# version is tagged already releases nothing. With the signing secrets set (see RELEASING.md) the
+# macOS and Windows installers are signed; without them the same installers are built unsigned.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
   contents: write
 
+# one release at a time, and never a half one
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.alpha.outputs.tag }}
+      is_new: ${{ steps.alpha.outputs.is_new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The version, the changelog and the tag
+        id: alpha
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 scripts/release.py alpha
+      - name: Push them, and open the draft
+        if: steps.alpha.outputs.is_new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.alpha.outputs.tag }}
+        run: |
+          git push origin HEAD:main "$TAG"
+          version="${TAG#v}"
+          case "$version" in *-alpha) kind=--prerelease; title="Alpha ${version%-alpha}" ;; *) kind=; title="$version" ;; esac
+          gh release create "$TAG" --draft $kind --title "$title" --notes-file release-notes.md
+
   build:
+    needs: version
+    if: needs.version.outputs.is_new == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -23,18 +60,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
       - name: Linux packages the window needs
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libdbus-1-dev
-      - name: The tag is the version in the files, no dev version, and on main
+      - name: The tag is the version in the files, and no dev version
         shell: bash
-        run: |
-          python3 scripts/set-version.py --check "$GITHUB_REF_NAME"
-          git fetch --quiet origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD || { echo "::error::$GITHUB_REF_NAME is not on main. Merge the tried state of dev into main and tag there (DEVELOPING.md)."; exit 1; }
+        run: python3 scripts/set-version.py --check "${{ needs.version.outputs.tag }}"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
@@ -62,13 +96,29 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Put the installers into a draft release
+      - name: Put the installers into the draft release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          case "$version" in *-alpha) kind=--prerelease; title="Alpha ${version%-alpha}" ;; *) kind=; title="$version" ;; esac
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft $kind --title "$title" --notes "Draft: check the installers before publishing."
           shopt -s nullglob
-          gh release upload "$GITHUB_REF_NAME" --clobber target/release/bundle/dmg/*.dmg target/release/bundle/nsis/*.exe target/release/bundle/appimage/*.AppImage target/release/bundle/deb/*.deb
+          gh release upload "$TAG" --clobber target/release/bundle/dmg/*.dmg target/release/bundle/nsis/*.exe target/release/bundle/appimage/*.AppImage target/release/bundle/deb/*.deb
+
+  dev:
+    # dev goes on from the alpha, under the next number; the installers do not wait for it
+    needs: version
+    if: needs.version.outputs.is_new == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+      - name: dev takes main back and gets the next dev version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          python3 scripts/release.py dev
+          git push origin HEAD:dev

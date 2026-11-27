@@ -8,7 +8,7 @@ There are two apps, built from the same code:
 | Name | CoWriting Editor Dev | CoWriting Editor |
 | Identifier | `io.github.dozwa.cowriting-editor.dev` | `io.github.dozwa.cowriting-editor` |
 | Version | `0.1.1-dev` | `0.1.1-alpha` |
-| Built by | CI started by hand on `dev`, or `tauri build` | the tag `v0.1.1-alpha` on `main` |
+| Built by | CI started by hand on `dev`, or `tauri build` | a merge of `dev` into `main` |
 | Found | on the CI run, for 90 days, with access to the repository | on the releases page, as a pre-release |
 
 Both can be installed side by side. Each has its own settings, its own keys in the system's key
@@ -24,24 +24,31 @@ The commands for both, day to day, are in `DEVELOPING.md`.
 
 `dev` holds a dev version: the next alpha's number with `-dev` behind it; `main` holds the
 version of the alpha that is out. After `0.1.1-alpha`
-comes `0.1.2-dev`, then `0.1.2-alpha`, and so on. `python3 scripts/set-version.py <version>` writes
-a version into every file that holds it; `--check` (run by CI) says whether they agree.
+comes `0.1.2-dev`, then `0.1.2-alpha`, and so on. The release workflow sets both by itself.
+`python3 scripts/set-version.py <version>` writes a version into every file that holds it, for a
+larger step; `--check` (run by CI) says whether they agree.
 
 ## From the dev app to an alpha
 
 Work is on the branch `dev`. A state of it that was built as the dev app and tried is merged into
-`main`, given the alpha's version there and tagged; the commands are in `DEVELOPING.md`.
+`main` by a pull request, with a merge commit; the steps are in `DEVELOPING.md`.
 
-The tag runs `.github/workflows/release.yml`: it checks that the tag is the version in the files,
-no dev version and on `main`, builds the installers for macOS, Windows and Linux, with pandoc and
-Typst inside, and puts them into a **draft** pre-release on GitHub. Nothing is published until
-you publish the draft. A version without `-alpha` is built the same way as a full release.
+The merge runs `.github/workflows/release.yml`. It gives `main` the alpha's version, moves the
+changelog's entries under a heading of that version, tags the commit, builds the installers for
+macOS, Windows and Linux, with pandoc and Typst inside, and puts them into a **draft**
+pre-release on GitHub. Then it merges `main` back into `dev` and sets the next dev version there.
+Nothing is published until you publish the draft. A version without `-alpha` on `main` is built
+the same way as a full release.
 
-In `CHANGELOG.md`, what the release takes moves from "On `dev`, in no release" to a new heading
-under "Releases", with the version and the date. What stays behind is in no release.
+The workflow commits and pushes to `main` and `dev` as `github-actions[bot]`. If either branch is
+protected one day, that bot has to be allowed to push, or the workflow needs a token of its own.
 
 ## What is not done yet
 
+- **The release workflow as it is now has never run on GitHub.** What it does to the two
+  branches was run through in a clone (two alphas in a row, a repair, a squashed merge that is
+  refused); that it may push to `main` and `dev`, opens the draft and hands the tag to the build
+  shows on the first merge.
 - **The dev app and the alpha as two apps have not been built yet.** The configuration is read
   and checked, but no installer of either was made since: the first run of each workflow will show
   whether the bundlers take a version like `0.1.1-dev`. The Windows `.msi` and the Linux `.rpm`
