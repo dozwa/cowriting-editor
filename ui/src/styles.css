@@ -481,7 +481,12 @@ dialog label.check.own small { flex-basis: 100%; }
 .external ul { display: grid; gap: 6px; }
 .external li { padding: 8px 10px; background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; gap: 3px; }
 .external .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.external li p.muted { font-size: 12.5px; }
+.external li p.muted, .external li p.attached { font-size: 12.5px; }
+.external em.warn, dialog .kept em.warn { color: var(--warn, #a15c00); font-style: normal; }
+dialog .kept { margin-top: 14px; display: grid; gap: 8px; }
+dialog .kept ul { display: grid; gap: 4px; list-style: none; padding: 0; margin: 0; }
+dialog .kept li { display: flex; gap: 10px; justify-content: space-between; align-items: baseline; font-size: 14px; }
+dialog .kept .list { max-height: 220px; overflow: auto; }
 :root[data-calm] .external li p.muted { display: block; }
 
 /* The tour: a card at the lower left, over the text, so the bar and the side panel it speaks about stay in sight. */

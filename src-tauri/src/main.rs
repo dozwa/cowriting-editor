@@ -614,6 +614,12 @@ fn state_external(editor: State<Editor>, stated: cowriting_app::ExternalUse) -> 
     editor.session()?.state_external(&stated)
 }
 
+/// The conversations a file of another AI tool holds, for the author to choose from. The file is only read.
+#[tauri::command]
+fn read_chats(path: String) -> Result<cowriting_app::outside::Conversations, String> {
+    cowriting_app::outside::conversations(&path)
+}
+
 #[tauri::command]
 fn withdraw_external(editor: State<Editor>, id: String) -> Result<(), String> {
     editor.session()?.withdraw_external(&id)
@@ -1026,6 +1032,7 @@ fn main() {
             comment_ai_text,
             state_external,
             withdraw_external,
+            read_chats,
             live,
             set_live,
             live_review,

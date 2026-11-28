@@ -109,6 +109,13 @@ impl Bridge {
             "state_external" => {
                 serde_json::from_value(args["stated"].clone()).map_err(|e| e.to_string()).and_then(|stated| self.session()?.state_external(&stated)).map(|_| Value::Null)
             }
+            "read_chats" => cowriting_app::outside::conversations(&text("path")).map(|found| json!(found)),
+            // no dialog here: an export beside the document, if there is one
+            "pick_chat" => {
+                let document = self.document.lock().unwrap().clone();
+                let beside = ["conversations.json", "chat.jsonl", "chat.pdf"].iter().map(|name| std::path::Path::new(&document).with_file_name(name)).find(|file| file.exists());
+                Ok(beside.map_or(Value::Null, |file| json!(file.to_string_lossy())))
+            }
             "withdraw_external" => self.session()?.withdraw_external(&text("id")).map(|_| Value::Null),
             "comment_ai_text" => self.session()?.comment_ai_text(&text("id"), &text("note")).map(|_| Value::Null),
             "log_view" => self.session()?.log_view(&text("documentText")).map(|view| json!(view)),

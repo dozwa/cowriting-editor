@@ -848,7 +848,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
               onCite={key => editor.current?.insert(`[@${key}]`)}
             />
           ) : (
-            <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} onExternal={async stated => {
+            <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} chats={{ pick: api.pickChat, read: api.readChats }} onExternal={async stated => {
               try {
                 await api.stateExternal(stated)
                 await refreshLog()
@@ -890,7 +890,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       {chosenPicture !== null && <PictureDialog name={chosenPicture.seen.name} linkedAs={chosenPicture.seen.path} folder={picturesFolder} onCopy={into => void copyPicture(chosenPicture.file, into)} onLink={() => (editor.current?.format('image', chosenPicture.seen.path), setChosenPicture(null))} onClose={() => setChosenPicture(null)} />}
       {dialog === 'markdown' && <MarkdownHelp onOpen={which => void api.openGuide(which).catch(fail)} onClose={() => setDialog(null)} />}
       {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
-      {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} onClose={() => setDialog(null)} />}
+      {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} hasOutside={log.external.some(stated => stated.attachments.length > 0)} onClose={() => setDialog(null)} />}
     </div>
   )
 }

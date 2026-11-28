@@ -39,6 +39,12 @@ Your text, your questions, the AI's answers, file names, paths, the address of y
 keys, your user name, your computer's name. The editor's technical log (diagnostics.log) is not
 sent either; it only leaves your computer if you add it to a bug report yourself.
 
+Chats and files from other AI tools that you keep with a statement of outside use are not sent
+anywhere either, and the AI you ask in the editor is not given them. They lie in the document's
+`.cowriting` folder on your computer. Whoever gets that folder from you, in a shared or synced
+folder or with a submission, gets them too: keep only the conversations that belong to the work,
+and mind what they say about other people.
+
 When a message arrives, the server sees the internet address it came from, as every server does.
 [[whether and how long the server keeps internet addresses]]
 

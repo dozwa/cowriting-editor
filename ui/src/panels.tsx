@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { AiTextRow, ExternalUse, LogView, PartyView, ThreadMessage, TurnRow, Use } from './api'
+import type { AiTextRow, Attached, Conversations, ExternalUse, LogView, NewAttachment, PartyView, ThreadMessage, TurnRow, Use } from './api'
 import { Dialog } from './dialogs'
 import { Sprite } from './experts'
 import type { Live } from './App'
@@ -313,7 +313,7 @@ function AiTextItem({ row, onOpen, onJump, onComment }: { row: AiTextRow; onOpen
           </>
         )}
         {' · '}
-        {m.panels.fromAnswerTo(<button className="link" onClick={() => onOpen(row.turn)}>{m.panels.quoted(row.asked)}</button>)}
+        {row.outside !== '' ? m.panels.fromKeptChat(row.outside, m.panels.quoted(row.asked)) : m.panels.fromAnswerTo(<button className="link" onClick={() => onOpen(row.turn)}>{m.panels.quoted(row.asked)}</button>)}
       </span>
       <span className="row">
         <input aria-label={m.panels.commentOnPassage(row.excerpt.slice(0, 40))} placeholder={m.panels.commentForDisclosure} value={note} onChange={e => setNote(e.target.value)} />
@@ -323,18 +323,56 @@ function AiTextItem({ row, onOpen, onJump, onComment }: { row: AiTextRow; onOpen
   )
 }
 
-const NOTHING_STATED: ExternalUse = { id: '', tool: '', model: '', date: '', purpose: '', material: '', result: '', checked: '' }
+const NOTHING_STATED: ExternalUse = { id: '', tool: '', model: '', date: '', purpose: '', material: '', result: '', checked: '', attachments: [], add: [] }
+
+/** How the author gets at the files of other tools: choose one, and see what it holds. */
+export type ChatFiles = { pick(): Promise<string | null>; read(path: string): Promise<Conversations> }
+
+/** A kept chat or file in a few words. */
+function attachedName(kept: Attached): string {
+  const t = m.panels
+  if (kept.kind === 'chat') return t.keptChat(kept.title, t.chatForms[kept.from] ?? kept.from, kept.turns)
+  return kept.kind === 'text' ? t.keptText : t.keptFile(kept.title === '' ? kept.file : kept.title)
+}
+
+/** A new chat or file, before the statement is saved. */
+function addedName(added: NewAttachment, files: Record<string, Conversations>): string {
+  const t = m.panels
+  if (added.kind === 'text') return t.keptText
+  const name = files[added.path]?.name ?? added.path
+  return added.kind === 'file' ? t.keptFile(name) : t.chatsFrom(added.conversations.length, name)
+}
 
 /** The form for AI use outside the editor: the tool and what it was for, and the rest only where it matters. */
-function ExternalDialog({ start, onSave, onClose }: { start: ExternalUse; onSave(stated: ExternalUse): Promise<boolean>; onClose(): void }) {
+function ExternalDialog({ start, chats, onSave, onClose }: { start: ExternalUse; chats: ChatFiles; onSave(stated: ExternalUse): Promise<boolean>; onClose(): void }) {
   const [stated, setStated] = useState(start)
+  /** The file the author is choosing conversations from, and the ones ticked. */
+  const [offered, setOffered] = useState<{ path: string; found: Conversations; chosen: number[] } | null>(null)
+  const [seen, setSeen] = useState<Record<string, Conversations>>({})
+  const [pasted, setPasted] = useState<string | null>(null)
+  const [problem, setProblem] = useState('')
   const t = m.panels
-  const field = (key: keyof ExternalUse, label: string, example = '', rows = 0) => (
+  const field = (key: 'tool' | 'model' | 'purpose' | 'material' | 'result' | 'checked', label: string, example = '', rows = 0) => (
     <label>
       {label}
       {rows > 0 ? <textarea rows={rows} value={stated[key]} placeholder={example} onChange={e => setStated({ ...stated, [key]: e.target.value })} /> : <input value={stated[key]} placeholder={example} onChange={e => setStated({ ...stated, [key]: e.target.value })} />}
     </label>
   )
+  const add = (added: NewAttachment) => setStated(now => ({ ...now, add: [...now.add, added] }))
+  const choose = async () => {
+    try {
+      const path = await chats.pick()
+      if (path === null) return
+      const found = await chats.read(path)
+      setSeen(now => ({ ...now, [path]: found }))
+      setProblem('')
+      if (found.form !== '') setOffered({ path, found, chosen: found.list.length === 1 ? [0] : [] })
+      else if (found.canKeepAsFile) add({ kind: 'file', path })
+      else setProblem(t.tooLargeToKeep(found.name))
+    } catch (e) {
+      setProblem(String(e))
+    }
+  }
   return (
     <Dialog title={start.id === '' ? t.externalTitle : t.externalEditTitle} onClose={onClose}>
       <p>{t.externalIntro}</p>
@@ -351,16 +389,73 @@ function ExternalDialog({ start, onSave, onClose }: { start: ExternalUse; onSave
       {field('material', t.externalMaterial, t.externalMaterialExample, 2)}
       {field('result', t.externalResult, '', 2)}
       {field('checked', t.externalChecked, '', 2)}
+      <section className="kept" aria-label={t.keptHeading}>
+        <h3>{t.keptHeading}</h3>
+        <p className="muted">{t.keptExplained}</p>
+        {(stated.attachments.length > 0 || stated.add.length > 0) && (
+          <ul>
+            {stated.attachments.map(kept => (
+              <li key={kept.file}>
+                <span>{attachedName(kept)}{kept.state !== 'intact' && <em className="warn"> {kept.state === 'changed' ? t.keptChanged : t.keptMissing}</em>}</span>
+                <button className="link" aria-label={t.takeAwayThis(attachedName(kept))} onClick={() => setStated({ ...stated, attachments: stated.attachments.filter(other => other.file !== kept.file) })}>{t.takeAway}</button>
+              </li>
+            ))}
+            {stated.add.map((added, at) => (
+              <li key={`new-${at}`}>
+                <span>{addedName(added, seen)} <span className="muted">{t.keptOnSave}</span></span>
+                <button className="link" aria-label={t.takeAwayThis(addedName(added, seen))} onClick={() => setStated({ ...stated, add: stated.add.filter((_, other) => other !== at) })}>{t.takeAway}</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {offered !== null && (
+          <fieldset className="choices">
+            <legend>{t.chooseChats(offered.found.name, t.chatForms[offered.found.form] ?? offered.found.form)}</legend>
+            <div className="list">
+              {offered.found.list.map(chat => (
+                <label className="check" key={chat.index}>
+                  <input type="checkbox" checked={offered.chosen.includes(chat.index)} onChange={e => setOffered({ ...offered, chosen: e.target.checked ? [...offered.chosen, chat.index].sort((a, b) => a - b) : offered.chosen.filter(other => other !== chat.index) })} />{' '}
+                  {t.chatOffered(chat.title, chat.date, chat.turns)}
+                </label>
+              ))}
+            </div>
+            <div className="row">
+              <button disabled={offered.chosen.length === 0} onClick={() => (add({ kind: 'chats', path: offered.path, conversations: offered.chosen }), setOffered(null))}>{t.keepChosen(offered.chosen.length)}</button>
+              <button onClick={() => setOffered(null)}>{t.keepNone}</button>
+            </div>
+          </fieldset>
+        )}
+        {pasted !== null && (
+          <>
+            <label>
+              {t.pasteChat}
+              <textarea rows={6} value={pasted} placeholder={t.pasteChatExample} onChange={e => setPasted(e.target.value)} />
+              <small>{t.pasteChatHint}</small>
+            </label>
+            <div className="row">
+              <button disabled={pasted.trim() === ''} onClick={() => (add({ kind: 'text', text: pasted }), setPasted(null))}>{t.keepPasted}</button>
+              <button onClick={() => setPasted(null)}>{t.keepNone}</button>
+            </div>
+          </>
+        )}
+        {offered === null && pasted === null && (
+          <div className="row">
+            <button onClick={() => void choose()}>{t.addFile}</button>
+            <button onClick={() => setPasted('')}>{t.addPasted}</button>
+          </div>
+        )}
+        {problem !== '' && <p className="error" role="alert">{problem}</p>}
+      </section>
       <div className="row end">
         <button onClick={onClose}>{m.dialogs.close}</button>
-        <button className="primary" disabled={stated.tool.trim() === '' || stated.purpose.trim() === ''} onClick={async () => (await onSave(stated)) && onClose()}>{start.id === '' ? t.externalSave : t.externalSaveEdit}</button>
+        <button className="primary" disabled={stated.tool.trim() === '' || stated.purpose.trim() === '' || offered !== null || pasted !== null} onClick={async () => (await onSave(stated)) && onClose()}>{start.id === '' ? t.externalSave : t.externalSaveEdit}</button>
       </div>
     </Dialog>
   )
 }
 
 /** What the author stated about other AI tools, and the way to state more. */
-function External({ rows, onSave, onWithdraw }: { rows: ExternalUse[]; onSave(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void }) {
+function External({ rows, chats, onSave, onWithdraw }: { rows: ExternalUse[]; chats: ChatFiles; onSave(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void }) {
   const [editing, setEditing] = useState<ExternalUse | null>(null)
   const t = m.panels
   return (
@@ -380,8 +475,14 @@ function External({ rows, onSave, onWithdraw }: { rows: ExternalUse[]; onSave(st
               {row.material !== '' && <p className="muted">{t.externalMaterialLabel} {row.material}</p>}
               {row.result !== '' && <p className="muted">{t.externalResultLabel} {row.result}</p>}
               {row.checked !== '' && <p className="muted">{t.externalCheckedLabel} {row.checked}</p>}
+              {row.attachments.length > 0 && (
+                <p className="attached">
+                  {t.keptLabel} {row.attachments.map(attachedName).join('; ')}
+                  {row.attachments.some(kept => kept.state !== 'intact') && <em className="warn"> {t.keptNotAsLogged}</em>}
+                </p>
+              )}
               <div className="row">
-                <button className="link" aria-label={t.externalEditFor(row.tool)} onClick={() => setEditing(row)}>{t.externalEdit}</button>
+                <button className="link" aria-label={t.externalEditFor(row.tool)} onClick={() => setEditing({ ...row, add: [] })}>{t.externalEdit}</button>
                 <button className="link" aria-label={t.externalWithdrawFor(row.tool)} onClick={() => onWithdraw(row.id)}>{t.externalWithdraw}</button>
               </div>
             </li>
@@ -390,17 +491,18 @@ function External({ rows, onSave, onWithdraw }: { rows: ExternalUse[]; onSave(st
       )}
       <button onClick={() => setEditing(NOTHING_STATED)}>{t.externalAdd}</button>
       {rows.length > 0 && <p className="muted">{t.externalKept}</p>}
-      {editing !== null && <ExternalDialog start={editing} onSave={onSave} onClose={() => setEditing(null)} />}
+      {editing !== null && <ExternalDialog start={editing} chats={chats} onSave={onSave} onClose={() => setEditing(null)} />}
     </section>
   )
 }
 
-type LogProps = { log: LogView; onOpen(id: string): void; onJump(line: number): void; onComment(id: string, note: string): void; onExternal(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void }
+type LogProps = { log: LogView; onOpen(id: string): void; onJump(line: number): void; onComment(id: string, note: string): void; chats: ChatFiles; onExternal(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void }
 
-export function LogPanel({ log, onOpen, onJump, onComment, onExternal, onWithdraw }: LogProps) {
+export function LogPanel({ log, onOpen, onJump, onComment, chats, onExternal, onWithdraw }: LogProps) {
   const { stats } = log
-  const external = <External rows={log.external} onSave={onExternal} onWithdraw={onWithdraw} />
-  if (log.turns.length === 0 && log.guard.length === 0) {
+  const external = <External rows={log.external} chats={chats} onSave={onExternal} onWithdraw={onWithdraw} />
+  // text from a chat the author kept can be found in the document before anything was asked here
+  if (log.turns.length === 0 && log.guard.length === 0 && log.aiText.length === 0) {
     return (
       <div className="log">
         <p className="hint">{m.panels.nothingLogged}</p>

@@ -35,7 +35,10 @@ let lastEditor: Editor & Seen
 /** What the app's window calls when files are dropped on it; set by the stand-in. */
 let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[] } = {}) {
+/** What the stand-in finds in an export of another tool. */
+const CHATS = { form: 'chatgpt', name: 'conversations.json', list: [{ index: 0, title: 'Mixed model in R', tool: 'ChatGPT', date: '2026-11-01', turns: 2 }, { index: 1, title: 'Holiday plans', tool: 'ChatGPT', date: '2026-11-02', turns: 1 }], canKeepAsFile: true }
+
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string } = {}) {
   let exportChoice: PdfChoice | null = options.exportChoice ?? null
   let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
   const turns: TurnRow[] = []
@@ -61,7 +64,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
   const detect = (text: string, source: 'paste' | 'typed', line: number, documentText: string): AiTextRow[] => {
     const turn = turns.find(t => t.answer !== '' && text.includes(t.answer))
     if (turn === undefined || aiText.some(row => row.turn === turn.id)) return []
-    const row: AiTextRow = { id: `a${aiText.length + 1}`, ts: '2026-11-23T10:05:00.000Z', source, match: 'exact', kind: 'text', words: turn.answer.split(/\s+/).length, excerpt: turn.answer, line, turn: turn.id, asked: turn.asked, note: '', stillInText: documentText.includes(turn.answer) }
+    const row: AiTextRow = { id: `a${aiText.length + 1}`, ts: '2026-11-23T10:05:00.000Z', source, match: 'exact', kind: 'text', words: turn.answer.split(/\s+/).length, excerpt: turn.answer, line, turn: turn.id, outside: '', asked: turn.asked, note: '', stillInText: documentText.includes(turn.answer) }
     aiText.unshift(row)
     return [row]
   }
@@ -99,8 +102,18 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     writeReportFile: async (target, minutes, documentText) => void calls.reportFiles.push([target, minutes, documentText]),
     stateExternal: async stated => {
       calls.project.push(['state', stated])
-      external = stated.id === '' ? [...external, { ...stated, id: `x${external.length + 1}` }] : external.map(row => (row.id === stated.id ? { ...stated, id: `${stated.id}b` } : row))
+      // what is added is kept: a chat for each conversation chosen or a marked text, a file as it is
+      const added = stated.add.flatMap((add, at): ExternalUse['attachments'] => {
+        const kept = { bytes: 100, sha256: 'ab12'.repeat(16), state: 'intact' as const }
+        if (add.kind === 'chats') return add.conversations.map(index => ({ ...kept, file: `chat-${at}-${index}.json`, kind: 'chat' as const, turns: CHATS.list[index]?.turns ?? 0, title: CHATS.list[index]?.title ?? '', from: CHATS.form }))
+        if (add.kind === 'text') return [{ ...kept, file: `text-${at}.md`, kind: 'text' as const, turns: 0, title: '', from: '' }]
+        return [{ ...kept, file: `f${at}-notes.pdf`, kind: 'file' as const, turns: 0, title: 'notes.pdf', from: '' }]
+      })
+      const now = { ...stated, attachments: [...stated.attachments, ...added], add: [] }
+      external = stated.id === '' ? [...external, { ...now, id: `x${external.length + 1}` }] : external.map(row => (row.id === stated.id ? { ...now, id: `${stated.id}b` } : row))
     },
+    pickChat: async () => options.chatPicked ?? '/downloads/conversations.json',
+    readChats: async path => (path.endsWith('.json') ? CHATS : { form: '', name: 'notes.pdf', list: [], canKeepAsFile: true }),
     withdrawExternal: async id => {
       calls.project.push(['withdraw', id])
       external = external.filter(row => row.id !== id)
@@ -386,7 +399,7 @@ test('the author asks, reads the answer, classifies it, and the log shows the ch
   expect(screen.getByText(/One AI input is not classified yet/)).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Write the disclosure' }))
   await screen.findByText('/work/.cowriting/thesis.md/disclosure/ai-register.en.md')
-  expect(calls.exported).toEqual([{ language: 'en', format: 'md', withPrompts: false, withAnswers: false }])
+  expect(calls.exported).toEqual([{ language: 'en', format: 'md', withPrompts: false, withAnswers: false, withOutside: false }])
   // it lies in a hidden folder: it can be shown there, and its text copied
   const copied: string[] = []
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => void copied.push(text) } })
@@ -1898,7 +1911,7 @@ test('AI use outside the editor is stated in a form with two things needed, corr
   await user.type(dialog.getByLabelText('What it was used for'), 'R code for the analysis')
   await user.type(dialog.getByLabelText(/What it worked on/), 'the trial data')
   await user.click(save)
-  await waitFor(() => expect(calls.project.at(-1)).toEqual(['state', { id: '', tool: 'ChatGPT', model: '', date: '', purpose: 'R code for the analysis', material: 'the trial data', result: '', checked: '' }]))
+  await waitFor(() => expect(calls.project.at(-1)).toEqual(['state', { id: '', tool: 'ChatGPT', model: '', date: '', purpose: 'R code for the analysis', material: 'the trial data', result: '', checked: '', attachments: [], add: [] }]))
   await screen.findByText('R code for the analysis')
   expect(screen.queryByRole('dialog', { name: 'AI use outside the editor' })).toBeNull()
   // a statement alone is something to disclose
@@ -1914,6 +1927,74 @@ test('AI use outside the editor is stated in a form with two things needed, corr
   await user.click(screen.getByRole('button', { name: 'Take back the statement about ChatGPT' }))
   await waitFor(() => expect(screen.queryByText('R code for the analysis')).toBeNull())
   expect(calls.project.at(-1)).toEqual(['withdraw', 'x1b'])
+})
+
+test('chats from another tool are chosen from its export, kept with the statement, and can go into an appendix', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: /Log/ }))
+  await user.click(screen.getByRole('button', { name: 'State AI use elsewhere…' }))
+  let dialog = within(screen.getByRole('dialog', { name: 'AI use outside the editor' }))
+  await user.type(dialog.getByLabelText('Tool'), 'ChatGPT')
+  await user.type(dialog.getByLabelText('What it was used for'), 'R code')
+
+  // the export's conversations are offered; nothing is kept that is not ticked, and the form waits for the choice
+  await user.click(dialog.getByRole('button', { name: 'Add a chat or file…' }))
+  await dialog.findByText('conversations.json (ChatGPT export): which conversations belong to this work?')
+  const save = dialog.getByRole('button', { name: 'Add to the log' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  expect((dialog.getByRole('button', { name: 'Keep the chosen' }) as HTMLButtonElement).disabled).toBe(true)
+  await user.click(dialog.getByRole('checkbox', { name: 'Mixed model in R, 2026-11-01, 2 exchanges' }))
+  await user.click(dialog.getByRole('button', { name: 'Keep 1 conversation' }))
+  dialog.getByText('1 chat from conversations.json')
+
+  // a chat pasted as text, and one taken away again before saving
+  await user.click(dialog.getByRole('button', { name: 'Paste a chat…' }))
+  await user.type(dialog.getByLabelText(/The chat, as text/), 'Prompt: Why?')
+  await user.click(dialog.getByRole('button', { name: 'Keep this text' }))
+  await user.click(dialog.getByRole('button', { name: 'Paste a chat…' }))
+  await user.type(dialog.getByLabelText(/The chat, as text/), 'wrong window')
+  await user.click(dialog.getByRole('button', { name: 'Keep this text' }))
+  await user.click(dialog.getAllByRole('button', { name: 'Take away pasted text' }).at(-1) as HTMLElement)
+  await user.click(save)
+  await waitFor(() => expect(calls.project.at(-1)).toMatchObject(['state', { tool: 'ChatGPT', attachments: [], add: [{ kind: 'chats', path: '/downloads/conversations.json', conversations: [0] }, { kind: 'text', text: 'Prompt: Why?' }] }]))
+  await screen.findByText(/Kept with it: chat “Mixed model in R” \(ChatGPT export, 2 exchanges\); pasted text/)
+
+  // a correction keeps what is there unless it is taken away
+  await user.click(screen.getByRole('button', { name: 'Correct the statement about ChatGPT' }))
+  dialog = within(screen.getByRole('dialog', { name: 'Correct the statement' }))
+  await user.click(dialog.getByRole('button', { name: 'Take away pasted text' }))
+  await user.click(dialog.getByRole('button', { name: 'Save the correction' }))
+  await waitFor(() => expect(calls.project.at(-1)).toMatchObject(['state', { id: 'x1', attachments: [{ file: 'chat-0-0.json' }], add: [] }]))
+  await waitFor(() => expect(screen.queryByText(/pasted text/)).toBeNull())
+
+  // the disclosure offers the appendix only when something is kept
+  await user.click(screen.getByRole('button', { name: 'Disclosure…' }))
+  const disclosure = within(screen.getByRole('dialog', { name: /Disclos/ }))
+  await user.click(disclosure.getByRole('checkbox', { name: /appendix of AI use outside the editor/ }))
+  await user.click(disclosure.getByRole('button', { name: /Write|Export|Create/ }))
+  await waitFor(() => expect(calls.exported.at(-1)).toMatchObject({ withOutside: true }))
+})
+
+test('a file that is no chat is kept as it is', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ chatPicked: '/downloads/notes.pdf' })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: /Log/ }))
+  await user.click(screen.getByRole('button', { name: 'State AI use elsewhere…' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'AI use outside the editor' }))
+  await user.type(dialog.getByLabelText('Tool'), 'Elicit')
+  await user.type(dialog.getByLabelText('What it was used for'), 'Finding studies')
+  await user.click(dialog.getByRole('button', { name: 'Add a chat or file…' }))
+  await dialog.findByText('file notes.pdf')
+  await user.click(dialog.getByRole('button', { name: 'Add to the log' }))
+  await waitFor(() => expect(calls.project.at(-1)).toMatchObject(['state', { add: [{ kind: 'file', path: '/downloads/notes.pdf' }] }]))
+  await screen.findByText('Kept with it: file notes.pdf')
+  // nothing kept that could be printed: the disclosure still offers the appendix, since the file is named there
+  expect((screen.getByRole('button', { name: 'Disclosure…' }) as HTMLButtonElement).disabled).toBe(false)
 })
 
 test('a new author is shown around: the tour goes through the window part by part, marks what it speaks about, and is told to the app once it is through', async () => {

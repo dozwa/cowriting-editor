@@ -166,13 +166,26 @@ export type AiTextRow = {
   line: number
   /** the turn whose answer it matches, and what the author had asked */
   turn: string
+  /** The tool, when the passage is from a chat the author kept with a statement of outside use; else empty. */
+  outside: string
   asked: string
   note: string
   stillInText: boolean
 }
 
 /** AI use outside the editor, as the author states it. `id` is empty for a new statement. */
-export type ExternalUse = { id: string; tool: string; model: string; date: string; purpose: string; material: string; result: string; checked: string }
+export type ExternalUse = {
+  id: string; tool: string; model: string; date: string; purpose: string; material: string; result: string; checked: string
+  /** What is kept with the statement. In a correction: the ones that stay. */
+  attachments: Attached[]
+  /** What the author adds with this statement. */
+  add: NewAttachment[]
+}
+/** A chat or file kept with a statement, as the log names it and as it is now on disk. */
+export type Attached = { file: string; kind: 'chat' | 'text' | 'file'; bytes: number; sha256: string; turns: number; title: string; from: string; state: 'intact' | 'changed' | 'missing' }
+export type NewAttachment = { kind: 'file'; path: string } | { kind: 'chats'; path: string; conversations: number[] } | { kind: 'text'; text: string }
+/** What a file of another AI tool holds. `form` is empty when the editor cannot read it as a chat. */
+export type Conversations = { form: string; name: string; list: { index: number; title: string; tool: string; date: string; turns: number }[]; canKeepAsFile: boolean }
 
 export type LogView = {
   /** the document's characters, counted as the words are: a run of spaces is one, marks and addresses are left out */
@@ -204,7 +217,7 @@ export type ModelStatus = 'tested' | 'failed' | 'untested'
 export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; notices: StoredNotice[] }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
-export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean }
+export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean; withOutside: boolean }
 export type Exported = { paths: string[]; register: string }
 
 /** Read when a file dialog opens, so the name is in the language shown now. */
@@ -282,6 +295,12 @@ export const api = {
   openGuide: (which: Page) => invoke<void>('open_guide', { which }),
   /** States AI use outside the editor, or corrects a statement (its `id` given). The log only grows. */
   stateExternal: (stated: ExternalUse) => invoke<void>('state_external', { stated }),
+  /** Asks the author for an export, a transcript or another file to keep with a statement; null when they cancel. */
+  pickChat: async (): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false })
+    return typeof path === 'string' ? path : null
+  },
+  readChats: (path: string) => invoke<Conversations>('read_chats', { path }),
   /** Takes a statement back: it stays in the log and leaves the disclosure. */
   withdrawExternal: (id: string) => invoke<void>('withdraw_external', { id }),
   /** What belongs to the open project besides text and log: linked files, and its own settings. */

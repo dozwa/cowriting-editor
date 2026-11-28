@@ -32,6 +32,7 @@ export const dialogs: typeof pattern = {
   language: 'Sprache',
   withPrompts: 'Auch den Anhang mit allen Prompts schreiben',
   withAnswers: 'Die Antworten der KI in den Anhang aufnehmen',
+  withOutside: 'Auch den Anhang zur KI-Nutzung außerhalb des Editors schreiben, mit den abgelegten Chats',
   writtenTo: 'Geschrieben nach:',
   showInFolder: 'Im Ordner zeigen',
   openFile: 'Öffnen',

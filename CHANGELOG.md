@@ -90,6 +90,18 @@ to a new heading with its version and date; the release workflow does that (see 
   holds stays as it is, and the log is kept as before. Its shortcut, the tour and "Show in log"
   still open it, and it is in the row while it is open; Live review is in the row while it is on.
   A hidden Log tab does not show how many answers are still to classify. (#39)
+- **Chats from other AI tools in the record.** A statement of AI use outside the editor can
+  keep the chat itself: conversations chosen from a data export of ChatGPT or Claude.ai or from
+  a transcript of Claude Code, a chat pasted as text with "Prompt:" and "Answer:" marked, or any
+  other file. Only what you choose is kept, in the document's `.cowriting` folder under
+  `external/`; tool calls, files and pictures inside a chat are left out and counted. The log
+  names each file with its SHA-256, the disclosure names it with the statement, and a new
+  appendix prints the kept chats in full, in Markdown or LaTeX, English or German. A file
+  changed after it was kept is said to be changed and not printed. Text you paste or type that
+  comes from a kept chat is found and listed like text from the editor's own AI. The readers
+  for ChatGPT's and Claude.ai's exports were written from what is known of their form and not
+  yet tried with a real export; Claude Code's was tried with real transcripts. Classifying such
+  chats like the editor's own turns, and merging the plugin's log, are not part of this. (#4, open)
 
 ### Fixed
 

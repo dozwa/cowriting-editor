@@ -234,6 +234,34 @@ what came of it and how you checked it are optional. A statement can be correcte
 the log keeps every line (entries of type `external`), and the disclosure lists what holds now in
 a section of its own, marked as your own statement.
 
+You can keep the chat itself with a statement ("Add a chat or file…" and "Paste a chat…" in the
+form):
+
+- **An export or a transcript.** The editor reads the data export of ChatGPT and of Claude.ai
+  (`conversations.json`) and a transcript of Claude Code (a `.jsonl` file under
+  `~/.claude/projects/`), lists the conversations in it, and keeps only the ones you tick: what
+  you asked and what was answered, in a plain file of its own form. The rest of the export is
+  not copied. Tool calls, files and pictures inside a chat are left out and counted, and of a
+  chat with regenerated answers the branch you went on with is kept. The two exports are read
+  as their form is known; they were not yet tried with a real export, and such forms change.
+- **A chat pasted as text**, from any tool. Begin a line with "Prompt:" where you asked and
+  "Answer:" where the tool answered (also "Frage:", "Antwort:", "You:", "ChatGPT:") and it is
+  kept as a chat; without such marks the text is kept as it is.
+- **Any other file** (a PDF, a screenshot), up to 25 MB, unchanged.
+
+Everything goes to `.cowriting/<file>/external/`, so it travels with the document, and is seen
+by whoever gets that folder. The log names each file with its size and SHA-256. The checksum
+shows that a file is unchanged since you kept it, not that the chat took place as it says; the
+disclosure says so. A file you take away, or whose statement you take back, is deleted; the log
+keeps its name and checksum. The editor did not see any of this use, and the AI you ask in the
+editor is not given these files.
+
+The disclosure names what is kept with each statement, and "Also write the appendix of AI use
+outside the editor" prints the chats in full (`ai-outside.<language>.md` or `.tex`), apart from
+the appendix of the editor's own prompts. A file changed after it was kept is named as changed
+and not printed. Answers in kept chats are also compared with what you paste or type: a passage
+taken from one is logged and listed in the disclosure like text from the editor's own AI.
+
 ## The tour
 
 At the first start a tour goes through the window in twelve short steps: the AI, opening a
@@ -314,7 +342,8 @@ detected, and the disclosure says so.
 
 For `thesis.md` the editor keeps a folder `.cowriting/thesis.md/` beside it: the log
 (`ai-log/YYYY-MM.jsonl`), the document as it was at each question (`snapshots/`), the AI's notes
-(`notes/`, the only place it can write), the disclosure (`disclosure/`), the last reference check
+(`notes/`, the only place it can write), the disclosure (`disclosure/`), chats and files you kept
+with a statement of outside AI use (`external/`), the last reference check
 (`verify.json`), and the hints you ticked off (`marks.json`). What you tell the
 experts is in `party.md`, experts you made in `party/<id>.md`, both in the project's folder (see Projects): plain files you can read and edit. Nothing is created
 until you first ask the AI, and nothing is written into the manuscript.

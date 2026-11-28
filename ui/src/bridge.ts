@@ -36,6 +36,8 @@ export const bridgeApi: Api = {
   writeReportFile: () => Promise.reject('The bridge keeps no technical log.'),
   openGuide: async which => (which === 'repository' || which === 'coffee' ? Promise.reject('The bridge opens guides only.') : void window.open(`https://${GUIDES[which].address}`, '_blank', 'noopener')),
   stateExternal: stated => call('state_external', { stated }),
+  pickChat: () => call('pick_chat'),
+  readChats: path => call('read_chats', { path }),
   withdrawExternal: id => call('withdraw_external', { id }),
   project: () => call('project'),
   pickLinkedFile: async () => null,

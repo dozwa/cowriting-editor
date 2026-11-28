@@ -79,8 +79,8 @@ export function Dialog({ title, onClose, mayClose, children }: { title: string; 
   )
 }
 
-export function DisclosureDialog({ api, language, open, onClose }: { api: Api; language: 'en' | 'de'; open: number; onClose(): void }) {
-  const [options, setOptions] = useState<ExportOptions>({ language, format: 'md', withPrompts: false, withAnswers: false })
+export function DisclosureDialog({ api, language, open, hasOutside, onClose }: { api: Api; language: 'en' | 'de'; open: number; hasOutside: boolean; onClose(): void }) {
+  const [options, setOptions] = useState<ExportOptions>({ language, format: 'md', withPrompts: false, withAnswers: false, withOutside: false })
   const [exported, setExported] = useState<Exported | null>(null)
   const [error, setError] = useState('')
   const [isCopied, setCopied] = useState(false)
@@ -133,6 +133,11 @@ export function DisclosureDialog({ api, language, open, onClose }: { api: Api; l
       <label className="check">
         <input type="checkbox" checked={options.withAnswers} disabled={!options.withPrompts} onChange={e => set({ withAnswers: e.target.checked })} /> {t.withAnswers}
       </label>
+      {hasOutside && (
+        <label className="check">
+          <input type="checkbox" checked={options.withOutside} onChange={e => set({ withOutside: e.target.checked })} /> {t.withOutside}
+        </label>
+      )}
       {error !== '' && <p className="error" role="alert">{error}</p>}
       {exported !== null && (
         <>

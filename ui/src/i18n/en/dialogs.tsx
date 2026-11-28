@@ -35,6 +35,7 @@ export const dialogs = {
   language: 'Language',
   withPrompts: 'Also write the appendix with every prompt',
   withAnswers: 'Include the AI’s answers in the appendix',
+  withOutside: 'Also write the appendix of AI use outside the editor, with the chats you kept',
   writtenTo: 'Written to:',
   showInFolder: 'Show in its folder',
   openFile: 'Open',

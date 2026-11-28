@@ -39,6 +39,13 @@ Ihr Text, Ihre Fragen, die Antworten der KI, Dateinamen, Pfade, die Adresse Ihre
 API-Schlüssel, Ihr Benutzername, der Name Ihres Computers. Auch das technische Protokoll des Editors
 (diagnostics.log) wird nicht gesendet; es verlässt Ihren Computer nur, wenn Sie es selbst einem Fehlerbericht hinzufügen.
 
+Chats und Dateien aus anderen KI-Werkzeugen, die Sie zu einer Angabe über die Nutzung außerhalb
+ablegen, werden ebenfalls nirgendwohin gesendet, und die KI, die Sie im Editor fragen, bekommt sie
+nicht. Sie liegen im `.cowriting`-Ordner des Dokuments auf Ihrem Computer. Wer diesen Ordner von
+Ihnen bekommt, in einem geteilten oder synchronisierten Ordner oder mit einer Abgabe, bekommt
+auch sie: Legen Sie nur die Unterhaltungen ab, die zur Arbeit gehören, und achten Sie darauf,
+was darin über andere Personen steht.
+
 Kommt eine Meldung an, sieht der Server die Internetadresse, von der sie kam, wie jeder Server.
 [[ob und wie lange der Server Internetadressen speichert]]
 
