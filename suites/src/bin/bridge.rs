@@ -266,7 +266,8 @@ impl Bridge {
                     runtime.block_on(cowriting_app::export_tools()),
                     session.export_target(cowriting_app::FileFormat::Pdf),
                     session.export_target(cowriting_app::FileFormat::Docx),
-                    session.export_choice()
+                    session.export_choice(),
+                    session.whole_export()
                 ]))
             }
             "layouts" => Ok(json!(self.session()?.layouts())),

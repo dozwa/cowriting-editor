@@ -39,7 +39,7 @@ fn a_layout_kept_under_a_name_is_there_for_every_project_and_goes_to_another_com
     assert!(thesis.layouts().is_empty());
 
     let layout = Layout { font: "Times New Roman".into(), font_size: Some(12), margin_cm: Some(2.5), page_numbers: Some(PageNumbers::BottomOuter), ..Layout::default() };
-    let choice = PdfChoice { engine: Some("xelatex".into()), paper: Paper::Letter, layout: layout.clone(), word_template: "/somewhere/faculty.docx".into() };
+    let choice = PdfChoice { engine: Some("xelatex".into()), paper: Paper::Letter, layout: layout.clone(), word_template: "/somewhere/faculty.docx".into(), ..Default::default() };
     assert_eq!(thesis.keep_layout("Thesis, faculty of medicine", &choice).unwrap(), "Thesis, faculty of medicine");
     thesis.keep_layout("abstract", &PdfChoice::default()).unwrap();
     // another project on the same computer has them too, by name

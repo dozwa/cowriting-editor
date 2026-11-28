@@ -198,7 +198,7 @@ pub struct AiTextRow {
     pub still_in_text: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportOptions {
     /// 'en' or 'de'.
@@ -212,6 +212,19 @@ pub struct ExportOptions {
     /// Also write the appendix of AI use outside the editor: the chats and files kept with the statements.
     #[serde(default)]
     pub with_outside: bool,
+    /// For a file of a project: the disclosure of the whole project, from the logs of all its files.
+    #[serde(default)]
+    pub whole_project: bool,
+}
+
+/// The export of a whole project, as the export dialog offers it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WholeExport {
+    pub name: String,
+    pub files: usize,
+    pub pdf: String,
+    pub docx: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -780,9 +793,12 @@ impl Session {
 
     /// Makes a PDF or Word file of the document with pandoc. `zotero` is what the author's Zotero holds for the
     /// cited keys, as CSL JSON; without it only the document's bibliography files are used.
+    /// With `pdf.whole_project`, for a file of a project, the export is of all its files in their order.
     pub fn export_document(&self, format: FileFormat, target: &str, document_text: &str, zotero: Option<&str>, pdf: &PdfChoice) -> Result<DocumentExport, String> {
         let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
         export::check_target(format, target, &sidecar.document)?;
+        let whole = self.whole_text(pdf, document_text)?;
+        let (document_text, folder) = whole.as_ref().map_or((document_text, sidecar.folder.as_str()), |whole| (whole.text.as_str(), whole.folder.as_str()));
         let tools = export::local_tools();
         let engine = pdf.engine.as_ref().or(tools.pdf_engines.first());
         if let Some(chosen) = engine.filter(|chosen| !tools.pdf_engines.contains(chosen)) {
@@ -807,7 +823,7 @@ impl Session {
         let mut args = export::pandoc_args(
             format,
             target,
-            &sidecar.folder,
+            folder,
             &used.files,
             engine.as_ref().map(|(name, path)| (*name, path.as_str())),
             pdf.paper,
@@ -844,7 +860,7 @@ impl Session {
         args.extend(["--metadata-file".to_string(), metadata.to_string_lossy().into_owned()]);
         let made = match zotero.map(|csl| std::fs::write(&kept, csl)) {
             Some(Err(e)) => Err(format!("The references from Zotero could not be handed to the export: {e}")),
-            _ => export::run_pandoc(document_text, &sidecar.folder, &args),
+            _ => export::run_pandoc(document_text, folder, &args),
         };
         let _ = std::fs::remove_file(&metadata);
         let _ = std::fs::remove_file(&kept);
@@ -866,16 +882,40 @@ impl Session {
 
     /// Keeps how this project's exports are set, with the project's settings.
     pub fn keep_export_choice(&self, choice: &PdfChoice) -> Result<(), String> {
-        let kept = PdfChoice { layout: choice.layout.within_limits(), ..choice.clone() };
+        // what is exported, the document or the whole project, is chosen each time and not kept
+        let kept = PdfChoice { layout: choice.layout.within_limits(), whole_project: false, ..choice.clone() };
         self.change_project(|project| {
             project.export = Some(serde_json::to_value(&kept).map_err(error)?);
             Ok(())
         })
     }
 
+    /// All files of the project as one text, when the export is to be of the whole project.
+    fn whole_text(&self, pdf: &PdfChoice, document_text: &str) -> Result<Option<project_files::Whole>, String> {
+        match &self.project {
+            Some(project) if pdf.whole_project => project_files::whole(self.workspace.host.as_ref(), project, Some((&self.workspace.sidecar.document, document_text))).map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    /// For a file of a project: the project's name, the number of its files, and where an export
+    /// of the whole would go (PDF, Word). None for a document on its own.
+    pub fn whole_export(&self) -> Option<WholeExport> {
+        let project = self.project.as_deref()?;
+        let files = project_files::members(self.workspace.host.as_ref(), project).ok()?.len();
+        let name = cowriting_core::project_file::ProjectFile::name_of(project).to_string();
+        let target = |format: FileFormat| {
+            std::path::Path::new(&cowriting_core::sidecar::Sidecar::for_document(project).folder).join(format!("{name}.{}", format.extension())).to_string_lossy().into_owned()
+        };
+        Some(WholeExport { pdf: target(FileFormat::Pdf), docx: target(FileFormat::Docx), name, files })
+    }
+
     /// The export with the references looked up in the author's Zotero, when it is running.
     pub async fn export_document_online(&self, format: FileFormat, target: &str, document_text: &str, pdf: &PdfChoice) -> Result<DocumentExport, String> {
-        let cited: Vec<String> = cited_keys(document_text).into_iter().collect();
+        // of the whole project, the keys every file cites
+        let whole = self.whole_text(pdf, document_text)?;
+        let document_text_cited = whole.as_ref().map_or(document_text, |whole| whole.text.as_str());
+        let cited: Vec<String> = cited_keys(document_text_cited).into_iter().collect();
         let zotero = cowriting_backends::lookup::better_bibtex_export(&cited).await;
         self.export_document(format, target, document_text, zotero.as_ref().map(|(csl, _)| csl.as_str()), pdf)
     }
@@ -891,7 +931,11 @@ impl Session {
 
     /// The document as the export would make it, in a temporary file: to look at a layout before anything is written beside the document.
     pub async fn preview_document_online(&self, format: FileFormat, document_text: &str, pdf: &PdfChoice) -> Result<DocumentExport, String> {
-        let target = self.preview_target(format);
+        let mut target = self.preview_target(format);
+        if let (true, Some(whole)) = (pdf.whole_project, self.whole_export()) {
+            // a file of its own, so that a viewer showing the one document's preview keeps it
+            target = std::path::Path::new(&target).with_file_name(format!("{}.{}", whole.name, format.extension())).to_string_lossy().into_owned();
+        }
         if let Some(folder) = std::path::Path::new(&target).parent() {
             std::fs::create_dir_all(folder).map_err(|e| format!("The preview could not be made: {e}"))?;
         }
@@ -1539,10 +1583,17 @@ impl Session {
         let lang = if options.language == "de" { Lang::De } else { Lang::En };
         let (format, extension) = if options.format == "tex" { (DocFormat::Tex, "tex") } else { (DocFormat::Md, "md") };
         let language = if lang == Lang::De { "de" } else { "en" };
-        let entries = self.workspace.log.read().map_err(error)?;
-        let (host, name, folder) = (self.workspace.host.as_ref(), &self.workspace.sidecar.name, self.workspace.sidecar.disclosure_dir());
-        // the saved document says which logged passages of AI text are still in it
-        let document = host.read(&self.workspace.sidecar.document).ok();
+        let host = self.workspace.host.as_ref();
+        let whole = if options.whole_project { Some(self.whole_record()?) } else { None };
+        let (entries, name, folder, document, kept) = match whole {
+            Some(whole) => (whole.entries, whole.name, whole.folder, whole.text, whole.kept),
+            None => {
+                // the saved document says which logged passages of AI text are still in it
+                let sidecar = &self.workspace.sidecar;
+                (self.workspace.log.read().map_err(error)?, sidecar.name.clone(), sidecar.disclosure_dir(), host.read(&sidecar.document).ok(), vec![sidecar.external_dir()])
+            }
+        };
+        let name = &name;
         let register = disclosure_with_document(&entries, name, lang, format, Profile::Editor, document.as_deref());
         let mut paths = vec![format!("{folder}/ai-register.{language}.{extension}")];
         host.write(&paths[0], &register).map_err(|e| format!("The disclosure could not be written: {e}"))?;
@@ -1552,13 +1603,62 @@ impl Session {
             host.write(&paths[1], &appendix).map_err(|e| format!("The prompts appendix could not be written: {e}"))?;
         }
         if options.with_outside {
-            let kept = self.workspace.sidecar.external_dir();
-            let appendix = outside_appendix(&entries, &|attachment| outside::found(&kept, attachment), name, lang, format);
+            // a kept chat is in the folder of the file it was stated in
+            let found = |attachment: &cowriting_core::types::Attachment| {
+                let all = kept.iter().map(|folder| outside::found(folder, attachment));
+                all.reduce(|best, next| if matches!(best, cowriting_core::disclosure::Kept::Missing) { next } else { best }).unwrap_or(cowriting_core::disclosure::Kept::Missing)
+            };
+            let appendix = outside_appendix(&entries, &found, name, lang, format);
             let path = format!("{folder}/ai-outside.{language}.{extension}");
             host.write(&path, &appendix).map_err(|e| format!("The appendix of outside AI use could not be written: {e}"))?;
             paths.push(path);
         }
         Ok(Exported { paths, register })
+    }
+}
+
+/// The record of AI use of a whole project: what its disclosure is made of.
+struct WholeRecord {
+    /// The entries of every file's log, in the order of their time.
+    entries: Vec<LogEntry>,
+    /// The project with its files, as the disclosure names what it is about.
+    name: String,
+    /// Where the disclosure is written: the project's file has a folder in `.cowriting` as a document has.
+    folder: String,
+    /// The saved files as one text; None when one of them is not there.
+    text: Option<String>,
+    /// The folders of kept chats, one per file.
+    kept: Vec<String>,
+}
+
+impl Session {
+    fn whole_record(&self) -> Result<WholeRecord, String> {
+        let (host, project) = (self.workspace.host.as_ref(), self.in_project()?);
+        let members = project_files::members(host, project)?;
+        let (mut entries, mut kept) = (Vec::new(), Vec::new());
+        for (_, path) in &members {
+            // the open document's log is read like the others: from disk, where every answer is at once
+            let sidecar = cowriting_core::sidecar::Sidecar::for_document(path);
+            let log = cowriting_core::log::Log::new(self.workspace.host.clone(), sidecar.log_dir(), sidecar.rewrites_dir());
+            entries.extend(log.read().map_err(|e| format!("The AI log of {path} could not be read: {e}"))?);
+            kept.push(sidecar.external_dir());
+        }
+        let time = |entry: &LogEntry| -> String {
+            match entry {
+                LogEntry::Prompt(e) => e.ts.clone(),
+                LogEntry::Response(e) => e.ts.clone(),
+                LogEntry::Annotation(e) => e.ts.clone(),
+                LogEntry::Guard(e) => e.ts.clone(),
+                LogEntry::AiText(e) => e.ts.clone(),
+                LogEntry::External(e) => e.ts.clone(),
+                LogEntry::Other(value) => value["ts"].as_str().unwrap_or_default().to_string(),
+            }
+        };
+        entries.sort_by_cached_key(time);
+        let names: Vec<&str> = members.iter().map(|(name, _)| name.as_str()).collect();
+        let name = format!("{} ({})", cowriting_core::project_file::ProjectFile::name_of(project), names.join(", "));
+        let text = project_files::whole(host, project, None).ok().map(|whole| whole.text);
+        Ok(WholeRecord { entries, name, folder: project_files::own_sidecar(project).disclosure_dir(), text, kept })
     }
 }
 

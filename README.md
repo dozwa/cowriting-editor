@@ -260,8 +260,20 @@ the window, the others as they are on disk. There you also
 to be a file of a project when a project's file in its folder, or up to three folders above it,
 lists it. A markdown file no project lists is a project of its own, as before.
 
-Not yet there for the whole project: the disclosure, the export to PDF and Word, and the AI
-reading the other files. Each file still has its own disclosure and export.
+**The whole project as one.** For a file of a project, "Export…" and "Disclosure…" ask "Of":
+this document, or the whole project.
+
+- The **export** of the whole holds all files in the project's order as one PDF or Word file,
+  beside the project's file and under its name. Title, author, language and whatever else stands
+  in front matter are taken from the first file; the front matter of the others is left out.
+  Footnotes that two files name alike (`[^1]` in every chapter) stay apart, and a picture is
+  found from the folder of the file that names it. A file that is not where the project names it
+  stops the export and is named. The levels of headings are taken as they are.
+- The **disclosure** of the whole is made of the AI logs of all files, names the project with
+  its files, and is kept in `.cowriting/<the project's file>/disclosure/` beside the project's
+  file. Each file still has its own as well.
+
+Not yet there: the AI reading the other files of the project.
 
 ## AI use outside the editor
 

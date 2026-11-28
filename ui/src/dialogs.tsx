@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Markdown, { type Components } from 'react-markdown'
-import type { Api, UpdateFound, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, KeptLayout, PageNumbers, PdfChoice, PdfLayout } from './api'
+import type { Api, UpdateFound, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, KeptLayout, PageNumbers, PdfChoice, PdfLayout, WholeExport } from './api'
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
@@ -80,7 +80,7 @@ export function Dialog({ title, onClose, mayClose, children }: { title: string; 
   )
 }
 
-export function DisclosureDialog({ api, language, open, hasOutside, onClose }: { api: Api; language: 'en' | 'de'; open: number; hasOutside: boolean; onClose(): void }) {
+export function DisclosureDialog({ api, language, open, hasOutside, project, onClose }: { api: Api; language: 'en' | 'de'; open: number; hasOutside: boolean; /** The project this document is a file of. */ project?: { name: string; files: number } | null; onClose(): void }) {
   const [options, setOptions] = useState<ExportOptions>({ language, format: 'md', withPrompts: false, withAnswers: false, withOutside: false })
   const [exported, setExported] = useState<Exported | null>(null)
   const [error, setError] = useState('')
@@ -112,6 +112,15 @@ export function DisclosureDialog({ api, language, open, hasOutside, onClose }: {
     <Dialog title={t.disclosureTitle} onClose={onClose}>
       <p>{t.disclosureIntro}</p>
       {open > 0 && <p className="hint">{t.notClassified(open)}</p>}
+      {project != null && (
+        <label>
+          {t.madeOf}
+          <select value={options.wholeProject === true ? 'project' : 'document'} onChange={e => set({ wholeProject: e.target.value === 'project' })}>
+            <option value="document">{t.thisDocument}</option>
+            <option value="project">{t.wholeProject(project.name, project.files)}</option>
+          </select>
+        </label>
+      )}
       <div className="row">
         <label>
           {t.language}
@@ -134,7 +143,8 @@ export function DisclosureDialog({ api, language, open, hasOutside, onClose }: {
       <label className="check">
         <input type="checkbox" checked={options.withAnswers} disabled={!options.withPrompts} onChange={e => set({ withAnswers: e.target.checked })} /> {t.withAnswers}
       </label>
-      {hasOutside && (
+      {/* another file of the project may have kept chats where this one has none */}
+      {(hasOutside || options.wholeProject === true) && (
         <label className="check">
           <input type="checkbox" checked={options.withOutside} onChange={e => set({ withOutside: e.target.checked })} /> {t.withOutside}
         </label>
@@ -249,7 +259,9 @@ export function layoutInFrontMatter(text: string): string[] {
 
 /** The document as a PDF or a Word file, made by pandoc, with the references behind its citekeys. */
 export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): string; onClose(): void }) {
-  const [setup, setSetup] = useState<{ tools: ExportTools; targets: Record<FileFormat, string> } | null>(null)
+  const [setup, setSetup] = useState<{ tools: ExportTools; targets: Record<FileFormat, string>; whole: WholeExport | null } | null>(null)
+  /** All files of the project as one. Chosen each time: it is not kept with the layout. */
+  const [isWhole, setWhole] = useState(false)
   const [format, setFormat] = useState<FileFormat>('pdf')
   const [pdf, setPdf] = useState<PdfChoice>(lastPdfChoice)
   const [made, setMade] = useState<DocumentExport | null>(null)
@@ -265,8 +277,8 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.exportSetup().then(([tools, pdf, docx, kept]) => {
-      setSetup({ tools, targets: { pdf, docx } })
+    api.exportSetup().then(([tools, pdf, docx, kept, whole]) => {
+      setSetup({ tools, targets: { pdf, docx }, whole: whole ?? null })
       // the project's own choice comes before what was chosen last on this computer
       if (kept !== null) setPdf(pdfChoiceFrom(kept))
     }, e => setError(String(e)))
@@ -283,13 +295,13 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   const write = async () => {
     if (setup === null) return
     try {
-      const target = await api.pickExport(format, setup.targets[format])
+      const target = await api.pickExport(format, isWhole && setup.whole !== null ? setup.whole[format] : setup.targets[format])
       if (target === null) return
       setWorking(true)
       setMade(null)
       setPreviewed(null)
       keep(pdf)
-      setMade(await api.exportDocument(format, target, getText(), { ...pdf, engine }))
+      setMade(await api.exportDocument(format, target, getText(), { ...pdf, engine, ...(isWhole ? { wholeProject: true } : {}) }))
       setError('')
     } catch (e) {
       setError(String(e))
@@ -304,7 +316,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
       setWorking(true)
       setMade(null)
       setPreviewed(null)
-      const shown = await api.previewDocument(format, getText(), { ...pdf, engine })
+      const shown = await api.previewDocument(format, getText(), { ...pdf, engine, ...(isWhole ? { wholeProject: true } : {}) })
       await api.showWritten(shown.path, 'open')
       // said only once it is open: a preview nobody sees is none
       setPreviewed(shown)
@@ -350,6 +362,16 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   return (
     <Dialog title={t.exportTitle} onClose={onClose}>
       <p>{t.exportIntro(<code>[@smith2020]</code>)}</p>
+      {setup != null && setup.whole !== null && (
+        <label>
+          {t.madeOf}
+          <select value={isWhole ? 'project' : 'document'} onChange={e => (setWhole(e.target.value === 'project'), setMade(null), setPreviewed(null))}>
+            <option value="document">{t.thisDocument}</option>
+            <option value="project">{t.wholeProject(setup.whole.name, setup.whole.files)}</option>
+          </select>
+        </label>
+      )}
+      {isWhole && <p className="muted">{t.wholeProjectNote}</p>}
       <label>
         {t.format}
         <select value={format} onChange={e => (setFormat(e.target.value as FileFormat), setMade(null))}>

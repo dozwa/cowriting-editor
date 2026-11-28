@@ -25,6 +25,10 @@ export const dialogs: typeof pattern = {
 
   close: 'Schließen',
   format: 'Format',
+  madeOf: 'Von',
+  thisDocument: 'Dieses Dokument',
+  wholeProject: (name: string, files: number) => `Das ganze Projekt „${name}“ (${files} Dateien)`,
+  wholeProjectNote: 'Alle Dateien in der Reihenfolge des Projekts, als ein Dokument. Titel, Autor und weiteres Front Matter kommen aus der ersten Datei.',
 
   disclosureTitle: 'Offenlegung der KI-Nutzung',
   disclosureIntro: 'Ein Verzeichnis dessen, wofür die KI genutzt wurde, erstellt aus dem Protokoll. Vor der Abgabe prüfen und an die Regeln Ihrer Einrichtung anpassen.',

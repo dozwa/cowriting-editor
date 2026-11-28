@@ -299,7 +299,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       watch.hints.unshift({ turn: `t${turns.length}`, persona: 'reviewer-2', who: 'Reviewer #2', line: 4, text: 'Why should a reader believe this?', ts: '2026-11-23T10:06:00.000Z' })
       return { kind: 'reviewed', hints: 1, ts: '2026-11-23T10:06:00.000Z' }
     },
-    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx', exportChoice],
+    exportSetup: async () => [{ hasPandoc: options.hasPandoc ?? true, pdfEngines: options.pdfEngines ?? ['typst'], isOwn: true, hasZotero: false, fonts: ['Arial', 'Libertinus Serif', 'Times New Roman'] }, '/work/thesis.pdf', '/work/thesis.docx', exportChoice, book === null ? null : { name: 'book', files: book.files.length, pdf: '/work/book.pdf', docx: '/work/book.docx' }],
     keepExportChoice: async pdf => void (exportChoice = pdf),
     layouts: async () => keptLayouts,
     keepLayout: async (name, pdf) => {
@@ -2351,6 +2351,37 @@ test('a document on its own becomes the first file of a project, and files are a
   await user.click(screen.getByRole('button', { name: 'Add a file…' }))
   await waitFor(() => expect(calls.files.at(-1)).toEqual(['add', '/work/results.md']))
   expect(await files.findByRole('button', { name: 'results.md' })).toBeTruthy()
+})
+
+test('a file of a project can be exported and disclosed alone or with the whole project', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ book: ['thesis.md', 'method.md', 'results.md'] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await documentOpened()
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
+  const of = await screen.findByLabelText('Of')
+  expect((of as HTMLSelectElement).value).toBe('document')
+  await user.selectOptions(screen.getByLabelText('Format'), 'docx')
+  await user.selectOptions(of, 'The whole project “book” (3 files)')
+  expect(screen.getByText(/front matter are taken from the first file/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await waitFor(() => expect(calls.exports.at(-1)?.slice(0, 2)).toEqual(['docx', '/work/book.docx']))
+  expect(calls.pdf.at(-1)?.wholeProject).toBe(true)
+  // the choice is for this export: it is not kept with the project's layout
+  expect((await api.exportSetup())[3]?.wholeProject ?? false).toBe(false)
+  await user.selectOptions(of, 'This document')
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await waitFor(() => expect(calls.exports.at(-1)?.slice(0, 2)).toEqual(['docx', '/work/thesis.docx']))
+  expect(calls.pdf.at(-1)?.wholeProject ?? false).toBe(false)
+  await user.click(screen.getByRole('button', { name: 'Close' }))
+
+  // this file was never put to the AI; another file of the project may have been
+  await user.click(screen.getByRole('button', { name: 'Disclosure…' }))
+  await user.selectOptions(screen.getByLabelText('Of'), 'The whole project “book” (3 files)')
+  // another file may have kept chats, so their appendix is offered for the whole
+  await user.click(screen.getByLabelText(/appendix of AI use outside the editor/))
+  await user.click(screen.getByRole('button', { name: 'Write the disclosure' }))
+  await waitFor(() => expect(calls.exported).toEqual([{ language: 'en', format: 'md', withPrompts: false, withAnswers: false, withOutside: true, wholeProject: true }]))
 })
 
 test('the project tab shows every file against its plan and the whole against its target, and opens, orders, renames and takes out files', async () => {

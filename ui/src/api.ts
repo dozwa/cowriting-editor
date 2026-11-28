@@ -60,7 +60,9 @@ export type PdfLayout = {
 /** A layout kept under a name on this computer, to use in any project and to pass on as a file. */
 export type KeptLayout = { name: string; paper: PdfChoice['paper']; layout: PdfLayout }
 /** What is chosen for an export; the paper and the layout hold for a Word file too. `wordTemplate` is a Word file of the author's whose styles a Word export takes in place of the layout, or empty. */
-export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout; wordTemplate: string }
+export type PdfChoice = { engine: string | null; paper: 'a4' | 'letter'; layout: PdfLayout; wordTemplate: string; /** For a file of a project: all its files as one. Chosen for one export, not kept. */ wholeProject?: boolean }
+/** For a file of a project: its name, the number of its files, and where an export of the whole would go. */
+export type WholeExport = { name: string; files: number; pdf: string; docx: string }
 export type DocumentExport = { path: string; cited: number; fromZotero: number; missing: string[]; warnings: string[]; /** Typefaces the layout names that this computer does not have: the PDF has another one in their place. */ missingFonts: string[] }
 
 export type Use = 'adopted' | 'adapted' | 'rejected' | 'info'
@@ -217,7 +219,7 @@ export type ModelStatus = 'tested' | 'failed' | 'untested'
 export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; /** The terms of use: whether the author has to agree before anything else, and whether they agreed to an earlier version. */ terms: { isDue: boolean; isChange: boolean; version: string }; /** This version can ask whether a newer one exists. */ canCheckForUpdate: boolean; notices: StoredNotice[] }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
-export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean; withOutside: boolean }
+export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean; withOutside: boolean; /** For a file of a project: the disclosure of the whole project. */ wholeProject?: boolean }
 export type Exported = { paths: string[]; register: string }
 
 /** Read when a file dialog opens, so the name is in the language shown now. */
@@ -427,7 +429,7 @@ export const api = {
   /** Sends the plan's points and the document to the model; logged. */
   checkPoints: (documentText: string) => invoke<CheckSummary>('check_points', { documentText }),
   /** What there is to export with, where a PDF and a Word file would go, and how this project's exports were last set (null: never). */
-  exportSetup: () => invoke<[ExportTools, string, string, PdfChoice | null]>('export_setup'),
+  exportSetup: () => invoke<[ExportTools, string, string, PdfChoice | null, WholeExport | null]>('export_setup'),
   /** Keeps how this project's exports are set, with the project's settings. */
   keepExportChoice: (pdf: PdfChoice) => invoke<void>('keep_export_choice', { pdf }),
   /** The layouts kept under a name on this computer. */

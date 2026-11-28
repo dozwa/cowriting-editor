@@ -797,6 +797,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const stored = [...(settings?.notices ?? []), ...doc.notices]
   const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
 
+  // in a project another file may have a record where this one has none
+  const nothingToDisclose = log.stats.turns === 0 && log.external.length === 0 && files === null
   return (
     <div className="app">
       <header className="bar">
@@ -816,7 +818,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
           <span className="muted counted-selection" role="status" title={m.app.selectedDetail(selected.chars.withoutSpaces, log.words, log.chars.withSpaces)}>{m.app.selectedCount(selected.words, selected.chars.withSpaces)}</span>
         )}
         <button data-tour="finish" onClick={() => setDialog('export')}>{m.app.export}</button>
-        <button data-tour="finish" onClick={() => setDialog('disclosure')} disabled={log.stats.turns === 0 && log.external.length === 0} title={log.stats.turns === 0 && log.external.length === 0 ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
+        <button data-tour="finish" onClick={() => setDialog('disclosure')} disabled={nothingToDisclose} title={nothingToDisclose ? m.app.nothingToDisclose : undefined}>{m.app.disclosure}</button>
         <button data-tour="settings around" onClick={() => setDialog('settings')}>{m.app.settings}</button>
         {bugButton}
       </header>
@@ -1005,7 +1007,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       {chosenPicture !== null && <PictureDialog name={chosenPicture.seen.name} linkedAs={chosenPicture.seen.path} folder={picturesFolder} onCopy={into => void copyPicture(chosenPicture.file, into)} onLink={() => (editor.current?.format('image', chosenPicture.seen.path), setChosenPicture(null))} onClose={() => setChosenPicture(null)} />}
       {dialog === 'markdown' && <MarkdownHelp onOpen={which => void api.openGuide(which).catch(fail)} onClose={() => setDialog(null)} />}
       {dialog === 'export' && <ExportDialog api={api} getText={() => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
-      {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} hasOutside={log.external.some(stated => stated.attachments.length > 0)} onClose={() => setDialog(null)} />}
+      {dialog === 'disclosure' && <DisclosureDialog api={api} language={here.disclosureLanguage !== 'document' ? here.disclosureLanguage : writing} open={open_} hasOutside={log.external.some(stated => stated.attachments.length > 0)} project={files === null ? null : { name: files.name, files: files.files.length }} onClose={() => setDialog(null)} />}
     </div>
   )
 }

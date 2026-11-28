@@ -971,14 +971,20 @@ async fn check_references(editor: State<'_, Editor>, document_text: String) -> R
     session.check_references_online(&document_text).await
 }
 
+/// The tools, where a PDF and a Word file would go, the project's kept choice, and for a file of a project the export of the whole.
+type ExportSetup = (ExportTools, String, String, Option<PdfChoice>, Option<cowriting_app::WholeExport>);
+
 /// What there is to export with, and where the export would go.
 #[tauri::command]
-async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Result<(ExportTools, String, String, Option<PdfChoice>), String> {
+async fn export_setup(app: tauri::AppHandle, editor: State<'_, Editor>) -> Result<ExportSetup, String> {
     let session = editor.session()?;
     // beside the document, or in the folder the author chose for exports
     let folder = read_file(&app).preferences.export_folder;
     let target = |format| in_export_folder(&session.export_target(format), &folder);
-    Ok((export_tools().await, target(FileFormat::Pdf), target(FileFormat::Docx), session.export_choice()))
+    // for a file of a project: the export of all its files as one
+    let whole =
+        session.whole_export().map(|whole| cowriting_app::WholeExport { pdf: in_export_folder(&whole.pdf, &folder), docx: in_export_folder(&whole.docx, &folder), ..whole });
+    Ok((export_tools().await, target(FileFormat::Pdf), target(FileFormat::Docx), session.export_choice(), whole))
 }
 
 /// The layouts kept under a name on this computer.

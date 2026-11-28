@@ -196,3 +196,110 @@ fn without_a_folder_of_the_editors_the_shared_settings_are_beside_the_projects_f
     open().make_project(&folder.path("book/book.cowriting.json")).unwrap();
     assert_eq!(open().project_view().folder, Sidecar::for_document(&folder.path("book/book.cowriting.json")).dir());
 }
+
+/// A book whose second file has front matter, a footnote named like one of the first, and a picture in its own folder.
+fn book_to_export(folder: &Folder) -> (Session, String) {
+    let intro = "---\ntitle: Walking\nlang: en\n---\n\n# Introduction\n\nWalking breaks help.[^1]\n\n[^1]: The first chapter's note.\n";
+    let method = "---\ntitle: Method\n---\n\n# Method\n\nWe followed 48 participants.[^1]\n\n![the offices](images/picture.png)\n\n[^1]: The second chapter's note.\n";
+    folder.write("book/intro.md", intro);
+    folder.write("book/chapters/method.md", method);
+    std::fs::create_dir_all(folder.path("book/chapters/images")).unwrap();
+    std::fs::copy(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/pictures/picture.png"), folder.path("book/chapters/images/picture.png")).unwrap();
+    folder.open("book/intro.md").make_project(&folder.path("book/book")).unwrap();
+    let session = folder.open("book/intro.md");
+    session.add_project_file(&folder.path("book/chapters/method.md")).unwrap();
+    (session, intro.to_string())
+}
+
+#[test]
+fn the_whole_project_is_one_text_in_the_files_order_with_notes_and_pictures_that_still_fit() {
+    let folder = Folder::new("whole");
+    let (_, intro) = book_to_export(&folder);
+    let project = folder.path("book/book.cowriting.json");
+    // the open document counts as it is in the window, saved or not
+    let in_window = intro.replace("Walking breaks help.", "Walking breaks help a lot.");
+    let whole = project_files::whole(&DiskHost, &project, Some((&folder.path("book/intro.md"), &in_window))).unwrap();
+    assert_eq!(whole.files, ["intro.md", "chapters/method.md"]);
+    assert_eq!(std::path::Path::new(&whole.folder), std::path::Path::new(&folder.path("book")));
+    let expected = "---\ntitle: Walking\nlang: en\n---\n\n# Introduction\n\nWalking breaks help a lot.[^1]\n\n[^1]: The first chapter's note.\n\n\
+                    # Method\n\nWe followed 48 participants.[^f2-1]\n\n![the offices](chapters/images/picture.png)\n\n[^f2-1]: The second chapter's note.\n";
+    assert_eq!(whole.text, expected, "the first file's front matter holds for the whole; the second file's note and picture are its own");
+
+    // a chapter that is gone stops the export and is named
+    std::fs::remove_file(folder.path("book/chapters/method.md")).unwrap();
+    let why = project_files::whole(&DiskHost, &project, None).unwrap_err();
+    assert!(why.starts_with("chapters/method.md is not where the project names it."), "{why}");
+}
+
+#[test]
+fn an_export_of_the_whole_project_holds_every_file_and_one_of_a_single_document_is_as_before() {
+    use cowriting_app::export::find_program;
+    use cowriting_app::{FileFormat, PdfChoice, WholeExport};
+    let folder = Folder::new("whole-export");
+    let (session, intro) = book_to_export(&folder);
+    let offered = session.whole_export().expect("a file of a project is offered the whole");
+    assert_eq!(offered, WholeExport { name: "book".into(), files: 2, pdf: folder.path("book/book.pdf"), docx: folder.path("book/book.docx") });
+    folder.write("alone.md", "# Alone\n");
+    assert_eq!(folder.open("alone.md").whole_export(), None);
+    if find_program("pandoc").is_none() {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "pandoc is not there: run scripts/fetch-tools.py");
+        eprintln!("pandoc is not installed: the export of a whole project was not run");
+        return;
+    }
+    let words = |path: &str| {
+        let mut file = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+        let mut text = String::new();
+        for name in ["word/document.xml", "word/footnotes.xml"] {
+            std::io::Read::read_to_string(&mut file.by_name(name).unwrap(), &mut text).unwrap();
+        }
+        let has_picture = file.file_names().any(|name| name.starts_with("word/media/"));
+        (text, has_picture)
+    };
+    let whole = PdfChoice { whole_project: true, ..Default::default() };
+    let made = session.export_document(FileFormat::Docx, &offered.docx, &intro, None, &whole).unwrap();
+    assert!(!made.warnings.iter().any(|warning| warning.contains("picture") || warning.contains("ote")), "{:?}", made.warnings);
+    let (text, has_picture) = words(&offered.docx);
+    for part in ["Walking breaks help.", "We followed 48 participants.", "The first chapter", "The second chapter"] {
+        assert!(text.contains(part), "the Word file of the whole project has: {part}");
+    }
+    assert!(has_picture, "the picture of the second file is found from the project's folder");
+    // and as a PDF with the editor's own Typst, where it is there (CI insists on it)
+    if cowriting_app::export::local_tools().pdf_engines.iter().any(|engine| engine == "typst") {
+        let choice = PdfChoice { engine: Some("typst".into()), whole_project: true, ..Default::default() };
+        let made = session.export_document(FileFormat::Pdf, &offered.pdf, &intro, None, &choice).unwrap();
+        assert!(!made.warnings.iter().any(|warning| warning.contains("picture")), "{:?}", made.warnings);
+        assert!(std::fs::read(&offered.pdf).unwrap().starts_with(b"%PDF-"));
+    } else {
+        assert!(std::env::var_os("COWRITING_NEED_TOOLS").is_none(), "Typst is not there: run scripts/fetch-tools.py");
+    }
+
+    let made = session.export_document(FileFormat::Docx, &folder.path("book/intro.docx"), &intro, None, &PdfChoice::default());
+    made.unwrap();
+    let (text, _) = words(&folder.path("book/intro.docx"));
+    assert!(text.contains("Walking breaks help.") && !text.contains("We followed 48 participants."), "one document's export is that document");
+}
+
+#[test]
+fn the_disclosure_of_the_whole_project_is_made_of_the_logs_of_all_its_files() {
+    use cowriting_app::{ExportOptions, ExternalUse};
+    let folder = Folder::new("whole-disclosure");
+    let (intro, _) = book_to_export(&folder);
+    intro.state_external(&ExternalUse { tool: "ChatGPT".into(), purpose: "An outline of the introduction".into(), ..Default::default() }).unwrap();
+    let method = folder.open("book/chapters/method.md");
+    method.state_external(&ExternalUse { tool: "DeepL".into(), purpose: "Translating the method section".into(), ..Default::default() }).unwrap();
+
+    let options = |whole_project| ExportOptions { language: "en".into(), format: "md".into(), with_prompts: true, with_answers: false, with_outside: true, whole_project };
+    let made = method.export(&options(true)).unwrap();
+    assert_eq!(made.paths.len(), 3);
+    let own = PathBuf::from(folder.path("book/.cowriting/book.cowriting.json/disclosure"));
+    assert!(made.paths.iter().all(|path| std::path::Path::new(path).starts_with(&own)), "it is kept under the project's own name: {:?}", made.paths);
+    assert!(made.register.contains("book (intro.md, chapters/method.md)"), "it names the project and its files:\n{}", made.register);
+    assert!(made.register.contains("ChatGPT") && made.register.contains("DeepL"), "the use stated in either file is in it");
+
+    let one = method.export(&options(false)).unwrap();
+    assert!(one.register.contains("DeepL") && !one.register.contains("ChatGPT"), "one file's disclosure is that file's");
+    assert!(std::path::Path::new(&one.paths[0]).starts_with(folder.path("book/chapters/.cowriting/method.md/disclosure")));
+
+    folder.write("alone.md", "# Alone\n");
+    assert!(folder.open("alone.md").export(&options(true)).is_err(), "a document on its own has no project to disclose");
+}

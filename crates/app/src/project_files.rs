@@ -5,7 +5,7 @@
 //! Nothing here reads or writes a manuscript, with two exceptions the author asks for by name: a
 //! file added under a name that does not exist yet is created empty, and a renamed file is moved.
 
-use crate::picture::{joined, relative, same_file};
+use crate::picture::{carried, joined, relative, same_file, Along};
 use cowriting_core::host::Host;
 use cowriting_core::project_file::{is_project_file, ProjectFile, ENDING};
 use cowriting_core::review::CheckFile;
@@ -316,9 +316,110 @@ pub fn overview(host: &dyn Host, projects: Option<&str>, project: &str, open: Op
     Ok(Overview { path: project.to_string(), name: ProjectFile::name_of(project).to_string(), goal: file.goal, words_target: file.words, words, chars, files })
 }
 
+/// A project's files as one text, in their order: what an export of the whole is made of.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Whole {
+    pub text: String,
+    /// The files as the project names them.
+    pub files: Vec<String>,
+    /// The project's folder: the ways of pictures in the text start there.
+    pub folder: String,
+}
+
+/// The project's documents with their paths, in the project's order.
+pub fn members(host: &dyn Host, project: &str) -> Result<Vec<(String, String)>, String> {
+    Ok(load(host, project)?.files.iter().map(|entry| (entry.clone(), member(project, entry))).collect())
+}
+
+/// Where what is made of the whole project is kept: a sidecar for the project's file, as a document has one.
+pub fn own_sidecar(project: &str) -> Sidecar {
+    Sidecar::for_document(project)
+}
+
+/// The text without the front matter it begins with.
+fn without_front_matter(text: &str) -> &str {
+    let body = text.trim_start_matches('\u{feff}');
+    let Some(rest) = body.strip_prefix("---\n").or_else(|| body.strip_prefix("---\r\n")) else { return body };
+    let mut at = 0;
+    for line in rest.split_inclusive('\n') {
+        at += line.len();
+        if matches!(line.trim_end(), "---" | "...") {
+            return &rest[at..];
+        }
+    }
+    body
+}
+
+/// Footnotes are named per file (`[^1]` in every chapter): in one text the names of two files
+/// would be one note. Each gets its file's number in front. Code blocks are left as they are.
+fn with_own_footnotes(text: &str, number: usize) -> String {
+    let mut out = String::with_capacity(text.len() + 64);
+    let mut fence: Option<&str> = None;
+    for line in text.split_inclusive('\n') {
+        let start = line.trim_start();
+        let mark = ["```", "~~~"].into_iter().find(|mark| start.starts_with(mark));
+        match (fence, mark) {
+            (None, Some(mark)) => fence = Some(mark),
+            (Some(open), Some(mark)) if open == mark => fence = None,
+            _ => {}
+        }
+        if fence.is_some() || mark.is_some() {
+            out.push_str(line);
+            continue;
+        }
+        let mut rest = line;
+        while let Some(at) = rest.find("[^") {
+            let (before, from) = rest.split_at(at + 2);
+            out.push_str(before);
+            let name = from.find(']').map(|end| &from[..end]).filter(|name| !name.is_empty() && !name.contains(char::is_whitespace) && !name.contains('['));
+            if name.is_some() {
+                out.push_str(&format!("f{number}-"));
+            }
+            rest = from;
+        }
+        out.push_str(rest);
+    }
+    out
+}
+
+/// The whole project as one document. `open` is the document in the window with its text as it
+/// is there; the other files are read from disk. The first file's front matter holds for the
+/// whole (title, author, language); that of the others is left out, since pandoc would let the
+/// last one win. Pictures a file names from a folder of its own are named from the project's
+/// folder. A file that is not there stops it: a book is not exported without one of its chapters.
+pub fn whole(host: &dyn Host, project: &str, open: Option<(&str, &str)>) -> Result<Whole, String> {
+    let file = load(host, project)?;
+    let folder = folder_of(project);
+    let mut parts = Vec::new();
+    for (at, entry) in file.files.iter().enumerate() {
+        let path = member(project, entry);
+        let in_window = open.filter(|(document, _)| same_file(&path, document)).map(|(_, text)| text.to_string());
+        let text = in_window
+            .or_else(|| host.read(&path).ok())
+            .ok_or_else(|| format!("{entry} is not where the project names it. Put it back, or take it out of the project in the Project tab; then export again."))?;
+        let text = if at == 0 { text } else { with_own_footnotes(without_front_matter(&text).trim_start_matches(['\n', '\r']), at + 1) };
+        parts.push(carried(&text, &folder_of(&path), &folder, Along::Leave).0.trim_end().to_string());
+    }
+    if parts.is_empty() {
+        return Err("The project has no files.".into());
+    }
+    Ok(Whole { text: parts.join("\n\n") + "\n", files: file.files, folder })
+}
+
 #[cfg(test)]
 mod tests {
     use super::spelled;
+    use super::{with_own_footnotes, without_front_matter};
+
+    #[test]
+    fn a_later_file_loses_its_front_matter_and_keeps_its_footnotes_apart() {
+        assert_eq!(without_front_matter("---\ntitle: Method\n---\n# Method\n"), "# Method\n");
+        assert_eq!(without_front_matter("---\r\ntitle: Method\r\n...\r\nText"), "Text");
+        assert_eq!(without_front_matter("---\n\nA rule, then text.\n"), "---\n\nA rule, then text.\n", "a rule that nothing closes is no front matter");
+        let text = "A claim.[^1] Another.[^note]\n\n```\nlist[^1]\n```\n\n[^1]: First.\n[^note]: Second, with an inline one^[kept] and [a link](x).\n";
+        let expected = "A claim.[^f2-1] Another.[^f2-note]\n\n```\nlist[^1]\n```\n\n[^f2-1]: First.\n[^f2-note]: Second, with an inline one^[kept] and [a link](x).\n";
+        assert_eq!(with_own_footnotes(text, 2), expected);
+    }
 
     #[test]
     fn on_windows_a_path_has_one_spelling_and_elsewhere_it_is_left_alone() {

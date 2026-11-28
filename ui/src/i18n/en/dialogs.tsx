@@ -28,6 +28,10 @@ export const dialogs = {
 
   close: 'Close',
   format: 'Format',
+  madeOf: 'Of',
+  thisDocument: 'This document',
+  wholeProject: (name: string, files: number) => `The whole project “${name}” (${files} files)`,
+  wholeProjectNote: 'All files in the project’s order, as one document. Title, author and other front matter are taken from the first file.',
 
   disclosureTitle: 'Disclosure of AI use',
   disclosureIntro: 'A register of what the AI was used for, built from the log. Check it and adapt it to your institution’s rules before you hand it in.',

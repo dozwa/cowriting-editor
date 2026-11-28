@@ -72,6 +72,10 @@ pub struct PdfChoice {
     /// the layout: a faculty's or a journal's template. Empty for none.
     #[serde(default)]
     pub word_template: String,
+    /// For a document that is a file of a project: export all the project's files, in their
+    /// order, as one. It means nothing for a document on its own.
+    #[serde(default)]
+    pub whole_project: bool,
 }
 
 /// Where the page's number stands.

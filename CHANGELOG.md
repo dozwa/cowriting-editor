@@ -114,8 +114,15 @@ to a new heading with its version and date; the release workflow does that (see 
   renamed and taken out; a renamed file keeps its log and plan. "Open…" takes a project's file
   too. A single document stays as it is and becomes a project's first file without losing
   settings or log. Tried in the browser; the file dialogs of the app's own window were not.
-  The disclosure and the export for a whole project, and the AI reading the other files, are
-  not part of this: each file still has its own. The Project tab can be hidden like the others.
+  **The whole project as one export and one disclosure:** for a file of a project the export
+  dialog and the disclosure dialog ask "Of": this document, or the whole project. The export
+  then holds all files in the project's order as one PDF or Word file beside the project's
+  file; title, author and other front matter come from the first file, footnotes named alike in
+  two files stay apart, and pictures are found from whichever folder a file is in. A file that
+  is missing stops the export and is named. The disclosure of the whole is made of the logs of
+  all files, names the project with its files, and is kept in `.cowriting/<project's file>/`
+  beside the project's file. Tried with the tests' Word and Typst exports, not in a window. The
+  AI reading the other files is not part of this. The Project tab can be hidden like the others.
   On Windows a document now has one spelling of its path however it was opened, so a file's plan
   is the same from the file dialog and from the Project tab.
   (#26, open)
