@@ -38,6 +38,15 @@ let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 /** What the stand-in finds in an export of another tool. */
 const CHATS = { form: 'chatgpt', name: 'conversations.json', list: [{ index: 0, title: 'Mixed model in R', tool: 'ChatGPT', date: '2026-11-01', turns: 2 }, { index: 1, title: 'Holiday plans', tool: 'ChatGPT', date: '2026-11-02', turns: 1 }], canKeepAsFile: true }
 
+/**
+ * The document is open: its name is shown and the text field is there. The field comes a moment
+ * after the name, so a test that types or drops right after the name alone fails now and then.
+ */
+async function documentOpened(name = 'thesis.md') {
+  await screen.findByText(name)
+  await screen.findByLabelText('Document')
+}
+
 function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string; /** The files of a project of several files the document is one of, by name. */ book?: string[]; /** What the server says about a newer version, or (a text) why it cannot be asked. Without it the editor does not check. */ update?: UpdateFound | string; installFails?: string } = {}) {
   let exportChoice: PdfChoice | null = options.exportChoice ?? null
   let book: { goal: string; words?: number; files: string[] } | null = options.book === undefined ? null : { goal: '', files: [...options.book] }
@@ -480,7 +489,7 @@ test('saving sends the text as typed, and a refused write is shown in the log', 
   const user = userEvent.setup()
   const { api, calls } = standIn({ refuse: true })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
   // the file's name is shown a moment before the text field is there
   await user.type(await screen.findByLabelText('Document'), 'Mine.')
@@ -543,7 +552,7 @@ test('a tested model carries no notice, and choosing Claude sends the key to the
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect(screen.queryByRole('note')).toBeNull()
   expect(screen.queryByText('untested model')).toBeNull()
 
@@ -563,7 +572,7 @@ test('each hint of an answer can be ticked off as done, all at once too, and the
   const user = userEvent.setup()
   const { api, calls } = standIn({ answer: HINTS })
   const { container, unmount } = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.type(screen.getByLabelText('Ask the AI'), 'hi')
   await user.click(screen.getByRole('button', { name: 'Ask' }))
   await screen.findByText('A closing remark.')
@@ -601,7 +610,7 @@ test('each hint of an answer can be ticked off as done, all at once too, and the
   await waitFor(() => expect(calls.marks).toEqual({ t1: [4] }))
   unmount()
   const again = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: /Log/ }))
   await user.click(again.container.querySelector<HTMLElement>('button.turn')!)
   await screen.findByText('A closing remark.')
@@ -612,7 +621,7 @@ test('an answer without lists or tables has nothing to tick, and one that is sti
   const user = userEvent.setup()
   const { api } = standIn({ answer: 'One paragraph, no list.' })
   const { container } = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.type(screen.getByLabelText('Ask the AI'), 'hi')
   await user.click(screen.getByRole('button', { name: 'Ask' }))
   await screen.findByText('One paragraph, no list.')
@@ -624,7 +633,7 @@ test('HTML in an answer is shown as text, and a web address is not a link', asyn
   const user = userEvent.setup()
   const { api } = standIn({ answer: 'See <img src=x onerror="window.pwned=1"> and [this page](https://example.org/x).' })
   const { container } = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.type(screen.getByLabelText('Ask the AI'), 'hi')
   await user.click(screen.getByRole('button', { name: 'Ask' }))
   await screen.findByText('this page')
@@ -644,7 +653,7 @@ test('the author briefs an expert, asks it for a review, and replies to it', asy
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Experts' }))
 
   // the party first, the others after; each with its figure
@@ -689,7 +698,7 @@ test('the author adds an expert of their own, and a name that is taken is refuse
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Experts' }))
   await user.click(screen.getByRole('button', { name: 'New expert…' }))
   expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true)
@@ -715,7 +724,7 @@ test('AI text pasted into the document is logged, said once, and can be commente
   const answer = 'Participants were randomly assigned to one of the two conditions by a colleague.'
   const { api, calls } = standIn({ answer })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const field = (await screen.findByLabelText('Document')) as HTMLTextAreaElement
 
   // pasting before anything was asked, or pasting one's own words, says nothing
@@ -762,7 +771,7 @@ test('with live review on, a pause in writing sends the text for hints; off, not
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const field = (await screen.findByLabelText('Document')) as HTMLTextAreaElement
 
   // off: the author writes and pauses, and nothing is sent
@@ -810,7 +819,7 @@ test('a review that comes too soon is asked for again later, and a failed one is
   const user = userEvent.setup()
   const { api, calls } = standIn({ review: { kind: 'wait', ms: 40 } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: /^Live/ }))
   await user.click(screen.getByLabelText('Live review'))
   await user.type(screen.getByLabelText('Document'), 'More words here.')
@@ -823,7 +832,7 @@ test('the author makes a plan, sees how far the text is, and has the points chec
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Plan' }))
 
   // no plan: an invitation, and the template to start from
@@ -864,7 +873,7 @@ test('the author adds a bibliography, finds a reference and has the references c
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Sources' }))
 
   // nothing yet: how to get a bibliography, and nothing to check
@@ -902,7 +911,7 @@ test('the author exports the document as it is in the editor, and is told which 
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.type(screen.getByLabelText('Document'), ' Not saved yet.')
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   expect(await screen.findByText(/Zotero with Better BibTeX is not running/)).toBeTruthy()
@@ -926,7 +935,7 @@ test('without pandoc the export says what to install and does not try', async ()
   const user = userEvent.setup()
   const { api, calls } = standIn({ hasPandoc: false })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   expect(await screen.findByText(/pandoc was not found/)).toBeTruthy()
   expect((screen.getByRole('button', { name: 'Export' }) as HTMLButtonElement).disabled).toBe(true)
@@ -946,7 +955,7 @@ test('the type and layout of a PDF can be set as a call for papers asks, are rem
   windowStorage()
   const { api, calls } = standIn({ pdfEngines: ['typst', 'pdflatex'] })
   const { unmount } = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   // closed until something is set: the standard needs no attention
   const layout = (await screen.findByText('Type and layout')).closest('details')!
@@ -974,7 +983,7 @@ test('the type and layout of a PDF can be set as a call for papers asks, are rem
 
   // next time the layout is still there, and the part is open because something is set
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   expect(((await screen.findByLabelText('Margins')) as HTMLSelectElement).value).toBe('2.5')
   expect((await screen.findByText(/Type and layout/)).closest('details')!.open).toBe(true)
@@ -990,7 +999,7 @@ test('a project keeps its own layout, and a project without one starts from what
   localStorage.setItem('cowriting.pdf', JSON.stringify({ engine: null, paper: 'letter', layout: { ...STANDARD_LAYOUT, marginCm: 4 } }))
   const first = standIn()
   const { unmount } = render(<App api={first.api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   expect(((await screen.findByLabelText('Margins')) as HTMLSelectElement).value).toBe('4')
   // what is set now is kept with the project, not only in the window
@@ -1001,7 +1010,7 @@ test('a project keeps its own layout, and a project without one starts from what
   // a project with a layout of its own shows that one, whatever this computer chose last
   const own = standIn({ exportChoice: { engine: null, paper: 'a4', layout: { ...STANDARD_LAYOUT, marginCm: 3, numbered: true }, wordTemplate: '' } })
   render(<App api={own.api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   await waitFor(() => expect((screen.getByLabelText('Margins') as HTMLSelectElement).value).toBe('3'))
   expect((screen.getByLabelText('Paper') as HTMLSelectElement).value).toBe('a4')
@@ -1013,7 +1022,7 @@ test('headings, code, single sides, columns and page numbers can be set, and wha
   windowStorage()
   const { api, calls } = standIn({ pdfEngines: ['typst', 'xelatex'] })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   await user.click(await screen.findByText('Type and layout'))
 
@@ -1051,7 +1060,7 @@ test('a Word file takes the layout as its styles, or a template of the author\'s
   windowStorage()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   await user.selectOptions(await screen.findByLabelText('Format'), 'docx')
   // the same layout as for a PDF, without what Word sets itself
@@ -1085,7 +1094,7 @@ test('a layout is kept under a name, used again, passed on as a file and taken i
   windowStorage()
   const { api, calls } = standIn({ keptLayouts: [{ name: 'Abstract', paper: 'a4', layout: { ...STANDARD_LAYOUT, fontSize: 10, twoColumns: true } }] })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   await user.click(await screen.findByText('Type and layout'))
 
@@ -1129,7 +1138,7 @@ test('a preview sets the document with the layout as it is now and opens it, wit
   windowStorage()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   await user.click(await screen.findByText('Type and layout'))
   await user.selectOptions(screen.getByLabelText('Margins'), '3')
@@ -1159,7 +1168,7 @@ test('a PDF is set with Typst on the chosen paper, and an installed LaTeX can be
   windowStorage()
   const { api, calls } = standIn({ pdfEngines: ['typst', 'xelatex'] })
   const { unmount } = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
 
   // the standard: Typst
@@ -1181,7 +1190,7 @@ test('a PDF is set with Typst on the chosen paper, and an installed LaTeX can be
 
   // next time the choice is still there
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   expect(((await screen.findByLabelText('Typeset with')) as HTMLSelectElement).value).toBe('xelatex')
   expect((screen.getByLabelText('Paper') as HTMLSelectElement).value).toBe('letter')
@@ -1196,7 +1205,7 @@ test('with Typst alone there is nothing to choose but the paper', async () => {
   // the editor's own words stay English here; what follows the system is the paper
   const { api } = standIn({ settings: { preferences: { ...STANDARD, interfaceLanguage: 'en' } } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   expect(((await screen.findByLabelText('Paper')) as HTMLSelectElement).value).toBe('a4')
   expect(screen.queryByLabelText('Typeset with')).toBeNull()
@@ -1207,7 +1216,7 @@ test('Claude Code is chosen without a key or an address, and the dialog says who
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('button', { name: 'Settings…' }))
   const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
   await user.click(dialog.getByRole('radio', { name: /Claude Code on this computer/ }))
@@ -1223,7 +1232,7 @@ test('Cmd or Ctrl with F opens the find bar, wherever the cursor is', async () =
   const user = userEvent.setup()
   const { api } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByPlaceholderText(/Ask about your text/))
   await user.keyboard('{Control>}f{/Control}')
   expect(lastEditor.finds).toEqual([1])
@@ -1232,7 +1241,7 @@ test('Cmd or Ctrl with F opens the find bar, wherever the cursor is', async () =
 test('a picture from the clipboard is saved beside the document and named in the text, and is not taken for pasted text', async () => {
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   act(() => lastEditor.picture(new File([new Uint8Array([137, 80, 78, 71, 1, 2, 3])], 'image.png', { type: 'image/png' })))
   await waitFor(() => expect(lastEditor.pictures).toEqual(['images/picture-2026-11-27.png']))
   expect(calls.pictures).toEqual(['pasted png of 7 bytes'])
@@ -1247,7 +1256,7 @@ test('pictures dropped on the window go where they are dropped, and one outside 
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   act(() => dropFiles(['/work/figures/plot.png', '/home/me/logo.png'], 320, 240))
   await waitFor(() => expect(lastEditor.pictures).toEqual(['figures/plot.png']))
   expect(lastEditor.cursors).toEqual([[320, 240]])
@@ -1269,7 +1278,7 @@ test('a document that names pictures from its folder asks what becomes of them b
   const user = userEvent.setup()
   const { api, calls } = standIn({ picturesToMove: { inside: ['images/plot.png'], outside: ['../shared/logo.svg'] } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('button', { name: 'Move…' }))
   const dialog = await screen.findByRole('dialog', { name: 'The pictures of this document' })
   expect(dialog.textContent).toContain('names 2 pictures')
@@ -1289,7 +1298,7 @@ test('pictures that all lie outside the folder can only be named from the new pl
   const user = userEvent.setup()
   const { api, calls } = standIn({ picturesToMove: { inside: [], outside: ['../shared/logo.svg'] } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('button', { name: 'Move…' }))
   await screen.findByRole('dialog', { name: 'The pictures of this document' })
   expect(screen.queryByRole('button', { name: 'Copy them along' })).toBeNull()
@@ -1300,7 +1309,7 @@ test('pictures that all lie outside the folder can only be named from the new pl
 test('while text is selected the top bar counts the selection, and the document again when it ends', async () => {
   const { api } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const bar = screen.getByRole('banner')
   expect(within(bar).getByText(/12,345 characters/)).toBeTruthy()
   // "We recruited 48 subjects." in '# Thesis\n\nWe recruited 48 subjects.\n'
@@ -1321,7 +1330,7 @@ test('a stored file that was set aside or is from a newer editor is named, and t
   const notices: StoredNotice[] = [{ what: 'setAside', file: '/home/me/config/projects/thesis.md-1/project.json', keptAs: '/home/me/config/projects/thesis.md-1/project.json.broken-2026-11-27' }]
   const { api } = standIn({ notices, settings: { notices: [{ what: 'newer', file: 'C:\\Users\\me\\config\\settings.json' }] } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const note = await screen.findByText(/project\.json could not be read/)
   expect(note.textContent).toContain('kept as project.json.broken-2026-11-27')
   expect(screen.getByText(/A newer version of the editor wrote settings\.json/)).toBeTruthy()
@@ -1333,7 +1342,7 @@ test('a renamed document is offered its old log, and takes it only when the auth
   const user = userEvent.setup()
   const { api, calls } = standIn({ orphans: [{ name: 'draft.md', isSameText: true, questions: 4 }] })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const offer = await screen.findByText(/This folder holds an AI log for/)
   expect(offer.textContent).toContain('draft.md (4 questions)')
   expect(offer.textContent).toContain('Its last saved text is exactly this document.')
@@ -1347,7 +1356,7 @@ test('saying no to the old log leaves it alone, and moving sends the text as it 
   const user = userEvent.setup()
   const { api, calls } = standIn({ orphans: [{ name: 'draft.md', isSameText: false, questions: 1 }] })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect((await screen.findByText(/This folder holds an AI log for/)).textContent).toContain('Its last saved text differs from this document.')
   await user.click(screen.getByRole('button', { name: 'No, this is a new document' }))
   expect(screen.queryByText(/This folder holds an AI log for/)).toBeNull()
@@ -1367,7 +1376,7 @@ test('an action button asks with what was typed, or its own question, and names 
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const actions = within(screen.getByRole('group', { name: 'Ready-made requests' }))
   // explaining needs something to explain
   expect((actions.getByRole('button', { name: 'Explain' }) as HTMLButtonElement).disabled).toBe(true)
@@ -1388,7 +1397,7 @@ test('an action button asks with what was typed, or its own question, and names 
 test('the status bar says Claude Code when Claude Code answers', async () => {
   const { api } = standIn({ settings: { backend: 'claude-code', model: 'haiku', baseUrl: '' } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect(await screen.findByText('haiku · Claude Code')).toBeTruthy()
 })
 
@@ -1485,7 +1494,7 @@ test('markdown buttons, line numbers and the source view are the author\'s choic
   first.unmount()
 
   render(<App api={standIn().api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await waitFor(() => expect(lastEditor.view).toEqual({ lineNumbers: true, source: true, spellcheck: true, language: 'en' }))
   expect(screen.queryByRole('toolbar', { name: 'Markdown' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Source' }).getAttribute('aria-pressed')).toBe('true')
@@ -1513,7 +1522,7 @@ test('the settings change how the editor looks at once, keep it on Save, and put
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const root = document.documentElement
   const openSection = async (name: string) => {
     if (screen.queryByRole('dialog', { name: 'Settings' }) === null) await user.click(screen.getByRole('button', { name: 'Settings…' }))
@@ -1590,7 +1599,7 @@ test('an answer\'s length can be limited, but not to less than a model needs to 
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('button', { name: 'Settings…' }))
   const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
   const save = dialog.getByRole('button', { name: 'Save' }) as HTMLButtonElement
@@ -1617,7 +1626,7 @@ test('with saving by itself on, the text is saved once the author pauses', async
   const user = userEvent.setup()
   const { api, calls } = standIn({ settings: { preferences: { ...STANDARD, autosaveSeconds: 0.2 } } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.type(screen.getByLabelText('Document'), 'Mine.')
   expect(calls.saved).toEqual([]) // not while typing
   await waitFor(() => expect(calls.saved).toEqual(['# Thesis\n\nWe recruited 48 subjects.\nMine.']))
@@ -1628,7 +1637,7 @@ test('a tab the author hides is out of the row, and comes back while it is opene
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const row = () => within(screen.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent?.replace(/\d+$/, ''))
   expect(row()).toEqual(['Ask', 'Experts', 'Live review', 'Plan', 'Project', 'Sources', 'Log'])
 
@@ -1663,7 +1672,7 @@ test('shortcuts do what their buttons do, and the author can give them other key
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const text = screen.getByLabelText('Document')
   await user.type(text, 'Mine.')
   await user.keyboard('{Control>}b{/Control}{Control>}s{/Control}')
@@ -1720,7 +1729,7 @@ test('the author chooses a reference style file for the export, and takes it off
   const opened: string[] = []
   api.openGuide = async which => void opened.push(which)
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Sources' }))
   // without a choice the export's style is named, so nobody wonders where "Chicago" came from
   expect(await screen.findByText(/None chosen: citations and the reference list are exported in pandoc's standard style/)).toBeTruthy()
@@ -1738,7 +1747,7 @@ test('the author chooses a reference style file for the export, and takes it off
 test('a file that is no style is refused in plain words', async () => {
   const user = userEvent.setup()
   render(<App api={standIn({ stylePicked: '/work/refs.bib' }).api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Sources' }))
   await user.click(await screen.findByRole('button', { name: 'Choose a style file' }))
   expect((await screen.findByRole('alert')).textContent).toContain('A reference style is a .csl file')
@@ -1749,7 +1758,7 @@ test('the editor speaks German as soon as it is chosen, and the three languages 
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   // words and characters, with the other count of characters behind it
   const counts = await screen.findByText('7 words · 12,345 characters')
   expect(counts.title).toContain('12,345 characters with spaces, 10,321 without.')
@@ -1792,7 +1801,7 @@ test('buttons and panels are drawn as large as the author sets them, and the tex
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const root = document.documentElement
   expect(root.style.getPropertyValue('--ui-zoom')).toBe('')
   await user.click(screen.getByRole('button', { name: 'Settings…' }))
@@ -1810,7 +1819,7 @@ test('a bug is reported from a button everybody sees, in three parts, and goes o
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   // the footer says which version this is, and that it is an alpha
   expect(within(screen.getByRole('contentinfo')).getByText('alpha 0.1.0')).toBeTruthy()
   // a version that says what it is stands as it is: the dev app and an alpha are told apart at a glance
@@ -1880,7 +1889,7 @@ test('at a start when the editor asks for support it asks once, and what the aut
   const user = userEvent.setup()
   const { api, calls } = standIn({ settings: { asking: { isDue: true, withStar: false } } })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const dialog = within(await screen.findByRole('dialog', { name: 'Does the editor help you?' }))
   // a star that was given is not asked for again
   expect(dialog.queryByRole('button', { name: 'Star it on GitHub' })).toBeNull()
@@ -1900,7 +1909,7 @@ test('the author links a file as background, says whom it is for, and rewords an
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Experts' }))
   screen.getByText('None linked.')
   await user.click(screen.getByRole('button', { name: 'Link a file…' }))
@@ -1933,7 +1942,7 @@ test('languages can be set for one document alone, and distraction-free hides th
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('button', { name: 'Settings…' }))
   let dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
   await user.click(dialog.getByRole('tab', { name: 'Language' }))
@@ -1965,7 +1974,7 @@ test('AI use outside the editor is stated in a form with two things needed, corr
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   // nothing logged yet: no disclosure, but the way to state outside use is there
   expect((screen.getByRole('button', { name: 'Disclosure…' }) as HTMLButtonElement).disabled).toBe(true)
   await user.click(screen.getByRole('tab', { name: /Log/ }))
@@ -2000,7 +2009,7 @@ test('chats from another tool are chosen from its export, kept with the statemen
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: /Log/ }))
   await user.click(screen.getByRole('button', { name: 'State AI use elsewhere…' }))
   let dialog = within(screen.getByRole('dialog', { name: 'AI use outside the editor' }))
@@ -2049,7 +2058,7 @@ test('a file that is no chat is kept as it is', async () => {
   const user = userEvent.setup()
   const { api, calls } = standIn({ chatPicked: '/downloads/notes.pdf' })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: /Log/ }))
   await user.click(screen.getByRole('button', { name: 'State AI use elsewhere…' }))
   const dialog = within(screen.getByRole('dialog', { name: 'AI use outside the editor' }))
@@ -2068,7 +2077,7 @@ test('a new author is shown around: the tour goes through the window part by par
   const user = userEvent.setup()
   const { api, calls } = standIn({ settings: { showTour: true } })
   const { container } = render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   const tour = within(await screen.findByRole('dialog', { name: 'You write, the AI reads' }))
   tour.getByText('Step 1 of 12')
   expect(tour.queryByRole('button', { name: 'Back' })).toBeNull()
@@ -2133,7 +2142,7 @@ test('the tour can be seen again: from the first page, and from About in the set
   const user = userEvent.setup()
   const { api } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect(screen.queryByRole('dialog')).toBeNull() // seen before: it does not start by itself
   await user.click(screen.getByRole('button', { name: 'Settings…' }))
   const settings = within(await screen.findByRole('dialog', { name: 'Settings' }))
@@ -2197,7 +2206,7 @@ test('closing the question about usage figures is a no, and without a server nob
 
   const quiet = standIn()
   render(<App api={quiet.api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect(screen.queryByRole('dialog')).toBeNull()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
   const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
@@ -2210,7 +2219,7 @@ test('a document can have an AI of its own: it is kept with the document, and th
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
   let dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
   const own = dialog.getByRole('checkbox', { name: 'Only for thesis.md' }) as HTMLInputElement
@@ -2243,7 +2252,7 @@ test('a file is linked for one expert from that expert’s own card, and taken a
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Experts' }))
   const files = (name: string) => screen.getByRole('button', { name: `Background files of ${name}` })
   expect(files('Reviewer #2').textContent).toBe('Files')
@@ -2275,7 +2284,7 @@ test('Escape closes a dialog', async () => {
   const user = userEvent.setup()
   const { api } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Export…' }))
   await user.click(await screen.findByLabelText('Format'))
   await user.keyboard('{Escape}')
@@ -2286,7 +2295,7 @@ test('an answer that is coming in can be stopped, and what was read stays', asyn
   const user = userEvent.setup()
   const { api, calls } = standIn({ holdAnswer: true })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
   await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
   await user.click(screen.getByRole('button', { name: 'Ask' }))
@@ -2303,7 +2312,7 @@ test('a classification can be changed afterwards', async () => {
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.type(screen.getByLabelText('Ask the AI'), 'Any feedback?')
   await user.click(screen.getByRole('button', { name: 'Ask' }))
   await user.click(await screen.findByRole('button', { name: '✗ not used' }))
@@ -2324,7 +2333,7 @@ test('a document on its own becomes the first file of a project, and files are a
   const user = userEvent.setup()
   const { api, calls } = standIn()
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Project' }))
   expect(screen.getByText(/This document is a project of its own/)).toBeTruthy()
 
@@ -2348,7 +2357,7 @@ test('the project tab shows every file against its plan and the whole against it
   const user = userEvent.setup()
   const { api, calls } = standIn({ book: ['thesis.md', 'method.md', 'results.md'] })
   render(<App api={api} makeEditor={plainEditor} />)
-  await screen.findByText('thesis.md')
+  await documentOpened()
   await user.click(screen.getByRole('tab', { name: 'Project' }))
   const rows = () => within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem').map(row => row.textContent ?? '')
   await waitFor(() => expect(rows()).toHaveLength(3))
