@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { type CheckedRef, GUIDES, type SourceHits, type SourcesView } from './api'
 import { m } from './i18n'
 import { when } from './text'
+import { More } from './more'
 
 type Props = {
   view: SourcesView
@@ -36,7 +37,7 @@ export function SourcesPanel({ view, onAdd, onRemove, onStyle, onNoStyle, onStyl
       <section>
         <h3>{t.bibliographyHeading}</h3>
         {view.files.length === 0 ? (
-          <p className="muted">{t.noBibliography(<code>bibliography: refs.bib</code>)}</p>
+          <More more={t.noBibliographyMore(<code>bibliography: refs.bib</code>)}>{t.noBibliography}</More>
         ) : (
           <ul className="bibfiles">
             {view.files.map(file => (
@@ -60,7 +61,7 @@ export function SourcesPanel({ view, onAdd, onRemove, onStyle, onNoStyle, onStyl
       <section>
         <h3>{t.styleHeading}</h3>
         {style === null ? (
-          <p className="muted">{t.noStyle(<code>csl: apa.csl</code>)}</p>
+          <More more={t.noStyleMore(<code>csl: apa.csl</code>)}>{t.noStyle}</More>
         ) : (
           <ul className="bibfiles">
             <li title={style.path}>
@@ -71,7 +72,7 @@ export function SourcesPanel({ view, onAdd, onRemove, onStyle, onNoStyle, onStyl
           </ul>
         )}
         {style?.isFromDocument !== true && <button onClick={() => void onStyle()}>{style === null ? t.chooseStyle : t.chooseOtherStyle}</button>}
-        <p className="muted">{t.styleNote(<button className="link" onClick={onStyles}>{GUIDES.styles.name}</button>)}</p>
+        <More more={t.styleNoteMore}>{t.styleNote(<button className="link" onClick={onStyles}>{GUIDES.styles.name}</button>)}</More>
       </section>
       <section>
         <h3>{t.findHeading}</h3>
@@ -103,7 +104,7 @@ export function SourcesPanel({ view, onAdd, onRemove, onStyle, onNoStyle, onStyl
       </section>
       <section>
         <h3>{t.checkHeading}</h3>
-        <p className="muted">{t.checkNote}</p>
+        <More more={t.checkNoteMore}>{t.checkNote}</More>
         <button
           disabled={isChecking || view.entries === 0}
           onClick={async () => {

@@ -9,4 +9,6 @@ export const shared: typeof pattern = {
   },
   modelUntested: 'Ungetestetes Modell: Es hält sich womöglich nicht an die Assist-only-Regeln. Alles, was es sagt, wird trotzdem protokolliert, und Ihren Text kann es nicht ändern.',
   modelFailed: 'Dieses Modell hat sich im Test nicht an die Assist-only-Regeln gehalten. Alles, was es sagt, wird trotzdem protokolliert, und Ihren Text kann es nicht ändern.',
+  more: 'Mehr',
+  less: 'Weniger',
 }

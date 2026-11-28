@@ -8,4 +8,7 @@ export const shared = {
   },
   modelUntested: 'Untested model: it may not keep to the assist-only rules. Everything it says is logged all the same, and it cannot change your text.',
   modelFailed: 'This model did not keep to the assist-only rules when tested. Everything it says is logged all the same, and it cannot change your text.',
+  /** The button that opens and closes the rest of an explanation. */
+  more: 'More',
+  less: 'Less',
 }

@@ -121,7 +121,8 @@ to a new heading with its version and date; the release workflow does that (see 
   two files stay apart, and pictures are found from whichever folder a file is in. A file that
   is missing stops the export and is named. The disclosure of the whole is made of the logs of
   all files, names the project with its files, and is kept in `.cowriting/<project's file>/`
-  beside the project's file. Tried with the tests' Word and Typst exports, not in a window. The
+  beside the project's file. Tried with the tests' Word and Typst exports and in the browser,
+  not in the app's own window. The
   AI reading the other files is not part of this. The Project tab can be hidden like the others.
   On Windows a document now has one spelling of its path however it was opened, so a file's plan
   is the same from the file dialog and from the Project tab.
@@ -191,6 +192,13 @@ to a new heading with its version and date; the release workflow does that (see 
 
 ### Changed
 
+- **Less explaining text.** Twenty-four explanations in the settings, the side panel and the
+  dialogs are cut down to one line, and the rest is behind "More" beside it, which opens it in
+  place and closes it again ("Less"); it is a button, so it works with the keyboard. What is
+  sent to whom and what cannot be undone stays in the first line. The texts of the consent
+  dialogs (terms of use, usage figures) are as they were. Not done yet: the shorter
+  explanations, a rule for new texts in the developer's notes, and whether "Calm" is still
+  needed. (#41, open)
 - The version is 0.2.0: what `dev` holds since 0.1.0 is far more than a step from 0.1.0 to 0.1.1.
 - The MIT licence has its own file.
 - The README points to the user wiki.

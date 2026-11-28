@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 
 export const project = {
   // a document that is a project of its own
-  alone: 'This document is a project of its own. A thesis, a book or a long report can be a project of several markdown files instead: each chapter in its own file, with its own plan and log, and the experts, linked files, sources and AI settings set once for all of them.',
-  aloneHow: 'A project is one small file beside the chapters that lists them in their order. This document becomes its first file, and its experts and settings become the project’s. Its plan, its log and the text itself stay as they are.',
+  alone: 'This document is a project of its own. A longer work can be a project of several files, one for each chapter.',
+  aloneHow: 'A thesis, a book or a long report, for example. Each file then has its own plan and log, and the experts, linked files, sources and AI settings are set once for all of them. A project is one small file beside the chapters that lists them in their order. This document becomes its first file, and its experts and settings become the project’s. Its plan, its log and the text itself stay as they are.',
   make: 'Make a project of several files…',
 
   // the whole
@@ -21,7 +21,8 @@ export const project = {
 
   // the files
   files: 'Files',
-  filesHint: 'In the order of the text. A click opens a file; what is open is saved first. Every file has its own plan and log; experts, linked files, sources and the AI are the same in all of them.',
+  filesHint: 'In the order of the text. A click opens a file; what is open is saved first.',
+  filesHintMore: 'Every file has its own plan and log; experts, linked files, sources and the AI are the same in all of them.',
   open: (name: string) => `Open ${name}`,
   isOpen: 'open',
   missing: 'not found',

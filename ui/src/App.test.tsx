@@ -2384,6 +2384,28 @@ test('a file of a project can be exported and disclosed alone or with the whole 
   await waitFor(() => expect(calls.exported).toEqual([{ language: 'en', format: 'md', withPrompts: false, withAnswers: false, withOutside: true, wholeProject: true }]))
 })
 
+test('an explanation shows one line, and the rest only when it is asked for', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await documentOpened()
+  await user.click(screen.getByRole('tab', { name: 'Project' }))
+  // the first line is there; what is good to know once is behind "More", for the mouse and the keyboard alike
+  expect(screen.getByText(/This document is a project of its own/)).toBeTruthy()
+  const rest = screen.getByText(/A project is one small file beside the chapters/)
+  expect(rest.hidden).toBe(true)
+  const more = screen.getByRole('button', { name: 'More' })
+  expect(more.getAttribute('aria-expanded')).toBe('false')
+  expect(more.getAttribute('aria-controls')).toBe(rest.id)
+  more.focus()
+  await user.keyboard('{Enter}')
+  expect(rest.hidden).toBe(false)
+  const less = screen.getByRole('button', { name: 'Less' })
+  expect(less.getAttribute('aria-expanded')).toBe('true')
+  await user.click(less)
+  expect(rest.hidden).toBe(true)
+})
+
 test('the project tab shows every file against its plan and the whole against its target, and opens, orders, renames and takes out files', async () => {
   const user = userEvent.setup()
   const { api, calls } = standIn({ book: ['thesis.md', 'method.md', 'results.md'] })
@@ -2520,7 +2542,7 @@ test('with the check at start switched off nothing is asked, and a version that 
   await user.click(settings.getByRole('tab', { name: 'About' }))
   const check = settings.getByRole('checkbox', { name: 'Ask at each start whether there is a newer version' }) as HTMLInputElement
   expect(check.checked).toBe(false)
-  expect(settings.getByText(/one request to the editor’s maker/)).toBeTruthy()
+  expect(settings.getByText(/one request to GitHub/)).toBeTruthy()
   await user.click(check)
   await user.click(settings.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(off.calls.preferences.at(-1)).toMatchObject({ updateCheck: true }))
@@ -2533,7 +2555,7 @@ test('with the check at start switched off nothing is asked, and a version that 
   const none = within(screen.getByRole('dialog', { name: 'Settings' }))
   await user.click(none.getByRole('tab', { name: 'About' }))
   expect(none.queryByRole('button', { name: 'Check for updates…' })).toBeNull()
-  expect(none.queryByText(/one request to the editor’s maker/)).toBeNull()
+  expect(none.queryByText(/one request to GitHub/)).toBeNull()
   expect(without.calls.updates).toEqual([])
 })
 

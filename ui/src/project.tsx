@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ProjectOverview } from './api'
 import { m } from './i18n'
+import { More } from './more'
 
 type Props = {
   /** null for a document that is a project of its own. */
@@ -28,8 +29,7 @@ export function ProjectPanel({ view, onMake, onOpen, onAdd, onAddNew, onRemove, 
     return (
       <div className="project">
         <section>
-          <p className="muted">{m.project.alone}</p>
-          <p className="muted">{m.project.aloneHow}</p>
+          <More more={m.project.aloneHow}>{m.project.alone}</More>
           <button onClick={onMake}>{m.project.make}</button>
         </section>
       </div>
@@ -76,7 +76,7 @@ export function ProjectPanel({ view, onMake, onOpen, onAdd, onAddNew, onRemove, 
       </section>
       <section>
         <h3>{m.project.files}</h3>
-        <p className="muted">{m.project.filesHint}</p>
+        <More more={m.project.filesHintMore}>{m.project.filesHint}</More>
         <ol className="files" aria-label={m.project.files}>
           {view.files.map((file, at) => (
             <li key={file.path} className={file.isOpen ? 'current' : undefined}>

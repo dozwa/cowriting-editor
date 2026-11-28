@@ -4,6 +4,7 @@ import type { Api, ModelChoice, ProjectOverrides, ProjectView, Settings, Setting
 import { Dialog, FeedbackDialog, UsageChoice } from './dialogs'
 import { LANGUAGES, type LanguageId, language, languageFor, m } from './i18n'
 import { ACTIONS, type Action, HIDEABLE_TABS, LIMITS, type Preferences, STANDARD, keysOf, showKeys, shortcutsOf, whyNot } from './preferences'
+import { More } from './more'
 
 type Kind = 'anthropic' | 'local' | 'other' | 'claudeCode'
 
@@ -134,9 +135,7 @@ function AiPane({ ai }: { ai: ReturnType<typeof useAi> }) {
         <label>
           {m.settings.longestAnswer}
           <input inputMode="numeric" value={ai.limit} onChange={e => ai.setLimit(e.target.value)} placeholder={m.settings.noLimit} aria-invalid={!ai.isLimitFine} />
-          <small>
-            {ai.isLimitFine ? m.settings.limitHint : m.settings.limitTooLow(FEWEST_TOKENS)}
-          </small>
+          {ai.isLimitFine ? <More as="small" className="" more={m.settings.limitHintMore}>{m.settings.limitHint}</More> : <small>{m.settings.limitTooLow(FEWEST_TOKENS)}</small>}
         </label>
       )}
       <p className="muted">{m.settings.kinds[kind].sent}</p>
@@ -374,7 +373,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                 <label>
                   {m.settings.fontName}
                   <input value={draft.textFontName} onChange={e => set('textFontName', e.target.value)} placeholder="Georgia" />
-                  <small>{m.settings.fontNameHint}</small>
+                  <More as="small" className="" more={m.settings.fontNameHintMore}>{m.settings.fontNameHint}</More>
                 </label>
               )}
               <div className="row">
@@ -417,11 +416,11 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                   </label>
                 ))}
               </fieldset>
-              <p className="muted">{m.settings.shownTabsHint}</p>
+              <More more={m.settings.shownTabsHintMore}>{m.settings.shownTabsHint}</More>
               <label className="check">
                 <input type="checkbox" checked={draft.spellcheck} onChange={e => set('spellcheck', e.target.checked)} /> {m.settings.spellcheck}
               </label>
-              <p className="muted">{m.settings.lookNote}</p>
+              <More more={m.settings.lookNoteMore}>{m.settings.lookNote}</More>
             </>
           )}
 
@@ -429,7 +428,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
             <>
               <FolderField label={m.settings.documentsFolder} folder={draft.documentsFolder} unset={m.settings.documentsFolderUnset} onPick={api.pickFolder} onChange={v => set('documentsFolder', v)} />
               <FolderField label={m.settings.exportFolder} folder={draft.exportFolder} unset={m.settings.exportFolderUnset} onPick={api.pickFolder} onChange={v => set('exportFolder', v)} />
-              <p className="muted">{m.settings.foldersNote}</p>
+              <More more={m.settings.foldersNoteMore}>{m.settings.foldersNote}</More>
               <label>
                 {m.settings.saving}
                 <select value={draft.autosaveSeconds} onChange={e => set('autosaveSeconds', Number(e.target.value))}>
@@ -578,7 +577,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
               {settings.canCheckForUpdate && (
                 <>
                   <h3>{m.settings.updateHeading}</h3>
-                  <p className="muted">{m.settings.updateAbout}</p>
+                  <More more={m.settings.updateAboutMore}>{m.settings.updateAbout}</More>
                   <label className="check">
                     <input type="checkbox" checked={draft.updateCheck} onChange={e => set('updateCheck', e.target.checked)} /> {m.settings.updateCheck}
                   </label>
@@ -596,7 +595,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                 </>
               )}
               <h3>{m.settings.diagnosticsHeading}</h3>
-              <p className="muted">{m.settings.diagnosticsAbout}</p>
+              <More more={m.settings.diagnosticsAboutMore}>{m.settings.diagnosticsAbout}</More>
               <label className="check">
                 <input type="checkbox" checked={draft.diagnostics} onChange={e => set('diagnostics', e.target.checked)} /> {m.settings.diagnostics}
               </label>
@@ -612,7 +611,7 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                 <button onClick={() => (void api.supportAnswered('coffee').catch(() => {}), void api.openGuide('coffee').catch(e => setError(String(e))))}>{m.settings.coffee}</button>
               </div>
               <h3>{m.settings.licences}</h3>
-              <p className="muted">{m.settings.licencesText}</p>
+              <More more={m.settings.licencesTextMore}>{m.settings.licencesText}</More>
             </>
           )}
         </div>

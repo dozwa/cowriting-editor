@@ -81,6 +81,9 @@ button.primary { background: var(--ink); color: var(--page); border-color: var(-
 button.primary:hover:not(:disabled) { opacity: 0.86; }
 button.link { border: 0; padding: 0; background: none; border-radius: 2px; color: inherit; text-decoration: underline; text-decoration-color: var(--soft); text-underline-offset: 2px; }
 button.link:hover { text-decoration-color: currentColor; }
+/* an explanation with more to it (more.tsx): the rest opens under the first line */
+.more-toggle { font-size: inherit; white-space: nowrap; }
+.more-text:not([hidden]) { display: block; margin-top: 4px; }
 input, select, textarea { background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); padding: 7px 9px; width: 100%; }
 /* a list to choose from is drawn like the fields beside it, not as the system draws it */
 select { appearance: none; -webkit-appearance: none; padding-right: 28px; background-image: var(--chevron); background-repeat: no-repeat; background-position: right 10px center; background-size: 10px 6px; text-overflow: ellipsis; }

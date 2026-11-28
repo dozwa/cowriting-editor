@@ -7,6 +7,7 @@ import { Sprite } from './experts'
 import type { Live } from './App'
 import { m } from './i18n'
 import { linkLines, USE_LABELS, when } from './text'
+import { More } from './more'
 
 type Node = { type: string; children?: Node[]; data?: { hProperties?: Record<string, unknown> } }
 
@@ -391,7 +392,7 @@ function ExternalDialog({ start, chats, onSave, onClose }: { start: ExternalUse;
       {field('checked', t.externalChecked, '', 2)}
       <section className="kept" aria-label={t.keptHeading}>
         <h3>{t.keptHeading}</h3>
-        <p className="muted">{t.keptExplained}</p>
+        <More more={t.keptExplainedMore}>{t.keptExplained}</More>
         {(stated.attachments.length > 0 || stated.add.length > 0) && (
           <ul>
             {stated.attachments.map(kept => (
@@ -461,7 +462,7 @@ function External({ rows, chats, onSave, onWithdraw }: { rows: ExternalUse[]; ch
   return (
     <section className="external">
       <h3>{t.externalHeading}</h3>
-      <p className="muted">{t.externalExplained}</p>
+      <More more={t.externalExplainedMore}>{t.externalExplained}</More>
       {rows.length > 0 && (
         <ul>
           {rows.map(row => (
@@ -490,7 +491,7 @@ function External({ rows, chats, onSave, onWithdraw }: { rows: ExternalUse[]; ch
         </ul>
       )}
       <button onClick={() => setEditing(NOTHING_STATED)}>{t.externalAdd}</button>
-      {rows.length > 0 && <p className="muted">{t.externalKept}</p>}
+      {rows.length > 0 && <More more={t.externalKeptMore}>{t.externalKept}</More>}
       {editing !== null && <ExternalDialog start={editing} chats={chats} onSave={onSave} onClose={() => setEditing(null)} />}
     </section>
   )
@@ -536,7 +537,7 @@ export function LogPanel({ log, onOpen, onJump, onComment, chats, onExternal, on
       {log.aiText.length > 0 && (
         <>
           <h3>{m.panels.aiTextHeading}</h3>
-          <p className="muted">{m.panels.aiTextExplained}</p>
+          <More more={m.panels.aiTextExplainedMore}>{m.panels.aiTextExplained}</More>
           <ul className="ai-text">
             {log.aiText.map(row => (
               <AiTextItem key={`${row.id}-${row.note}`} row={row} onOpen={onOpen} onJump={onJump} onComment={onComment} />

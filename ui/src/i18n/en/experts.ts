@@ -33,7 +33,8 @@ export const experts = {
   cancel: 'Cancel',
   // background files
   files: 'Background files',
-  filesHint: 'Files of yours the AI should know: wording rules, a glossary, the methods, a style sheet. Text files, Word files and PDFs with text in them. They are sent along with every question to those they are for, and the log names them.',
+  filesHint: 'Files of yours the AI should know. They are sent along with every question to those they are for.',
+  filesHintMore: 'Such as wording rules, a glossary, the methods or a style sheet: text files, Word files and PDFs with text in them. The log names them.',
   linkFile: 'Link a file…',
   noFiles: 'None linked.',
   fileFor: (name: string) => `Who gets ${name}`,

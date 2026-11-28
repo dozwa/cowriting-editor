@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Expert, LinkedFile, PartyView } from './api'
 import { m } from './i18n'
+import { More } from './more'
 
 /** An expert's figure: one square per letter of its sprite, in its own colours or the shared ones. */
 export function Sprite({ expert, shared, size = 36 }: { expert: Pick<Expert, 'sprite' | 'palette' | 'name'>; shared: Record<string, string>; size?: number }) {
@@ -56,7 +57,7 @@ function Files({ files, experts, onLink, onFor, onUnlink }: { files: LinkedFile[
   return (
     <section className="files">
       <h3>{m.experts.files}</h3>
-      <p className="muted">{m.experts.filesHint}</p>
+      <More more={m.experts.filesHintMore}>{m.experts.filesHint}</More>
       {files.length === 0 ? (
         <p className="muted">{m.experts.noFiles}</p>
       ) : (

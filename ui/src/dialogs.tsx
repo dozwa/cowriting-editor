@@ -4,6 +4,7 @@ import Markdown, { type Components } from 'react-markdown'
 import type { Api, UpdateFound, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, KeptLayout, PageNumbers, PdfChoice, PdfLayout, WholeExport } from './api'
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
+import { More } from './more'
 
 /** A chosen picture lies outside the document's folder: copy it beside the document, or name it where it is. */
 export function PictureDialog({ name, linkedAs, folder, onCopy, onLink, onClose }: { name: string; linkedAs: string; /** The project's folder for copies. */ folder: string; onCopy(into: string): void; onLink(): void; onClose(): void }) {
@@ -361,7 +362,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
   const cannot = tools === undefined ? '' : !tools.hasPandoc ? t.noPandoc : format === 'pdf' && engines.length === 0 ? t.noPdfEngine : ''
   return (
     <Dialog title={t.exportTitle} onClose={onClose}>
-      <p>{t.exportIntro(<code>[@smith2020]</code>)}</p>
+      <More className="" more={t.exportIntroMore(<code>[@smith2020]</code>)}>{t.exportIntro}</More>
       {setup != null && setup.whole !== null && (
         <label>
           {t.madeOf}
@@ -405,7 +406,7 @@ export function ExportDialog({ api, getText, onClose }: { api: Api; getText(): s
             <button onClick={() => void api.pickWordTemplate().then(picked => picked !== null && choose({ wordTemplate: picked }), e => setError(String(e)))}>{t.wordChooseTemplate}</button>
             {pdf.wordTemplate !== '' && <button className="link" onClick={() => choose({ wordTemplate: '' })}>{t.wordRemoveTemplate}</button>}
           </div>
-          <p className="muted">{pdf.wordTemplate === '' ? t.wordNote : t.wordTemplateNote}</p>
+          {pdf.wordTemplate === '' ? <More more={t.wordNoteMore}>{t.wordNote}</More> : <p className="muted">{t.wordTemplateNote}</p>}
         </>
       )}
       {(format === 'pdf' ? engines.length > 0 : pdf.wordTemplate === '') && (
@@ -733,7 +734,7 @@ export function FeedbackDialog({ api, settings, kind: startsAs = 'idea', getText
           <label className="check">
             <input type="checkbox" checked={log !== null} disabled={!keepsLog} onChange={e => void addLog(e.target.checked)} /> {t.feedbackLog(LOG_MINUTES)}
           </label>
-          <p className="muted">{keepsLog ? t.feedbackLogHint : t.feedbackLogOff}</p>
+          {keepsLog ? <More more={t.feedbackLogHintMore}>{t.feedbackLogHint}</More> : <p className="muted">{t.feedbackLogOff}</p>}
         </>
       )}
       <label>
@@ -744,7 +745,7 @@ export function FeedbackDialog({ api, settings, kind: startsAs = 'idea', getText
       <button className="link" onClick={() => void copy()} disabled={!canSend}>{t.feedbackCopy}</button>
       {isBug && keepsLog && (
         <>
-          <p className="muted">{t.reportFileAbout(LOG_MINUTES)}</p>
+          <More more={t.reportFileAboutMore(LOG_MINUTES)}>{t.reportFileAbout}</More>
           {getText !== undefined && (
             <label className="check">
               <input type="checkbox" checked={withText} onChange={e => setWithText(e.target.checked)} /> {t.reportFileWithText}
@@ -928,7 +929,7 @@ export function UpdateDialog({ api, version, found, beforeInstall, onFound, onCl
               <Markdown components={NOTES_PARTS}>{now.notes}</Markdown>
             </div>
           )}
-          <p className="muted">{now.canInstall ? t.updateHow : t.updateByHand}</p>
+          {now.canInstall ? <More more={t.updateHowMore}>{t.updateHow}</More> : <p className="muted">{t.updateByHand}</p>}
         </>
       )}
       {isInstalling && <p role="status">{t.updateInstalling}</p>}
