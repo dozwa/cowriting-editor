@@ -22,7 +22,7 @@ impl Copy {
         let from = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/stored/v0.1.0");
         let copy = Copy(root);
         let document = copy.path("paper/thesis.md");
-        let project = format!("projects/{}", Sidecar::project_key(&document));
+        let project = format!("projects/{}", Sidecar::project_key(&cowriting_app::project_files::native(&document)));
         copy.take(&from.join("paper"), "paper");
         copy.take(&from.join("config"), "config");
         std::fs::create_dir_all(copy.path("config/projects")).unwrap();
@@ -104,7 +104,7 @@ fn a_project_of_version_0_1_0_opens_with_everything_still_there() {
 fn what_this_version_saves_into_an_old_project_keeps_the_rest_and_names_its_form() {
     let copy = Copy::new("saves");
     let (session, opened) = copy.open().unwrap();
-    let project = format!("config/projects/{}", Sidecar::project_key(&copy.path("paper/thesis.md")));
+    let project = format!("config/projects/{}", Sidecar::project_key(&cowriting_app::project_files::native(&copy.path("paper/thesis.md"))));
     session.set_live(false, &["grammar-guy".to_string()], &opened.text).unwrap();
     session.set_member("lay-reader", false).unwrap();
     session.unlink_file(&copy.path("paper/rules.md")).unwrap();
@@ -186,7 +186,7 @@ fn a_document_last_worked_on_with_a_newer_editor_is_not_opened_and_its_record_st
 #[test]
 fn a_projects_file_that_cannot_be_read_is_named_when_the_document_opens() {
     let copy = Copy::new("named");
-    let project = format!("config/projects/{}/project.json", Sidecar::project_key(&copy.path("paper/thesis.md")));
+    let project = format!("config/projects/{}/project.json", Sidecar::project_key(&cowriting_app::project_files::native(&copy.path("paper/thesis.md"))));
     std::fs::write(copy.path(&project), "{ \"files\": [").unwrap();
     let (session, opened) = copy.open().unwrap();
     match opened.notices.as_slice() {

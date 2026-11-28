@@ -981,7 +981,7 @@ impl Session {
     /// Linking it again changes who gets it. Only its path is kept; the file stays where it is and is read when the AI is asked.
     pub fn link_file(&self, path: &str, personas: &[String]) -> Result<(), String> {
         let host = self.workspace.host.as_ref();
-        if path == self.workspace.sidecar.document {
+        if picture::same_file(path, &self.workspace.sidecar.document) {
             return Err("That is the document itself; the AI reads it anyway.".into());
         }
         // a Word file or a PDF is read once now; the editor keeps what it says and passes that on
@@ -1185,6 +1185,8 @@ impl Session {
     }
 
     pub fn move_document(&self, target: &str, document_text: &str) -> Result<(), String> {
+        // the new place in the spelling it will be opened by, so its settings are found there
+        let target = &project_files::native(target);
         let (host, sidecar) = (self.workspace.host.as_ref(), &self.workspace.sidecar);
         let to = self.elsewhere(target);
         if std::path::Path::new(target) == std::path::Path::new(&sidecar.document) {
