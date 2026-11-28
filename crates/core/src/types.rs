@@ -245,6 +245,24 @@ pub fn external_uses(entries: &[LogEntry]) -> Vec<ExternalEntry> {
     current
 }
 
+/// What the reference of an annotation begins with when it is about a chat kept with a statement
+/// of outside use, and not about a turn in the editor: the kept file's name follows.
+pub const KEPT: &str = "external:";
+
+/// What the author did with each kept chat, by the kept file's name: the last choice counts, as
+/// for a turn. An older editor and the plugin find no turn under such a reference and pass it over.
+pub fn kept_uses(entries: &[LogEntry]) -> std::collections::HashMap<String, AnnotationEntry> {
+    let mut uses = std::collections::HashMap::new();
+    for entry in entries {
+        if let LogEntry::Annotation(annotation) = entry {
+            if let Some(file) = annotation.reference.strip_prefix(KEPT) {
+                uses.insert(file.to_string(), annotation.clone());
+            }
+        }
+    }
+    uses
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum Known {

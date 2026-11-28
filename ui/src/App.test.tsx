@@ -137,7 +137,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       calls.project.push(['state', stated])
       // what is added is kept: a chat for each conversation chosen or a marked text, a file as it is
       const added = stated.add.flatMap((add, at): ExternalUse['attachments'] => {
-        const kept = { bytes: 100, sha256: 'ab12'.repeat(16), state: 'intact' as const }
+        const kept = { bytes: 100, sha256: 'ab12'.repeat(16), state: 'intact' as const, use: '' as const, note: '' }
         if (add.kind === 'chats') return add.conversations.map(index => ({ ...kept, file: `chat-${at}-${index}.json`, kind: 'chat' as const, turns: CHATS.list[index]?.turns ?? 0, title: CHATS.list[index]?.title ?? '', from: CHATS.form }))
         if (add.kind === 'text') return [{ ...kept, file: `text-${at}.md`, kind: 'text' as const, turns: 0, title: '', from: '' }]
         return [{ ...kept, file: `f${at}-notes.pdf`, kind: 'file' as const, turns: 0, title: 'notes.pdf', from: '' }]
@@ -406,6 +406,11 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     },
     annotate: async (reference, use, note) => {
       calls.annotated.push([reference, use, note])
+      if (reference.startsWith('external:')) {
+        // a chat kept with a statement of outside use, named by its file
+        external = external.map(row => ({ ...row, attachments: row.attachments.map(kept => (`external:${kept.file}` === reference ? { ...kept, use, note } : kept)) }))
+        return
+      }
       const turn = turns.find(t => t.id === reference)!
       Object.assign(turn, { use, note, isOpen: false })
     },
@@ -2037,6 +2042,14 @@ test('chats from another tool are chosen from its export, kept with the statemen
   await user.click(save)
   await waitFor(() => expect(calls.project.at(-1)).toMatchObject(['state', { tool: 'ChatGPT', attachments: [], add: [{ kind: 'chats', path: '/downloads/conversations.json', conversations: [0] }, { kind: 'text', text: 'Prompt: Why?' }] }]))
   await screen.findByText(/Kept with it: chat “Mixed model in R” \(ChatGPT export, 2 exchanges\); pasted text/)
+
+  // each kept chat is classified like an answer of the editor's own AI; the choice goes into the disclosure
+  const chat = within(screen.getByRole('group', { name: 'chat “Mixed model in R” (ChatGPT export, 2 exchanges)' }))
+  await user.type(chat.getByLabelText('Comment on this input'), 'Wrote the code myself')
+  await user.click(chat.getByRole('button', { name: '✎ changed' }))
+  await waitFor(() => expect(calls.annotated.at(-1)).toEqual(['external:chat-0-0.json', 'adapted', 'Wrote the code myself']))
+  expect(await chat.findByText(/in your own way · “Wrote the code myself”/)).toBeTruthy()
+  expect(within(screen.getByRole('group', { name: 'pasted text' })).getByRole('button', { name: '✓ used' })).toBeTruthy()
 
   // a correction keeps what is there unless it is taken away
   await user.click(screen.getByRole('button', { name: 'Correct the statement about ChatGPT' }))

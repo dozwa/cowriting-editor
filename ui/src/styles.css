@@ -81,6 +81,9 @@ button.primary { background: var(--ink); color: var(--page); border-color: var(-
 button.primary:hover:not(:disabled) { opacity: 0.86; }
 button.link { border: 0; padding: 0; background: none; border-radius: 2px; color: inherit; text-decoration: underline; text-decoration-color: var(--soft); text-underline-offset: 2px; }
 button.link:hover { text-decoration-color: currentColor; }
+/* what the author did with a chat kept with a statement of outside use */
+.kept-use { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--rule); }
+.kept-use .classify { margin-top: 4px; }
 /* an explanation with more to it (more.tsx): the rest opens under the first line */
 .more-toggle { font-size: inherit; white-space: nowrap; }
 .more-text:not([hidden]) { display: block; margin-top: 4px; }

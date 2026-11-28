@@ -544,6 +544,7 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
         "The editor cannot see the use of other tools. These statements are the author's own.",
         "Die Nutzung anderer Werkzeuge kann der Editor nicht sehen. Diese Angaben stammen von der Autorin oder dem Autor selbst.",
     );
+    let kept_uses = crate::types::kept_uses(entries);
     let external: Vec<String> = crate::types::external_uses(entries)
         .iter()
         .map(|stated| {
@@ -567,7 +568,13 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 }
             }
             if !stated.attachments.is_empty() {
-                let kept: Vec<String> = stated.attachments.iter().map(|attachment| attachment_line(attachment, lang, false)).collect();
+                let kept: Vec<String> = stated
+                    .attachments
+                    .iter()
+                    .map(|attachment| {
+                        format!("{}{}", attachment_line(attachment, lang, false), kept_use(attachment, &kept_uses, lang).map(|use_| format!(", {use_}")).unwrap_or_default())
+                    })
+                    .collect();
                 line.push_str(&format!(" {} {}.", pick("Kept with it:", "Dazu abgelegt:"), kept.join("; ")));
             }
             line
@@ -809,6 +816,22 @@ pub fn prompts_appendix(entries: &[LogEntry], name: &str, lang: Lang, format: Do
 }
 
 /// One kept file as the disclosure names it. The register has the beginning of the hash, the appendix all of it.
+/// What the author did with a kept chat or pasted text, as the disclosure says it; None for any
+/// other file, which is no exchange with an AI that could be used or not.
+fn kept_use(attachment: &Attachment, uses: &HashMap<String, AnnotationEntry>, lang: Lang) -> Option<String> {
+    if attachment.kind == "file" {
+        return None;
+    }
+    let head = if lang == Lang::De { "Verwendung" } else { "use" };
+    Some(match uses.get(&attachment.file) {
+        Some(annotation) => {
+            let note = annotation.note.as_deref().map(|note| py_squash(note, None)).filter(|note| !note.is_empty());
+            format!("{head}: {}{}", use_label(lang, &annotation.use_), note.map(|note| format!(" ({note})")).unwrap_or_default())
+        }
+        None => format!("{head}: {}", use_label(lang, "open")),
+    })
+}
+
 fn attachment_line(attachment: &Attachment, lang: Lang, whole_hash: bool) -> String {
     let de = lang == Lang::De;
     let hash = if whole_hash { attachment.sha256.clone() } else { format!("{}…", attachment.sha256.chars().take(12).collect::<String>()) };
@@ -893,6 +916,14 @@ pub fn outside_appendix(entries: &[LogEntry], kept: &dyn Fn(&Attachment) -> Kept
     let or_dash = |text: &str| if text.trim().is_empty() { "–".to_string() } else { text.trim().to_string() };
     let quoted = |text: &str| -> Vec<String> { py_splitlines(&or_dash(text)).iter().map(|line| format!("> {line}")).collect() };
     let statements: Vec<ExternalEntry> = crate::types::external_uses(entries).into_iter().filter(|stated| !stated.attachments.is_empty()).collect();
+    let kept_uses = crate::types::kept_uses(entries);
+    // what the author did with a chat, under its heading
+    let used = |attachment: &Attachment| {
+        kept_use(attachment, &kept_uses, lang).map(|use_| {
+            let mut chars = use_.chars();
+            chars.next().map(|first| format!("{}{}.", first.to_uppercase(), chars.as_str())).unwrap_or_default()
+        })
+    };
     let heading = |stated: &ExternalEntry| {
         let model = if stated.model.trim().is_empty() { String::new() } else { format!(" ({})", stated.model.trim()) };
         let date = if stated.date.trim().is_empty() { String::new() } else { format!("{}: ", stated.date.trim()) };
@@ -912,6 +943,9 @@ pub fn outside_appendix(entries: &[LogEntry], kept: &dyn Fn(&Attachment) -> Kept
                 ]);
                 for attachment in &stated.attachments {
                     out.extend([format!("### {}", attachment_line(attachment, lang, true)), String::new()]);
+                    if let Some(used) = used(attachment) {
+                        out.extend([used, String::new()]);
+                    }
                     match kept(attachment) {
                         Kept::Chat(chat) => {
                             if !about(&chat).is_empty() {
@@ -950,6 +984,9 @@ pub fn outside_appendix(entries: &[LogEntry], kept: &dyn Fn(&Attachment) -> Kept
                 for attachment in &stated.attachments {
                     // a checksum has no place to break; the line is ragged so it need not be stretched
                     out.extend(["{\\raggedright\\sloppy".to_string(), format!("\\textbf{{{}}}\\par}}", breakable_hash(&e(&attachment_line(attachment, lang, true))))]);
+                    if let Some(used) = used(attachment) {
+                        out.push(format!("{}\\par", e(&used)));
+                    }
                     match kept(attachment) {
                         Kept::Chat(chat) => {
                             if !about(&chat).is_empty() {

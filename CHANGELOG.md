@@ -100,8 +100,10 @@ to a new heading with its version and date; the release workflow does that (see 
   changed after it was kept is said to be changed and not printed. Text you paste or type that
   comes from a kept chat is found and listed like text from the editor's own AI. The readers
   for ChatGPT's and Claude.ai's exports were written from what is known of their form and not
-  yet tried with a real export; Claude Code's was tried with real transcripts. Classifying such
-  chats like the editor's own turns, and merging the plugin's log, are not part of this. (#4, open)
+  yet tried with a real export; Claude Code's was tried with real transcripts. A kept chat or
+  pasted text is classified like an answer of the editor's own AI (used, changed, not used, only
+  informed, with a comment), as one whole; the disclosure and the appendix say what was done
+  with it, and "not annotated" where nothing was said. (#4, open)
 
 - **Projects of several files.** A thesis, a book or a long report can be a project of several
   markdown files. "Make a project of several files…" in the new **Project** tab writes a file

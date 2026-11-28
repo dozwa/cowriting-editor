@@ -965,7 +965,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
               onCite={key => editor.current?.insert(`[@${key}]`)}
             />
           ) : (
-            <LogPanel log={log} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} chats={{ pick: api.pickChat, read: api.readChats }} onExternal={async stated => {
+            <LogPanel log={log} onAnnotate={annotate} onOpen={openTurn} onJump={line => editor.current?.jumpToLine(line)} chats={{ pick: api.pickChat, read: api.readChats }} onExternal={async stated => {
               try {
                 await api.stateExternal(stated)
                 await refreshLog()

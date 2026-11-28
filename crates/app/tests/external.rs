@@ -130,8 +130,10 @@ fn chats_chosen_from_an_export_are_kept_with_a_statement_and_printed_in_the_appe
     let (register, appendix) = exported(&session, "en", "md");
     let short: String = kept[0].sha256.chars().take(12).collect();
     assert!(
-        register
-            .contains(&format!("Kept with it: chat “Mixed model in R” (ChatGPT export, 2 exchanges, file {}, SHA-256 {short}…); chat “Limits of agreement script”", kept[0].file)),
+        register.contains(&format!(
+            "Kept with it: chat “Mixed model in R” (ChatGPT export, 2 exchanges, file {}, SHA-256 {short}…), use: not annotated; chat “Limits of agreement script”",
+            kept[0].file
+        )),
         "{register}"
     );
     assert!(register.contains("file “thesis.md”") && register.contains("pasted text (file text-"), "{register}");
@@ -201,4 +203,53 @@ fn text_pasted_from_a_kept_chat_is_found_and_the_disclosure_says_where_it_is_fro
     // what the author wrote in the question is theirs
     assert!(session.report_paste("Why a random slope?", 5, &text).unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn a_kept_chat_is_classified_like_an_answer_and_the_disclosure_says_what_was_done_with_it() {
+    use cowriting_app::outside::NewAttachment;
+    let (folder, session) = opened("classified");
+    let stated = ExternalUse {
+        tool: "ChatGPT".into(),
+        purpose: "R code for the mixed model".into(),
+        add: vec![
+            NewAttachment::Text { text: "Prompt: Are 48 enough?\nAnswer: For a pilot study, yes.".into() },
+            NewAttachment::File { path: folder.join("thesis.md").to_string_lossy().into_owned() },
+        ],
+        ..Default::default()
+    };
+    session.state_external(&stated).unwrap();
+    let kept = session.log_view("").unwrap().external[0].attachments.clone();
+    let (chat, file) = (&kept[0], &kept[1]);
+    assert_eq!((chat.use_.as_str(), chat.note.as_str()), ("", ""), "nothing said yet");
+    let (register, appendix) = exported(&session, "en", "md");
+    assert!(register.contains("SHA-256") && register.contains("), use: not annotated; file “thesis.md”"), "an unclassified chat is said to be: {register}");
+    assert!(appendix.contains("\n\nUse: not annotated.\n\n"), "{appendix}");
+
+    // the reference names the kept file; anything else is refused
+    let reference = format!("external:{}", chat.file);
+    assert!(session.annotate(&reference, "copied", "").is_err(), "one of the four choices");
+    assert!(session.annotate("external:not-kept.json", "adopted", "").is_err());
+    assert!(session.annotate(&format!("external:{}", file.file), "adopted", "").is_err(), "a file that is no chat is not an answer to classify");
+    session.annotate(&reference, "adopted", "").unwrap();
+    // a later choice counts, as for a turn; the log keeps both
+    session.annotate(&reference, "adapted", "  Took the model, wrote the code myself  ").unwrap();
+    let view = session.log_view("").unwrap();
+    let chat = &view.external[0].attachments[0];
+    assert_eq!((chat.use_.as_str(), chat.note.as_str()), ("adapted", "Took the model, wrote the code myself"));
+    assert_eq!((view.stats.turns, view.stats.annotations, view.stats.unannotated), (0, 0, 0), "the editor's own turns are counted apart");
+
+    let (register, appendix) = exported(&session, "en", "md");
+    assert!(register.contains("), use: adapted (Took the model, wrote the code myself); file “thesis.md” ("), "{register}");
+    assert!(appendix.contains("\n\nUse: adapted (Took the model, wrote the code myself).\n\n"), "{appendix}");
+    let (german, german_appendix) = exported(&session, "de", "md");
+    assert!(german.contains("), Verwendung: angepasst (Took the model, wrote the code myself)"), "{german}");
+    assert!(german_appendix.contains("Verwendung: angepasst (Took the model, wrote the code myself)."), "{german_appendix}");
+    let (_, tex) = exported(&session, "en", "tex");
+    assert!(tex.contains("Use: adapted (Took the model, wrote the code myself).\\par"), "{tex}");
+
+    // a corrected statement that still keeps the chat keeps its classification
+    let id = view.external[0].id.clone();
+    session.state_external(&ExternalUse { id, checked: "Recomputed by hand".into(), ..view.external[0].clone() }).unwrap();
+    assert_eq!(session.log_view("").unwrap().external[0].attachments[0].use_, "adapted");
 }

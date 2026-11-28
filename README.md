@@ -315,6 +315,12 @@ the appendix of the editor's own prompts. A file changed after it was kept is na
 and not printed. Answers in kept chats are also compared with what you paste or type: a passage
 taken from one is logged and listed in the disclosure like text from the editor's own AI.
 
+Under each statement in the Log tab, a kept chat or pasted text has the same four choices as an
+answer of the editor's own AI: used, changed, not used, only informed, with a comment. The
+choice is for the chat as a whole, can be made again, and stands in the disclosure and the
+appendix beside the chat ("use: adapted"); a chat without one is said to be "not annotated".
+These choices are not counted among the editor's own turns.
+
 ## The tour
 
 At the first start a tour goes through the window in twelve short steps: the AI, opening a

@@ -184,7 +184,7 @@ export type ExternalUse = {
   add: NewAttachment[]
 }
 /** A chat or file kept with a statement, as the log names it and as it is now on disk. */
-export type Attached = { file: string; kind: 'chat' | 'text' | 'file'; bytes: number; sha256: string; turns: number; title: string; from: string; state: 'intact' | 'changed' | 'missing' }
+export type Attached = { file: string; kind: 'chat' | 'text' | 'file'; bytes: number; sha256: string; turns: number; title: string; from: string; state: 'intact' | 'changed' | 'missing'; /** What the author did with a kept chat or text; '' while not said. */ use: Use | ''; note: string }
 export type NewAttachment = { kind: 'file'; path: string } | { kind: 'chats'; path: string; conversations: number[] } | { kind: 'text'; text: string }
 /** What a file of another AI tool holds. `form` is empty when the editor cannot read it as a chat. */
 export type Conversations = { form: string; name: string; list: { index: number; title: string; tool: string; date: string; turns: number }[]; canKeepAsFile: boolean }

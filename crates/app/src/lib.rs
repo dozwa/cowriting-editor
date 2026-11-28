@@ -170,6 +170,10 @@ pub struct Attached {
     pub from: String,
     /// 'intact', 'changed' (the file is not what was kept) or 'missing'.
     pub state: String,
+    /// What the author did with a kept chat or text: 'adopted', 'adapted', 'rejected', 'info', or '' while not said.
+    #[serde(rename = "use")]
+    pub use_: String,
+    pub note: String,
 }
 
 /// A passage of the document that matches a logged answer.
@@ -1502,8 +1506,28 @@ impl Session {
         stored::write(host, &file, &stored::MARKS, &json).map_err(|e| format!("The marks could not be saved: {e}"))
     }
 
+    /// What the author did with an answer. A reference that begins with `external:` is about a
+    /// chat kept with a statement of outside use, named by its file: classified like a turn of
+    /// the editor's own, as one whole.
     pub fn annotate(&self, reference: &str, use_: &str, note: &str) -> Result<(), String> {
-        annotate(&self.workspace, reference, use_, note)
+        let Some(file) = reference.strip_prefix(cowriting_core::types::KEPT) else { return annotate(&self.workspace, reference, use_, note) };
+        if !cowriting_core::turn::USES.contains(&use_) {
+            return Err(format!("{use_} is not one of {}.", cowriting_core::turn::USES.join(", ")));
+        }
+        let entries = self.workspace.log.read().map_err(error)?;
+        let is_kept = cowriting_core::types::external_uses(&entries).iter().any(|stated| stated.attachments.iter().any(|kept| kept.file == file && kept.kind != "file"));
+        if !is_kept {
+            return Err(format!("No statement that holds now keeps a chat {file}."));
+        }
+        let note = note.trim();
+        let entry = AnnotationEntry {
+            reference: reference.to_string(),
+            ts: self.workspace.host.now(),
+            use_: use_.to_string(),
+            note: (!note.is_empty()).then(|| note.to_string()),
+            ..Default::default()
+        };
+        self.workspace.log.append(&LogEntry::Annotation(entry)).map_err(error)
     }
 
     pub fn thread(&self, id: &str) -> Result<Vec<ThreadMessage>, String> {
@@ -1544,10 +1568,11 @@ impl Session {
             .rev()
             .collect();
         let ai_text = entries.iter().rev().filter_map(|e| if let LogEntry::AiText(found) = e { Some(ai_text_row(found, &entries, document_text)) } else { None }).collect();
+        let kept_uses = cowriting_core::types::kept_uses(&entries);
         let external = cowriting_core::types::external_uses(&entries)
             .into_iter()
             .map(|e| {
-                let attachments = e.attachments.iter().map(|a| self.attached(a)).collect();
+                let attachments = e.attachments.iter().map(|a| self.attached(a, &kept_uses)).collect();
                 ExternalUse {
                     id: e.id,
                     tool: e.tool,
@@ -1573,9 +1598,21 @@ impl Session {
         })
     }
 
-    fn attached(&self, a: &cowriting_core::types::Attachment) -> Attached {
+    fn attached(&self, a: &cowriting_core::types::Attachment, uses: &std::collections::HashMap<String, AnnotationEntry>) -> Attached {
         let state = outside::state(&self.workspace.sidecar.external_dir(), a).to_string();
-        Attached { file: a.file.clone(), kind: a.kind.clone(), bytes: a.bytes, sha256: a.sha256.clone(), turns: a.turns, title: a.title.clone(), from: a.from.clone(), state }
+        let (use_, note) = uses.get(&a.file).map(|said| (said.use_.clone(), said.note.clone().unwrap_or_default())).unwrap_or_default();
+        Attached {
+            file: a.file.clone(),
+            kind: a.kind.clone(),
+            bytes: a.bytes,
+            sha256: a.sha256.clone(),
+            turns: a.turns,
+            title: a.title.clone(),
+            from: a.from.clone(),
+            state,
+            use_,
+            note,
+        }
     }
 
     /// Writes the AI register, and the appendices asked for, into the sidecar's `disclosure/`.

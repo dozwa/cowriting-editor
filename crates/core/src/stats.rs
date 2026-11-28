@@ -34,6 +34,8 @@ pub fn compute_stats(entries: &[LogEntry], today: &str, party: &Party) -> Stats 
             LogEntry::Response(r) => {
                 responses.insert(&r.reference, r);
             }
+            // what the author did with a kept chat of another tool is no turn of the editor's: it is counted apart
+            LogEntry::Annotation(a) if a.reference.starts_with(crate::types::KEPT) => {}
             LogEntry::Annotation(a) => {
                 annotated.insert(&a.reference, a);
             }

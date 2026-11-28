@@ -100,7 +100,7 @@ function Answer({ text, onJump, marks }: { text: string; onJump(line: number): v
 }
 
 /** The four choices under an AI input, or the choice the author made. */
-function Classify({ turn, onAnnotate }: { turn: TurnRow; onAnnotate(id: string, use: Use, note: string): void }) {
+function Classify({ turn, onAnnotate }: { turn: Pick<TurnRow, 'id' | 'use' | 'note'>; onAnnotate(id: string, use: Use, note: string): void }) {
   const [note, setNote] = useState(turn.note)
   // a choice can be made again: the log keeps both, and the later one counts
   const [isChanging, setChanging] = useState(false)
@@ -456,7 +456,7 @@ function ExternalDialog({ start, chats, onSave, onClose }: { start: ExternalUse;
 }
 
 /** What the author stated about other AI tools, and the way to state more. */
-function External({ rows, chats, onSave, onWithdraw }: { rows: ExternalUse[]; chats: ChatFiles; onSave(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void }) {
+function External({ rows, chats, onSave, onWithdraw, onAnnotate }: { rows: ExternalUse[]; chats: ChatFiles; onSave(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void; onAnnotate(id: string, use: Use, note: string): void }) {
   const [editing, setEditing] = useState<ExternalUse | null>(null)
   const t = m.panels
   return (
@@ -482,6 +482,13 @@ function External({ rows, chats, onSave, onWithdraw }: { rows: ExternalUse[]; ch
                   {row.attachments.some(kept => kept.state !== 'intact') && <em className="warn"> {t.keptNotAsLogged}</em>}
                 </p>
               )}
+              {/* a kept chat is classified like an answer of the editor's own AI, as one whole; a file that is no chat is not */}
+              {row.attachments.filter(kept => kept.kind !== 'file').map(kept => (
+                <div className="kept-use" key={kept.file} role="group" aria-label={attachedName(kept)}>
+                  <p className="muted">{attachedName(kept)}</p>
+                  <Classify key={kept.file + kept.use} turn={{ id: `external:${kept.file}`, use: kept.use, note: kept.note }} onAnnotate={onAnnotate} />
+                </div>
+              ))}
               <div className="row">
                 <button className="link" aria-label={t.externalEditFor(row.tool)} onClick={() => setEditing({ ...row, add: [] })}>{t.externalEdit}</button>
                 <button className="link" aria-label={t.externalWithdrawFor(row.tool)} onClick={() => onWithdraw(row.id)}>{t.externalWithdraw}</button>
@@ -497,11 +504,11 @@ function External({ rows, chats, onSave, onWithdraw }: { rows: ExternalUse[]; ch
   )
 }
 
-type LogProps = { log: LogView; onOpen(id: string): void; onJump(line: number): void; onComment(id: string, note: string): void; chats: ChatFiles; onExternal(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void }
+type LogProps = { log: LogView; onOpen(id: string): void; onJump(line: number): void; onComment(id: string, note: string): void; chats: ChatFiles; onExternal(stated: ExternalUse): Promise<boolean>; onWithdraw(id: string): void; onAnnotate(id: string, use: Use, note: string): void }
 
-export function LogPanel({ log, onOpen, onJump, onComment, chats, onExternal, onWithdraw }: LogProps) {
+export function LogPanel({ log, onOpen, onJump, onComment, chats, onExternal, onWithdraw, onAnnotate }: LogProps) {
   const { stats } = log
-  const external = <External rows={log.external} chats={chats} onSave={onExternal} onWithdraw={onWithdraw} />
+  const external = <External rows={log.external} chats={chats} onSave={onExternal} onWithdraw={onWithdraw} onAnnotate={onAnnotate} />
   // text from a chat the author kept can be found in the document before anything was asked here
   if (log.turns.length === 0 && log.guard.length === 0 && log.aiText.length === 0) {
     return (
