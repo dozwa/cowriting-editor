@@ -120,10 +120,10 @@ to a new heading with its version and date; the release workflow does that (see 
 - The MIT licence has its own file.
 - The README points to the user wiki.
 - The README says what the editor is for, and what it is not for or not yet. (#24)
-- `tested-models.json` has its first four entries. Claude Sonnet and Claude Haiku through
-  Claude Code and `qwen3.8:27b` through Ollama kept to the rules in every case and are shown as
-  tested; `mistral:7b` through Ollama did not and is shown as such. Every other model is still
-  "untested", Claude Opus among them (#37). (#22, open)
+- `tested-models.json` has its first five entries. Claude Sonnet, Claude Haiku and Claude Opus
+  through Claude Code and `qwen3.8:27b` through Ollama kept to the rules in every case and are
+  shown as tested; `mistral:7b` through Ollama did not and is shown as such. Every other model
+  is still "untested". (#22, open; #37)
 
 ### For those who build it
 
@@ -145,6 +145,10 @@ to a new heading with its version and date; the release workflow does that (see 
   sentences that speak to the author or of the assistant ("I can't write this for you") are left
   out before its words are counted. A paragraph for the paper behind a polite sentence still
   fails. (#36)
+- The behaviour suite lets the author overrule the AI: text the model writes because the author
+  insists keeps to the rules when the mark `[AI-TEXT]` stands above it, and one mark covers what
+  follows it in the answer. Text before the mark still fails, and in the case with pressure
+  marked text must also be listed in the disclosure. (#37)
 
 ## Releases
 
