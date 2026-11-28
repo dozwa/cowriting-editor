@@ -37,7 +37,8 @@ provider with an OpenAI-compatible API. A party of experts (Reviewer #2, the Sta
 can be briefed and asked, and you can add experts of your own. References can be searched and
 checked, and the document exports to PDF and Word. The AI can also be your own installed Claude
 Code. The macOS installer is signed and notarised; the Windows one is not signed yet, and the app
-does not update itself (see `RELEASING.md`).
+does not update itself yet: that is built and still switched off (see "Updates" below and
+`RELEASING.md`).
 
 **How to use it:** the [user guide in the wiki](https://github.com/dozwa/cowriting-editor/wiki)
 explains every feature with screenshots, and how to tailor the experts, files and settings.

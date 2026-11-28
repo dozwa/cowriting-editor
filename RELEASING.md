@@ -59,8 +59,10 @@ protected one day, that bot has to be allowed to push, or the workflow needs a t
 - **Signing is prepared, not tried.** Without the secrets below the installers are unsigned:
   macOS says the app is from an unidentified developer (right-click → Open gets past it), Windows
   shows a SmartScreen warning.
-- **Updates from inside the app are not built.** They need a signing key for updates (below) and
-  Tauri's updater plugin.
+- **Updates from inside the app are built and switched off.** The check for a newer version, its
+  dialog, the updater and the release workflow's part are there; what is missing is the key for
+  updates and the server's address (below). Until both are set, no version asks or updates
+  itself. Fetching and installing an update was never run: that needs two signed releases.
 - **The Windows certificate is not wired in**, because how depends on what you buy (see below).
 
 ## macOS: Developer ID and notarisation
@@ -91,11 +93,63 @@ https://tauri.app/distribute/sign/windows/
 
 ## Updates from inside the app
 
-Tauri's updater checks a signature of its own on every update. That needs a key pair: the public
-key goes into `tauri.conf.json`, the private key stays a GitHub secret
-(`TAURI_SIGNING_PRIVATE_KEY`). Make it yourself, so the private key never passes through anyone
-else's hands: `ui/node_modules/.bin/tauri signer generate`. Lose that key and installed copies
-can no longer be updated. Guide: https://tauri.app/plugin/updater/
+How it works, in the order things happen:
+
+1. **A release is built with signatures.** With the key for updates, `tauri build` writes a
+   signature (`.sig`) beside every installer and, on macOS, the app as an archive
+   (`.app.tar.gz`), which is what an update there installs. The signature names the version it
+   was made for. The workflow puts all of that into the draft release, and the job `updates`
+   writes `latest.json` from the signatures (`scripts/latest-json.py`): the version, the
+   changelog's entries, and for each system the file on GitHub and its signature.
+2. **The editor asks the server**, at each start and when the author asks: one GET of the
+   address in `SERVER` (`crates/app/src/update_check.rs`), with nothing in it about the editor or
+   the author. The server answers with the `latest.json` of the newest published release and
+   holds no files itself (#15).
+3. **The author starts the update** in the dialog. The updater takes the answer the check got,
+   fetches the file from the release on GitHub, and installs it only if the signature fits the
+   public key built into the app and names exactly the announced version
+   (`requireSignedVersion`). A file from anywhere but this project's releases is refused before
+   anything is fetched. So a server that answers wrongly can at worst offer nothing.
+
+What the maintainer has to do once:
+
+- **Make the key pair**, yourself, so the private key never passes through anyone else's hands:
+  `ui/node_modules/.bin/tauri signer generate -w ~/.tauri/cowriting-editor.key`. Give it a
+  password.
+- **The public key** (the content of the `.pub` file, one line) goes into `pubkey` in
+  `src-tauri/tauri.updater.conf.json`. That file is laid over a release's configuration only
+  while it holds a key; the dev app never has it.
+- **The private key** (the content of the key file) becomes the secret
+  `TAURI_SIGNING_PRIVATE_KEY`, its password `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. With a public
+  key in the file and no secret, the release build stops and says so.
+- **Keep the private key and its password safe, outside GitHub too.** Lose them and installed
+  copies can no longer be updated: every author would have to install a release by hand once.
+- **The server's address** goes into `SERVER` in `crates/app/src/update_check.rs`, and the
+  privacy statement's part on the check is filled in (`docs/PRIVACY.md`, `docs/DATENSCHUTZ.md`).
+  The first release with both the key and the address is the first one that can be updated
+  *from*; everyone on an older one installs it by hand.
+
+What the server has to answer: the newest published release's `latest.json`, unchanged, with
+`content-type: application/json`. Alphas are pre-releases, so GitHub's "latest release" does not
+name them; the server has to take the newest release from the list of releases, or be told of a
+new one. A draft's `latest.json` already names the files where they will be once the release is
+published, so nothing has to be rewritten on publishing.
+
+To try the check without a server: `COWRITING_UPDATE_SERVER=http://127.0.0.1:<port>/latest.json`
+makes the dev app and the bridge ask a server on this computer (only such an address is
+accepted). They show the notice and cannot install.
+
+Still to find out on the first signed releases:
+
+- **macOS** installs an update only from a signed and notarised build, and only where the app
+  may be replaced (not from the disk image, not from a folder the user cannot write to).
+- **Windows** unsigned: the installer of an update shows SmartScreen again each time.
+- **Linux**: an AppImage replaces itself; whether the `.deb` gets a signature and updates through
+  the updater (it needs the rights to install a package) was not tried.
+- If one system's build fails, the job `updates` does not run and the draft has no
+  `latest.json`: run the failed job again before publishing.
+
+Guide: https://tauri.app/plugin/updater/
 
 ## Changing a file the editor keeps
 

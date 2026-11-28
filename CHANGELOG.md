@@ -184,6 +184,12 @@ to a new heading with its version and date; the release workflow does that (see 
   entries under the release's heading, tags, builds the installers into a draft pre-release, and
   sets `dev` to the next dev version.
 - CI checks and tests every push and builds the dev app only when it is started by hand on `dev`.
+- **A release can be built for updates.** With the public key for updates in
+  `src-tauri/tauri.updater.conf.json` and its private half as the secret
+  `TAURI_SIGNING_PRIVATE_KEY`, the release workflow signs every installer, puts the signatures
+  and the macOS app archive into the draft, and writes `latest.json` from them
+  (`scripts/latest-json.py`), the file the editor's server passes on. Without the key a release
+  is built as before. Not run yet: there is no key. `RELEASING.md` has the steps. (#33)
 - The Windows `.msi` and the Linux `.rpm`, which were never published, are no longer built.
 - The release build leaves out signing secrets that are not set.
 - The export test has a document with pictures, and the tests read the stylesheets.

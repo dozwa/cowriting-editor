@@ -10,6 +10,9 @@ name: Release
 # Nothing is published: the draft is looked at and published by hand. A push to `main` whose
 # version is tagged already releases nothing. With the signing secrets set (see RELEASING.md) the
 # macOS and Windows installers are signed; without them the same installers are built unsigned.
+# With the key for updates (its public half in src-tauri/tauri.updater.conf.json, its private half
+# the secret TAURI_SIGNING_PRIVATE_KEY) the release can update itself and be updated to: its files
+# get signatures, and `latest.json` is put into the draft. Without the key it is built as before.
 on:
   push:
     branches: [main]
@@ -87,8 +90,24 @@ jobs:
           for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             if [ -z "${!name}" ]; then unset "$name"; fi
           done
-          ui/node_modules/.bin/tauri build --config src-tauri/tauri.release.conf.json
+          configs=(--config src-tauri/tauri.release.conf.json)
+          # updates from inside the app: only with both halves of the key
+          python=$(command -v python3 || command -v python)
+          if [ "$("$python" scripts/latest-json.py key)" = yes ]; then
+            if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+              echo "::error::src-tauri/tauri.updater.conf.json holds a public key for updates, but the secret TAURI_SIGNING_PRIVATE_KEY is not set. A release built without it could not be updated to."
+              exit 1
+            fi
+            configs+=(--config src-tauri/tauri.updater.conf.json)
+          else
+            echo "::notice::No key for updates in src-tauri/tauri.updater.conf.json: this release cannot update itself (see RELEASING.md)."
+            unset TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          fi
+          ui/node_modules/.bin/tauri build "${configs[@]}"
         env:
+          # updates: the private half of the key the files are signed with (empty when not set)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS: Developer ID certificate and notarisation (empty when not set: unsigned build)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -104,6 +123,33 @@ jobs:
         run: |
           shopt -s nullglob
           gh release upload "$TAG" --clobber target/release/bundle/dmg/*.dmg target/release/bundle/nsis/*.exe target/release/bundle/appimage/*.AppImage target/release/bundle/deb/*.deb
+          # what the updater fetches and checks: on macOS the app as an archive, and a signature beside every file (none without the key for updates)
+          updates=(target/release/bundle/macos/*.app.tar.gz target/release/bundle/macos/*.app.tar.gz.sig target/release/bundle/nsis/*.exe.sig target/release/bundle/appimage/*.AppImage.sig target/release/bundle/deb/*.deb.sig)
+          if [ ${#updates[@]} -gt 0 ]; then gh release upload "$TAG" --clobber "${updates[@]}"; fi
+
+  updates:
+    # what an installed editor learns of this release from: latest.json, made from the signatures of its files
+    needs: [version, build]
+    if: needs.version.outputs.is_new == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - name: latest.json into the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if [ "$(python3 scripts/latest-json.py key)" != yes ]; then
+            echo "::notice::No key for updates: no latest.json for this release."
+            exit 0
+          fi
+          mkdir signatures
+          gh release download "$TAG" --dir signatures --pattern '*.sig'
+          gh release view "$TAG" --json body --jq .body > notes.md
+          python3 scripts/latest-json.py write --tag "$TAG" --signatures signatures --notes notes.md --out latest.json
+          gh release upload "$TAG" --clobber latest.json
 
   dev:
     # dev goes on from the alpha, under the next number; the installers do not wait for it

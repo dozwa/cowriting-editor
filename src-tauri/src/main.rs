@@ -1240,3 +1240,73 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod update_tests {
+    use cowriting_app::update_check;
+
+    /// The release workflow's script writes `latest.json` from the signatures of a release's files.
+    /// The editor's check and the updater both have to read what it writes.
+    #[test]
+    fn what_the_release_writes_is_read_by_the_check_and_by_the_updater() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let folder = std::env::temp_dir().join(format!("cowriting-latest-json-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(folder.join("signatures")).unwrap();
+        // the names the files have on GitHub, where a space became a dot; a file that is no installer is left out
+        for name in [
+            "CoWriting.Editor.app.tar.gz",
+            "CoWriting.Editor_0.1.2-alpha_x64-setup.exe",
+            "CoWriting.Editor_0.1.2-alpha_amd64.AppImage",
+            "CoWriting.Editor_0.1.2-alpha_amd64.deb",
+            "notes.txt",
+        ] {
+            std::fs::write(folder.join("signatures").join(format!("{name}.sig")), format!("signature of {name}\n")).unwrap();
+        }
+        std::fs::write(folder.join("notes.md"), "### Added\n\n- Something „new“.\n").unwrap();
+        let out = folder.join("latest.json");
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let ran = std::process::Command::new(python)
+            .arg(root.join("scripts/latest-json.py"))
+            .args(["write", "--tag", "v0.1.2-alpha", "--signatures"])
+            .arg(folder.join("signatures"))
+            .arg("--notes")
+            .arg(folder.join("notes.md"))
+            .arg("--out")
+            .arg(&out)
+            .output()
+            .expect("python runs the script");
+        assert!(ran.status.success(), "{}", String::from_utf8_lossy(&ran.stderr));
+        let written = std::fs::read_to_string(&out).unwrap();
+
+        let release = update_check::read(&written, "0.1.1-alpha").unwrap().expect("0.1.2-alpha is newer than 0.1.1-alpha");
+        assert_eq!((release.version.as_str(), release.notes.as_str()), ("0.1.2-alpha", "### Added\n\n- Something „new“."));
+        assert_eq!(release.date.len(), 10, "the day of the release");
+        assert!(update_check::files_are_ours(&release.answer), "every file is named where the release has it on GitHub");
+        let platforms = release.answer["platforms"].as_object().unwrap();
+        assert_eq!(platforms.keys().map(String::as_str).collect::<Vec<_>>(), ["darwin-aarch64", "linux-x86_64", "linux-x86_64-deb", "windows-x86_64"]);
+        assert_eq!(platforms["windows-x86_64"]["url"], "https://github.com/dozwa/cowriting-editor/releases/download/v0.1.2-alpha/CoWriting.Editor_0.1.2-alpha_x64-setup.exe");
+        assert_eq!(platforms["windows-x86_64"]["signature"], "signature of CoWriting.Editor_0.1.2-alpha_x64-setup.exe");
+
+        let for_updater: tauri_plugin_updater::RemoteRelease = serde_json::from_value(release.answer.clone()).expect("the updater reads it");
+        assert_eq!(for_updater.version.to_string(), "0.1.2-alpha");
+        assert_eq!(for_updater.signature("darwin-aarch64").unwrap(), "signature of CoWriting.Editor.app.tar.gz");
+        assert!(for_updater.pub_date.is_some());
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    /// The updater's part of the configuration is laid over a release only: the dev app has none, and without a key a release has none either.
+    #[test]
+    fn the_updater_is_configured_in_a_file_of_its_own_that_the_plugin_reads() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let read = |name: &str| serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(root.join(name)).unwrap()).unwrap();
+        for name in ["tauri.conf.json", "tauri.release.conf.json"] {
+            assert!(read(name)["plugins"]["updater"].is_null(), "{name} does not name the updater");
+        }
+        let updater = read("tauri.updater.conf.json");
+        assert_eq!(updater["bundle"]["createUpdaterArtifacts"], true);
+        assert_eq!(updater["plugins"]["updater"]["requireSignedVersion"], true, "a file is installed only as the version it was signed as");
+        let config: tauri_plugin_updater::Config = serde_json::from_value(updater["plugins"]["updater"].clone()).expect("the plugin reads its configuration");
+        assert!(config.endpoints.is_empty(), "the editor asks its server itself; the updater asks nobody");
+    }
+}
