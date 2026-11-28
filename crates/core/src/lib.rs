@@ -14,6 +14,7 @@ pub mod log;
 pub mod paste_tracking;
 pub mod personas;
 pub mod project;
+pub mod project_file;
 pub mod review;
 pub mod scope;
 pub mod sidecar;

@@ -176,7 +176,7 @@ fn named(text: &str) -> Vec<Named> {
 }
 
 /// A way from a folder, as a path of its own: `..` goes up, `/` is between the parts.
-fn joined(folder: &str, way: &str) -> String {
+pub(crate) fn joined(folder: &str, way: &str) -> String {
     let mut all: Vec<&str> = parts(folder);
     for part in parts(way) {
         if part == ".." {
@@ -212,6 +212,12 @@ pub struct ToMove {
     pub inside: Vec<String>,
     /// Elsewhere (the way starts with `..`).
     pub outside: Vec<String>,
+}
+
+/// Whether two paths name the same file, however they are written.
+pub(crate) fn same_file(a: &str, b: &str) -> bool {
+    let at = a.trim_end_matches(['/', '\\']).rfind(['/', '\\']);
+    at.is_some_and(|at| relative(&a[..at], b).as_deref() == Some(&a[at + 1..]))
 }
 
 fn same_folder(a: &str, b: &str) -> bool {

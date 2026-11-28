@@ -10,6 +10,7 @@ pub mod linked;
 pub mod outside;
 pub mod picture;
 pub mod preferences;
+pub mod project_files;
 pub mod shown;
 pub mod support;
 pub mod usage;
@@ -377,6 +378,8 @@ pub struct Session {
     is_reviewing: AtomicBool,
     /// The editor's folder for project settings; None keeps them beside the document.
     projects: Option<String>,
+    /// The project of several files this document is one of, by its file (`*.cowriting.json`).
+    project: Option<String>,
 }
 
 /// Live review as the Live tab shows it.
@@ -510,7 +513,9 @@ impl Session {
     }
 
     /// Opens a markdown file whose project settings are kept in `projects`, the editor's own folder for them.
+    /// A project's file opens the first of its files.
     pub fn open_in(host: Arc<dyn Host>, path: &str, projects: Option<&str>) -> Result<(Session, Opened), String> {
+        let path = &project_files::document_to_open(host.as_ref(), path)?;
         let text = host.read(path).map_err(|e| format!("{path} could not be opened: {e}"))?;
         if let Some(projects) = projects {
             follow_move(host.as_ref(), path, projects);
@@ -518,7 +523,13 @@ impl Session {
         if stored::is_newer(host.as_ref(), &cowriting_core::sidecar::Sidecar::for_document(path).doc_json(), &stored::DOC) {
             return Err(format!("{path} was last worked on with a newer version of the editor, and this version cannot continue its AI log safely. Please update the editor."));
         }
-        let workspace = Workspace::open_in(host, path, EDITOR_VERSION, projects);
+        let mut workspace = Workspace::open_in(host, path, EDITOR_VERSION, projects);
+        // one file of a project of several: the experts, linked files and sources are the project's
+        let project = project_files::find(workspace.host.as_ref(), path);
+        if let Some((file, project)) = &project {
+            workspace.sidecar = workspace.sidecar.clone().with_shared(&project_files::shared_folder(projects, file, project), file);
+        }
+        let project = project.map(|(file, _)| file);
         let mut notices = workspace.sidecar.look_over(workspace.host.as_ref());
         notices.extend(stored::look_at::<VerifyFile>(workspace.host.as_ref(), &workspace.sidecar.verify_json(), &stored::VERIFY));
         let orphans = if workspace.sidecar.info(workspace.host.as_ref()).is_some() { Vec::new() } else { orphans_of(&workspace, &text) };
@@ -526,7 +537,7 @@ impl Session {
         // live review left on: what is in the document now is the baseline, as when it is turned on
         let baseline = LiveSettings::load(&workspace).is_on.then(|| opened.text.clone());
         let live = Mutex::new(LiveState { baseline, ..Default::default() });
-        let session = Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false), projects: projects.map(String::from) };
+        let session = Session { workspace, saved: Mutex::new(opened.text.clone()), live, is_reviewing: AtomicBool::new(false), projects: projects.map(String::from), project };
         session.remember_place();
         session.refresh_linked();
         Ok((session, opened))
@@ -1189,7 +1200,52 @@ impl Session {
             to.ensure(host, document_text).map_err(error)?;
         }
         to.take_settings(host, sidecar);
+        if let Some(project) = &self.project {
+            project_files::replace(host, project, &sidecar.document, target)?;
+        }
         host.remove(&sidecar.document).map_err(|e| format!("The document and its log are at the new place; the old file could not be removed: {e}"))
+    }
+
+    /// The project of several files this document is one of, with all its files; None for a document that is a project of its own.
+    pub fn project_overview(&self, document_text: &str) -> Result<Option<project_files::Overview>, String> {
+        let Some(project) = &self.project else { return Ok(None) };
+        project_files::overview(self.workspace.host.as_ref(), self.projects.as_deref(), project, Some((&self.workspace.sidecar.document, document_text))).map(Some)
+    }
+
+    /// Makes a project of several files at `path` with this document as its first. The document is
+    /// to be opened again afterwards: its experts and settings are the project's from then on.
+    pub fn make_project(&self, path: &str) -> Result<String, String> {
+        project_files::create(self.workspace.host.as_ref(), self.projects.as_deref(), path, &self.workspace.sidecar.document)
+    }
+
+    fn in_project(&self) -> Result<&str, String> {
+        self.project.as_deref().ok_or_else(|| "This document is not a file of a project.".to_string())
+    }
+
+    /// Adds a markdown file to the project; one that is not there yet is created empty.
+    pub fn add_project_file(&self, path: &str) -> Result<(), String> {
+        project_files::add(self.workspace.host.as_ref(), self.in_project()?, path)
+    }
+
+    /// Takes a file out of the project; the file and its log stay.
+    pub fn remove_project_file(&self, path: &str) -> Result<(), String> {
+        project_files::remove(self.workspace.host.as_ref(), self.in_project()?, path)
+    }
+
+    pub fn order_project_files(&self, paths: &[String]) -> Result<(), String> {
+        project_files::order(self.workspace.host.as_ref(), self.in_project()?, paths)
+    }
+
+    /// Renames another file of the project. The open document is moved with "Move…", which takes the text in the window.
+    pub fn rename_project_file(&self, path: &str, name: &str) -> Result<String, String> {
+        if picture::same_file(path, &self.workspace.sidecar.document) {
+            return Err("The open document is renamed with \"Move…\".".into());
+        }
+        project_files::rename(self.workspace.host.as_ref(), self.projects.as_deref(), self.in_project()?, path, name)
+    }
+
+    pub fn set_project_goal(&self, goal: &str, words: Option<u32>) -> Result<(), String> {
+        project_files::set_goal(self.workspace.host.as_ref(), self.in_project()?, goal, words)
     }
 
     /// The author's comment on a logged passage of AI text. The entry itself is never changed or removed.

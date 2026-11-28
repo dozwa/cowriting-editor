@@ -48,6 +48,7 @@ impl Kind {
 
 pub const DOC: Kind = Kind::new("what the log knows about its document (doc.json)", &[]);
 pub const PROJECT: Kind = Kind::new("the project's settings (project.json)", &[]);
+pub const PROJECT_FILE: Kind = Kind::new("the project's list of files (*.cowriting.json)", &[]);
 pub const LIVE: Kind = Kind::new("the live review's settings (live.json)", &[]);
 pub const CHECK: Kind = Kind::new("the last check of the plan's points (check.json)", &[]);
 pub const VERIFY: Kind = Kind::new("the last check of the references (verify.json)", &[]);

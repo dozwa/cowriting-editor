@@ -1,5 +1,6 @@
 //! What belongs to one project besides its text and its log: files the author linked as background
-//! knowledge, and the settings that differ from the general ones. A project is one markdown file.
+//! knowledge, and the settings that differ from the general ones. A project is one markdown file,
+//! or several that a project's file lists (`project_file`): then they share what is kept here.
 //!
 //! It is kept in `project.json` in the project's settings folder (see `Sidecar::settings_dir`).
 
@@ -61,7 +62,8 @@ pub struct ProjectAi {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Project {
-    /// The document this is the project of, as it was last opened: for a person who looks into the folder.
+    /// The document this is the project of, as it was last opened, or the project's file when it
+    /// has several: for a person who looks into the folder.
     pub document: String,
     pub files: Vec<LinkedFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -97,7 +99,8 @@ impl Project {
     }
 
     pub fn save(&self, host: &dyn Host, sidecar: &Sidecar) -> std::io::Result<()> {
-        let project = Project { document: sidecar.document.clone(), ..self.clone() };
+        let document = sidecar.shared.as_ref().map_or_else(|| sidecar.document.clone(), |shared| shared.file.clone());
+        let project = Project { document, ..self.clone() };
         crate::stored::write(host, &sidecar.project_json(), &crate::stored::PROJECT, &project)
     }
 }

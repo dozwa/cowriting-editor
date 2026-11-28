@@ -19,6 +19,18 @@ pub struct Sidecar {
     pub name: String,
     /// Where the project's settings are kept, when that is not beside the document: a folder of the editor's own.
     pub project: Option<String>,
+    /// For a document that is one file of a project of several: the folder of the settings all
+    /// its files share, and the project's file that lists them.
+    pub shared: Option<Shared>,
+}
+
+/// What a file of a project of several files knows about that project.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shared {
+    /// Where the experts, the linked files, the sources and the other shared settings are kept.
+    pub folder: String,
+    /// The project's file (`*.cowriting.json`).
+    pub file: String,
 }
 
 /// What the sidecar remembers about its document: `doc.json`.
@@ -60,12 +72,18 @@ impl Sidecar {
             Some(at) => (&path[..at], &path[at + 1..]),
             None => (".", path),
         };
-        Sidecar { document: path.to_string(), folder: if folder.is_empty() { "/".into() } else { folder.to_string() }, name: name.to_string(), project: None }
+        Sidecar { document: path.to_string(), folder: if folder.is_empty() { "/".into() } else { folder.to_string() }, name: name.to_string(), project: None, shared: None }
     }
 
     /// The same document with its project's settings in `folder`, away from the document.
     pub fn with_project(mut self, folder: &str) -> Sidecar {
         self.project = Some(folder.trim_end_matches(['/', '\\']).to_string());
+        self
+    }
+
+    /// The same document as one file of a project of several: what the project's files share is in `folder`.
+    pub fn with_shared(mut self, folder: &str, file: &str) -> Sidecar {
+        self.shared = Some(Shared { folder: folder.trim_end_matches(['/', '\\']).to_string(), file: file.to_string() });
         self
     }
 
@@ -76,9 +94,16 @@ impl Sidecar {
         format!("{name}-{}", content_hash(document))
     }
 
-    /// Where the project's settings are: the experts and what they were told, the plan, the sources,
-    /// live review, linked files. In the editor's own folder when one was given, else with the log.
+    /// Where the project's settings are: the experts and what they were told, the sources, live
+    /// review, linked files. For a file of a project of several files that is the folder they
+    /// share; else the document's own (`own_dir`).
     pub fn settings_dir(&self) -> String {
+        self.shared.as_ref().map_or_else(|| self.own_dir(), |shared| shared.folder.clone())
+    }
+
+    /// Where this one document's settings are, which it shares with no other file: its plan. In
+    /// the editor's own folder when one was given, else with the log.
+    pub fn own_dir(&self) -> String {
         self.project.clone().unwrap_or_else(|| self.dir())
     }
 
@@ -99,7 +124,7 @@ impl Sidecar {
             return;
         }
         for name in ["party.md", "party", "party.json", "scope.md", "live.json", "sources.json"] {
-            let (old, new) = (format!("{}/{name}", self.dir()), format!("{}/{name}", self.settings_dir()));
+            let (old, new) = (format!("{}/{name}", self.dir()), format!("{}/{name}", self.own_dir()));
             if host.exists(&old) && !host.exists(&new) {
                 let _ = host.rename(&old, &new);
             }
@@ -167,9 +192,9 @@ impl Sidecar {
         format!("{}/party.json", self.settings_dir())
     }
 
-    /// The author's plan: goal, targets, sections, points.
+    /// The author's plan: goal, targets, sections, points. Every file of a project has its own.
     pub fn scope_md(&self) -> String {
-        format!("{}/scope.md", self.settings_dir())
+        format!("{}/scope.md", self.own_dir())
     }
 
     /// What the last point check found.
