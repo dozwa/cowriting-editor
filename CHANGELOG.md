@@ -131,6 +131,12 @@ to a new heading with its version and date; the release workflow does that (see 
   against a server on the same computer; fetching and installing was never run. The dev app
   does not check. (#38, #33, open)
 
+- **Usage figures are sealed.** A message to the editor's maker is encrypted on your computer
+  with a public key built into the editor, and filled up to one of a few fixed lengths, before
+  it is sent: only the maker's server can read it, not a service that passes it on. What
+  Settings shows as "what would be sent" is still the plain message. Usage figures remain
+  switched off as built, and sent only with consent. (#28, open)
+
 ### Fixed
 
 - **PDF export with Typst and pictures.** Every export with Typst failed as soon as the document

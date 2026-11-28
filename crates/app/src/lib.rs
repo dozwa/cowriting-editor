@@ -11,6 +11,7 @@ pub mod outside;
 pub mod picture;
 pub mod preferences;
 pub mod project_files;
+pub mod sealed;
 pub mod shown;
 pub mod support;
 pub mod update_check;

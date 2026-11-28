@@ -328,7 +328,9 @@ start (a random number made for the installation, the version, the kind of syste
 separately, a session's figures when the editor closes (minutes open, requests to an AI by kind of
 provider and model, documents worked on, words added). It asks once, with nothing ticked; Settings
 under About shows the exact messages, the privacy statement (`docs/PRIVACY.md`,
-`docs/DATENSCHUTZ.md`) and lets you withdraw. As built now this is switched off altogether: there
+`docs/DATENSCHUTZ.md`) and lets you withdraw. Each message is sealed before it leaves the
+computer: encrypted with a public key built into the editor, and filled up to a fixed length,
+so that only the maker's server can read it and nothing that passes it on. As built now this is switched off altogether: there
 is no server address (`SERVER` in `crates/app/src/usage.rs`) and the statement is a draft with
 parts to fill in, and while either is so the editor neither asks nor sends.
 

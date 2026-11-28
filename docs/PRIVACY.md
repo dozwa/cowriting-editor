@@ -45,6 +45,12 @@ anywhere either, and the AI you ask in the editor is not given them. They lie in
 folder or with a submission, gets them too: keep only the conversations that belong to the work,
 and mind what they say about other people.
 
+Before a message leaves your computer, the editor encrypts it for the maker's server, with a key
+built into the editor. On the way, and for a service that passes the message on to the server,
+it is then unreadable; it is opened on the maker's server, checked and stored there. Encryption
+does not hide that a message was sent, when, and from which internet address, and the figures
+remain personal data: they carry the installation's number.
+
 When a message arrives, the server sees the internet address it came from, as every server does.
 [[whether and how long the server keeps internet addresses]]
 

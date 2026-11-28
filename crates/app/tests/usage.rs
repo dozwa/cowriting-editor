@@ -1,8 +1,13 @@
 //! Usage figures: nothing without consent, nothing but counts with it, and what arrives at the
 //! server is what the editor showed. The server here is a listener on this computer.
 
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use cowriting_app::preferences::Preferences;
+use cowriting_app::sealed;
 use cowriting_app::usage::{self, Counted, Sender};
+use crypto_box::aead::OsRng;
+use crypto_box::SecretKey;
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -150,18 +155,68 @@ fn what_is_sent_is_counts_and_the_editors_own_names() {
     }
 }
 
+/// What the server does with what arrives: opens it with its private key and takes the filling off.
+fn opened(arrived: &Value, secret: &SecretKey) -> Value {
+    let sealed = BASE64.decode(arrived["sealed"].as_str().unwrap()).unwrap();
+    serde_json::from_slice(&secret.unseal(&sealed).expect("it opens with the key it was sealed for")).unwrap()
+}
+
 #[tokio::test]
-async fn the_server_gets_exactly_the_message_and_a_failure_is_said() {
+async fn the_server_gets_the_message_sealed_and_opens_exactly_what_the_editor_showed() {
+    let secret = SecretKey::generate(&mut OsRng);
     let (address, got) = server(204);
     let message = usage::start_message(&sender());
-    usage::send(&address, &message).await.unwrap();
-    assert_eq!(got.join().unwrap(), message);
+    usage::send_for(&address, &message, &secret.public_key()).await.unwrap();
+    let arrived = got.join().unwrap();
+    // nothing of the message is readable in what was sent
+    assert_eq!(arrived.as_object().unwrap().keys().collect::<Vec<_>>(), ["v", "key", "sealed"]);
+    assert_eq!((&arrived["v"], arrived["key"].as_str()), (&json!(1), Some(sealed::key_id(&secret.public_key()).as_str())));
+    for plain in ["0123456789abcdef", "0.9.0", "macos", "start"] {
+        assert!(!arrived.to_string().contains(plain), "'{plain}' is readable on the way");
+    }
+    assert_eq!(opened(&arrived, &secret), message);
 
     let (address, got) = server(500);
-    assert_eq!(usage::send(&address, &message).await.unwrap_err(), "The server answered 500.");
+    assert_eq!(usage::send_for(&address, &message, &secret.public_key()).await.unwrap_err(), "The server answered 500.");
     got.join().unwrap();
 
     // nobody there: said without the address
     let gone = usage::send("http://127.0.0.1:9/usage", &message).await.unwrap_err();
     assert!(gone.starts_with("The figures could not be sent") && !gone.contains("127.0.0.1"), "{gone}");
+}
+
+#[test]
+fn a_sealed_message_opens_with_its_key_only_and_its_length_says_little() {
+    let secret = SecretKey::generate(&mut OsRng);
+    let public = secret.public_key();
+    let start = usage::start_message(&sender());
+    let sealed_start = sealed::seal(&start, &public).unwrap();
+    assert_eq!(opened(&sealed_start, &secret), start);
+    // another key does not open it
+    let other = SecretKey::generate(&mut OsRng);
+    assert!(other.unseal(&BASE64.decode(sealed_start["sealed"].as_str().unwrap()).unwrap()).is_err());
+    // sealing the same message twice gives two different texts of the same length
+    let again = sealed::seal(&start, &public).unwrap();
+    assert_ne!(sealed_start["sealed"], again["sealed"]);
+    // another system and version, the same length: every sign of use is filled up to one size
+    let elsewhere = usage::start_message(&Sender { installation: "fedcba9876543210".into(), version: "0.12.34-alpha".into(), system: "windows x86_64".into() });
+    let length = |sealed: &Value| BASE64.decode(sealed["sealed"].as_str().unwrap()).unwrap().len();
+    assert_eq!(length(&sealed_start), length(&sealed::seal(&elsewhere, &public).unwrap()));
+    assert_eq!(length(&sealed_start), sealed::SIZES[0] + 48, "the smallest size, the sender's one-time key and the tag");
+    // a session with many models takes the next size, and one too long for the longest is not sealed
+    let mut counted = Counted::default();
+    for n in 0..12 {
+        counted.request("openai-compatible", &format!("a-model-with-a-long-name-number-{n}:latest"));
+    }
+    let session = usage::session_message(&sender(), &counted, Duration::from_secs(600));
+    assert_eq!(length(&sealed::seal(&session, &public).unwrap()), sealed::SIZES[1] + 48);
+    assert_eq!(opened(&sealed::seal(&session, &public).unwrap(), &secret), session);
+    assert!(sealed::seal(&json!({ "kind": "session", "much": "x".repeat(5000) }), &public).is_err());
+}
+
+#[test]
+fn the_built_in_key_is_a_key_and_has_the_name_it_says() {
+    let public = sealed::KEY.public_key().expect("32 bytes in base64");
+    assert_eq!(sealed::key_id(&public), sealed::KEY.id, "the id is the start of the key's SHA-256: the server finds its private key by it");
+    assert_eq!(sealed::seal(&usage::start_message(&sender()), &public).unwrap()["key"], sealed::KEY.id);
 }

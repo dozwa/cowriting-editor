@@ -46,6 +46,13 @@ Ihnen bekommt, in einem geteilten oder synchronisierten Ordner oder mit einer Ab
 auch sie: Legen Sie nur die Unterhaltungen ab, die zur Arbeit gehören, und achten Sie darauf,
 was darin über andere Personen steht.
 
+Bevor eine Meldung Ihren Computer verlässt, verschlüsselt der Editor sie für den Server des
+Herstellers, mit einem Schlüssel, der im Editor eingebaut ist. Unterwegs und für einen Dienst, der
+die Meldung an den Server weiterreicht, ist sie dann nicht lesbar; geöffnet wird sie auf dem
+Server des Herstellers, dort geprüft und gespeichert. Die Verschlüsselung verbirgt nicht, dass
+eine Meldung gesendet wurde, wann und von welcher Internetadresse, und die Zahlen bleiben
+personenbezogene Daten: Sie tragen die Nummer der Installation.
+
 Kommt eine Meldung an, sieht der Server die Internetadresse, von der sie kam, wie jeder Server.
 [[ob und wie lange der Server Internetadressen speichert]]
 

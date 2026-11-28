@@ -15,6 +15,8 @@ pdf-extract = "0.12.1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
 semver = "1"
+crypto_box = { version = "0.9", features = ["seal"] }
+base64 = "0.23.1"
 
 [dev-dependencies]
 async-trait = "0.1"

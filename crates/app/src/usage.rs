@@ -4,6 +4,7 @@
 //! Nothing here is derived from who the author is: an installation is a random number made when
 //! they agreed, and deleted when they take both consents back. What is sent is built in this file
 //! and nowhere else, from counts the editor keeps in memory; the same text is shown in Settings.
+//! On its way it is sealed for the server (`crate::sealed`), so nothing in between can read it.
 //! Without a server's address, or while the privacy statement still has parts to fill in, the
 //! editor does not ask and does not send.
 
@@ -164,10 +165,17 @@ pub fn session_message(sender: &Sender, counted: &Counted, open_for: Duration) -
     })
 }
 
-/// Hands a message to the server; it waits a few seconds at most, since the editor is starting or closing.
+/// Hands a message to the server, sealed for the server's key (see `sealed`): what leaves the
+/// computer is the sealed message, never the plain one. It waits a few seconds at most, since the editor is starting or closing.
 pub async fn send(server: &str, message: &Value) -> Result<(), String> {
+    send_for(server, message, &crate::sealed::KEY.public_key()?).await
+}
+
+/// `send` for a given key; the built-in one everywhere but in tests.
+pub async fn send_for(server: &str, message: &Value, key: &crypto_box::PublicKey) -> Result<(), String> {
+    let sealed = crate::sealed::seal(message, key).map_err(|e| format!("The figures could not be sent: {e}"))?;
     let client = reqwest::Client::builder().timeout(Duration::from_secs(4)).build().map_err(|e| e.to_string())?;
-    let reply = client.post(server).json(message).send().await.map_err(|e| format!("The figures could not be sent: {}", e.without_url()))?;
+    let reply = client.post(server).json(&sealed).send().await.map_err(|e| format!("The figures could not be sent: {}", e.without_url()))?;
     if reply.status().is_success() {
         Ok(())
     } else {
