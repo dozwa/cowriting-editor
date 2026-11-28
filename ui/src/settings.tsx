@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { Api, ModelChoice, ProjectOverrides, ProjectView, Settings, SettingsView } from './api'
 import { Dialog, FeedbackDialog, UsageChoice } from './dialogs'
 import { LANGUAGES, type LanguageId, languageFor, m } from './i18n'
-import { ACTIONS, type Action, LIMITS, type Preferences, STANDARD, keysOf, showKeys, shortcutsOf, whyNot } from './preferences'
+import { ACTIONS, type Action, HIDEABLE_TABS, LIMITS, type Preferences, STANDARD, keysOf, showKeys, shortcutsOf, whyNot } from './preferences'
 
 type Kind = 'anthropic' | 'local' | 'other' | 'claudeCode'
 
@@ -402,6 +402,15 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                 <input type="checkbox" checked={draft.calm} onChange={e => set('calm', e.target.checked)} /> {m.settings.calm}
               </label>
               <p className="muted">{m.settings.calmHint}</p>
+              <fieldset className="choices">
+                <legend>{m.settings.shownTabs}</legend>
+                {HIDEABLE_TABS.map(tab => (
+                  <label className="check" key={tab}>
+                    <input type="checkbox" checked={!draft.hiddenTabs.includes(tab)} onChange={e => set('hiddenTabs', HIDEABLE_TABS.filter(other => (other === tab ? !e.target.checked : draft.hiddenTabs.includes(other))))} /> {m.settings.tabNames[tab]}
+                  </label>
+                ))}
+              </fieldset>
+              <p className="muted">{m.settings.shownTabsHint}</p>
               <label className="check">
                 <input type="checkbox" checked={draft.spellcheck} onChange={e => set('spellcheck', e.target.checked)} /> {m.settings.spellcheck}
               </label>

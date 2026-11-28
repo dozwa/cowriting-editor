@@ -372,6 +372,8 @@ dialog label { display: grid; gap: 5px; margin: 14px 0; font-weight: 650; font-s
 dialog label input, dialog label select { font-weight: 400; font-size: 14px; }
 dialog label small { font-weight: 400; color: var(--soft); font-size: 12.5px; }
 dialog label.check { display: flex; gap: 8px; align-items: center; font-weight: 400; font-size: 14px; margin: 7px 0; }
+dialog fieldset.choices { border: 0; padding: 0; margin: 14px 0 0; }
+dialog fieldset.choices legend { padding: 0; font-weight: 650; font-size: 14px; }
 dialog .row label { flex: 1; }
 dialog > .muted, dialog [role='status'] .muted { font-size: 13px; margin-top: 10px; }
 dialog .hint { margin: 14px 0; padding: 10px 12px; max-width: none; background: var(--marker-wash); color: var(--marker); border-radius: var(--radius); font-size: 13px; }

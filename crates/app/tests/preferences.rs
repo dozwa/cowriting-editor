@@ -94,6 +94,10 @@ fn a_file_from_an_older_version_or_one_edited_by_hand_still_reads() {
     assert_eq!((said.languages().manuscript, said.languages().answers), (Some(Lang::En), Some(Lang::De)));
     assert_eq!(Preferences::default().languages(), Default::default());
 
+    // hidden tabs: only tabs there are, each once, and never "ask", so the panel is not empty
+    let hidden = Preferences { hidden_tabs: vec!["log".into(), "ask".into(), "nothing".into(), "live".into(), "log".into()], ..Default::default() }.within_limits();
+    assert_eq!(hidden.hidden_tabs, ["live", "log"]);
+
     // 'another font' without a name is the standard font
     let nameless = Preferences { text_font: "other".into(), ..Default::default() }.within_limits();
     assert_eq!(nameless.text_font, "literata");

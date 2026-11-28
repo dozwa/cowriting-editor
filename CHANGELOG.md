@@ -85,6 +85,11 @@ to a new heading with its version and date; the release workflow does that (see 
   with a newer editor is not opened, so its record is not continued in a form it may have left
   behind. What a newer editor added to a file stays when an older one saves it. Updates from
   inside the app are not part of this. (#25)
+- **Tabs of the side panel can be hidden.** Under "Text and look" in the settings, every tab but
+  "Ask" can be taken out of the row: Experts, Live review, Plan, Sources, Log. What a hidden tab
+  holds stays as it is, and the log is kept as before. Its shortcut, the tour and "Show in log"
+  still open it, and it is in the row while it is open; Live review is in the row while it is on.
+  A hidden Log tab does not show how many answers are still to classify. (#39)
 
 ### Fixed
 

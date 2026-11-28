@@ -36,6 +36,8 @@ pub struct Preferences {
     pub spellcheck: bool,
     /// Distraction-free: the explanations and hints around the controls are hidden.
     pub calm: bool,
+    /// Tabs of the side panel the author does not want in the row: 'experts', 'live', 'scope', 'sources', 'log'.
+    pub hidden_tabs: Vec<String>,
     /// Save by itself once the author has paused this long; 0 for never.
     pub autosave_seconds: u32,
     /// Where "Open" and "New" start; empty for wherever the system's dialog was last.
@@ -81,6 +83,7 @@ impl Default for Preferences {
             ui_size: "standard".into(),
             spellcheck: true,
             calm: false,
+            hidden_tabs: Vec::new(),
             autosave_seconds: 0,
             documents_folder: String::new(),
             export_folder: String::new(),
@@ -121,6 +124,9 @@ impl Preferences {
         self.line_width = one_of(&self.line_width, &["narrow", "standard", "wide"], &standard.line_width);
         self.ui_font = one_of(&self.ui_font, &["hanken", "system"], &standard.ui_font);
         self.ui_size = one_of(&self.ui_size, &["small", "standard", "large", "larger"], &standard.ui_size);
+        // "ask" is not among them, so the panel is never empty
+        self.hidden_tabs =
+            ["experts", "live", "scope", "sources", "log"].iter().filter(|tab| self.hidden_tabs.iter().any(|hidden| hidden == *tab)).map(|tab| tab.to_string()).collect();
         self.autosave_seconds = if self.autosave_seconds == 0 { 0 } else { self.autosave_seconds.clamp(2, 600) };
         self.documents_folder = self.documents_folder.trim().to_string();
         self.export_folder = self.export_folder.trim().to_string();

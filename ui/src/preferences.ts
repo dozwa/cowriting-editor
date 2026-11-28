@@ -16,6 +16,8 @@ export type Preferences = {
   spellcheck: boolean
   /** Distraction-free: explanations and hints around the controls are hidden. */
   calm: boolean
+  /** Tabs of the side panel the author took out of the row. */
+  hiddenTabs: HideableTab[]
   /** Save by itself once the author has paused this long; 0 for never. */
   autosaveSeconds: number
   documentsFolder: string
@@ -51,6 +53,7 @@ export const STANDARD: Preferences = {
   uiSize: 'standard',
   spellcheck: true,
   calm: false,
+  hiddenTabs: [],
   autosaveSeconds: 0,
   documentsFolder: '',
   exportFolder: '',
@@ -105,6 +108,12 @@ export function applyLook(preferences: Preferences, root: HTMLElement = document
 export type Tab = 'ask' | 'experts' | 'live' | 'scope' | 'sources' | 'log'
 export type TabAction = 'tabAsk' | 'tabExperts' | 'tabLive' | 'tabPlan' | 'tabSources' | 'tabLog'
 export type Action = 'save' | 'open' | 'new' | 'export' | 'settings' | 'ask' | 'buttons' | 'lineNumbers' | 'source' | 'calm' | 'find' | TabAction | Format
+
+/** The tabs in the order of the row. */
+export const TABS: Tab[] = ['ask', 'experts', 'live', 'scope', 'sources', 'log']
+/** "Ask" cannot be hidden, so the panel is never empty. */
+export type HideableTab = Exclude<Tab, 'ask'>
+export const HIDEABLE_TABS = TABS.filter((tab): tab is HideableTab => tab !== 'ask')
 
 /** The tab of the side panel each of its shortcuts shows. */
 export const TAB_OF: Record<TabAction, Tab> = { tabAsk: 'ask', tabExperts: 'experts', tabLive: 'live', tabPlan: 'scope', tabSources: 'sources', tabLog: 'log' }

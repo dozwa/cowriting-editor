@@ -177,7 +177,10 @@ tab) these are the only web pages the editor ever opens, and their addresses are
   (15 seconds to an hour) and the most reviews in an hour (1 to 120).
 - **Text and look**: light, dark or as the system; the typeface, size and line length of your text;
   the typeface of the interface and the size of its buttons and panels (small to larger; your text
-  keeps its own size); spelling marks. You see a change while you choose it.
+  keeps its own size); spelling marks. You see a change while you choose it. Here you also choose
+  which tabs the side panel shows: every tab but "Ask" can be taken out of the row. A hidden tab
+  loses nothing (the log is kept as before), its shortcut still opens it, and Live review is in
+  the row while it is on.
 - **Files**: the folder "Open" and "New" start in, a folder for exports, saving by itself after a
   pause in typing, and opening the last document again at start.
 - **Language**: four choices that need not agree. The editor's own language (English or German, or

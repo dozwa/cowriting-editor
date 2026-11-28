@@ -1544,6 +1544,41 @@ test('with saving by itself on, the text is saved once the author pauses', async
   await screen.findByText('saved')
 })
 
+test('a tab the author hides is out of the row, and comes back while it is opened or live review is on', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  const row = () => within(screen.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent?.replace(/\d+$/, ''))
+  expect(row()).toEqual(['Ask', 'Experts', 'Live review', 'Plan', 'Sources', 'Log'])
+
+  // hidden in the settings while it is the open one: the panel moves to the next tab that is shown
+  await user.click(screen.getByRole('tab', { name: 'Experts' }))
+  await user.click(screen.getByRole('button', { name: 'Settings…' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(dialog.getByRole('tab', { name: 'Text and look' }))
+  expect(dialog.queryByRole('checkbox', { name: 'Ask' })).toBeNull()
+  for (const name of ['Experts', 'Live review', 'Log']) await user.click(dialog.getByRole('checkbox', { name }))
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.preferences.at(-1)).toMatchObject({ hiddenTabs: ['experts', 'live', 'log'] }))
+  await waitFor(() => expect(row()).toEqual(['Ask', 'Plan', 'Sources']))
+  expect(screen.getByRole('tab', { name: 'Plan' }).getAttribute('aria-selected')).toBe('true')
+
+  // its shortcut still opens it, and it is in the row for as long as it is open
+  await user.click(screen.getByLabelText('Document'))
+  await user.keyboard('{Control>}6{/Control}')
+  expect(row()).toEqual(['Ask', 'Plan', 'Sources', 'Log'])
+  expect(screen.getByRole('tab', { name: /Log/ }).getAttribute('aria-selected')).toBe('true')
+  await user.click(screen.getByRole('tab', { name: 'Ask' }))
+  expect(row()).toEqual(['Ask', 'Plan', 'Sources'])
+
+  // live review that is on keeps its tab in the row
+  await user.keyboard('{Control>}3{/Control}')
+  await user.click(await screen.findByRole('checkbox', { name: /Live review/ }))
+  await user.click(screen.getByRole('tab', { name: 'Ask' }))
+  await waitFor(() => expect(row()).toEqual(['Ask', 'Live review', 'Plan', 'Sources']))
+})
+
 test('shortcuts do what their buttons do, and the author can give them other keys', async () => {
   const user = userEvent.setup()
   const { api, calls } = standIn()

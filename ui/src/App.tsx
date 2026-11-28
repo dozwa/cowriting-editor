@@ -10,7 +10,7 @@ import { createEditor, type Editor, type Format } from './editor'
 import { FormatBar, MarkdownHelp } from './formatbar'
 import { AskPanel, LogPanel } from './panels'
 import { languageFor, m, setLanguage } from './i18n'
-import { type Action, type Preferences, STANDARD, TAB_OF, type Tab, type TabAction, applyLook, keysOf, shortcutsOf } from './preferences'
+import { type Action, type Preferences, STANDARD, TABS, TAB_OF, type Tab, type TabAction, applyLook, keysOf, shortcutsOf } from './preferences'
 import { SettingsDialog } from './settings'
 import { MODEL_NOTICE, when } from './text'
 
@@ -596,6 +596,12 @@ export function App({ api, makeEditor = createEditor }: Props) {
   }
   const dialogRef = useRef(dialog)
   dialogRef.current = dialog
+  // a tab the author hides while it is open gives way to the next one that is shown
+  const hiddenTabs = preferences.hiddenTabs.join(' ')
+  useEffect(() => {
+    const hidden: Tab[] = preferencesRef.current.hiddenTabs
+    if (hidden.includes(tabRef.current)) setTab([...TABS.slice(TABS.indexOf(tabRef.current) + 1), ...TABS].find(next => !hidden.includes(next)) ?? 'ask')
+  }, [hiddenTabs])
   // which tab and which dialog were shown goes into the technical log: names of the editor's own
   useEffect(() => seeView(`tab:${tab}`), [tab])
   useEffect(() => {
@@ -686,6 +692,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
   }
 
   const open_ = log.stats.unannotated
+  // a hidden tab is in the row while it is the open one (a shortcut, the tour or a link led there), and Live review while it is on
+  const inRow = (which: Tab) => which === tab || !(preferences.hiddenTabs as Tab[]).includes(which) || (which === 'live' && watching?.isOn === true)
   const stored = [...(settings?.notices ?? []), ...doc.notices]
   const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
 
@@ -776,15 +784,19 @@ export function App({ api, makeEditor = createEditor }: Props) {
           />
           <nav className="tabs" role="tablist">
             <button role="tab" title={m.app.tabAskTitle} aria-selected={tab === 'ask'} onClick={() => showTab('ask')}>{m.app.tabAsk}</button>
-            <button role="tab" title={m.app.tabExpertsTitle} aria-selected={tab === 'experts'} onClick={() => showTab('experts')}>{m.app.tabExperts}</button>
-            <button role="tab" title={m.app.tabLiveTitle} aria-selected={tab === 'live'} onClick={() => showTab('live')}>
-              {m.app.tabLive}{newHints > 0 && <span className="badge hints" title={m.app.newHints(newHints)}>{newHints}</span>}
-            </button>
-            <button role="tab" title={m.app.tabPlanTitle} aria-selected={tab === 'scope'} onClick={() => showTab('scope')}>{m.app.tabPlan}</button>
-            <button role="tab" title={m.app.tabSourcesTitle} aria-selected={tab === 'sources'} onClick={() => showTab('sources')}>{m.app.tabSources}</button>
-            <button role="tab" title={m.app.tabLogTitle} aria-selected={tab === 'log'} onClick={() => showTab('log')}>
-              {m.app.tabLog}{open_ > 0 && <span className="badge" title={m.app.toClassify(open_)}>{open_}</span>}
-            </button>
+            {inRow('experts') && <button role="tab" title={m.app.tabExpertsTitle} aria-selected={tab === 'experts'} onClick={() => showTab('experts')}>{m.app.tabExperts}</button>}
+            {inRow('live') && (
+              <button role="tab" title={m.app.tabLiveTitle} aria-selected={tab === 'live'} onClick={() => showTab('live')}>
+                {m.app.tabLive}{newHints > 0 && <span className="badge hints" title={m.app.newHints(newHints)}>{newHints}</span>}
+              </button>
+            )}
+            {inRow('scope') && <button role="tab" title={m.app.tabPlanTitle} aria-selected={tab === 'scope'} onClick={() => showTab('scope')}>{m.app.tabPlan}</button>}
+            {inRow('sources') && <button role="tab" title={m.app.tabSourcesTitle} aria-selected={tab === 'sources'} onClick={() => showTab('sources')}>{m.app.tabSources}</button>}
+            {inRow('log') && (
+              <button role="tab" title={m.app.tabLogTitle} aria-selected={tab === 'log'} onClick={() => showTab('log')}>
+                {m.app.tabLog}{open_ > 0 && <span className="badge" title={m.app.toClassify(open_)}>{open_}</span>}
+              </button>
+            )}
           </nav>
           {tab === 'ask' ? (
             <AskPanel thread={thread} live={live} turns={log.turns} isReady={settings?.isReady ?? true} notice={notice} party={shownParty} onAsk={ask} onAnnotate={annotate} marks={marks} onMark={(id, done) => void mark(id, done)} onJump={line => editor.current?.jumpToLine(line)} onNew={() => setThread([])} onStop={() => void api.stopAnswer().catch(fail)} onSettings={() => setDialog('settings')} />
