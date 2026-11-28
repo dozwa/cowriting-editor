@@ -68,6 +68,8 @@ pub struct Preferences {
     pub usage_ping: bool,
     /// The author agreed, separately: a session's figures go to the editor's maker when the editor closes.
     pub usage_figures: bool,
+    /// Ask the editor's server at each start whether a newer version exists. Nothing is fetched or installed by that.
+    pub update_check: bool,
 }
 
 impl Default for Preferences {
@@ -99,6 +101,7 @@ impl Default for Preferences {
             diagnostics: true,
             usage_ping: false,
             usage_figures: false,
+            update_check: true,
         }
     }
 }
