@@ -221,6 +221,33 @@ export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withP
 export type Exported = { paths: string[]; register: string }
 
 /** Read when a file dialog opens, so the name is in the language shown now. */
+/** One file of a project of several files, as the overview shows it. */
+export interface ProjectFileRow {
+  path: string
+  /** Its way from the project's folder. */
+  name: string
+  words: number
+  /** The words its own plan sets. */
+  target?: number
+  points: number
+  pointsMade: number
+  /** 0–1; missing without a plan. */
+  progress?: number
+  isMissing: boolean
+  isOpen: boolean
+}
+
+/** A project of several markdown files with all its files. */
+export interface ProjectOverview {
+  path: string
+  name: string
+  goal: string
+  wordsTarget?: number
+  words: number
+  chars: number
+  files: ProjectFileRow[]
+}
+
 const markdown = () => [{ name: m.dialogs.fileMarkdown, extensions: ['md', 'markdown'] }]
 
 /** The pages the editor can show in the browser; the addresses here are for reading, the app has its own. */
@@ -266,9 +293,26 @@ export const api = {
   },
   /** Asks the author for a file, starting in `folder` if one is given; null when they cancel. */
   pickDocument: async (folder = ''): Promise<string | null> => {
-    const path = await open({ multiple: false, directory: false, filters: markdown(), ...(folder === '' ? {} : { defaultPath: folder }) })
+    const path = await open({ multiple: false, directory: false, filters: [...markdown(), { name: m.app.projectFile, extensions: ['json'] }], ...(folder === '' ? {} : { defaultPath: folder }) })
     return typeof path === 'string' ? path : null
   },
+  /** Asks for a markdown file to add to the project, starting in `folder`. */
+  pickProjectFile: async (folder: string): Promise<string | null> => {
+    const path = await open({ multiple: false, directory: false, filters: markdown(), defaultPath: folder })
+    return typeof path === 'string' ? path : null
+  },
+  /** Asks where the file of a new project goes: beside the document, under its name. */
+  pickProject: (document: string) => save({ filters: [{ name: m.app.projectFile, extensions: ['json'] }], defaultPath: `${document.replace(/\.(md|markdown)$/i, '')}.cowriting.json` }),
+  /** The project of several files the open document is one of; null for a document on its own. */
+  projectFiles: (documentText: string) => invoke<ProjectOverview | null>('project_files', { documentText }),
+  /** Makes a project with the open document as its first file; returns the project's file. The document is to be opened again. */
+  makeProject: (path: string) => invoke<string>('make_project', { path }),
+  addProjectFile: (path: string) => invoke<void>('add_project_file', { path }),
+  removeProjectFile: (path: string) => invoke<void>('remove_project_file', { path }),
+  orderProjectFiles: (paths: string[]) => invoke<void>('order_project_files', { paths }),
+  /** Renames a file of the project that is not open; returns its new path. */
+  renameProjectFile: (path: string, name: string) => invoke<string>('rename_project_file', { path, name }),
+  setProjectGoal: (goal: string, words: number | null) => invoke<void>('set_project_goal', { goal, words }),
   pickNewDocument: (folder = '') => save({ filters: markdown(), defaultPath: folder === '' ? 'untitled.md' : `${folder}${folder.includes('\\') ? '\\' : '/'}untitled.md` }),
   /** Asks before unsaved changes are left behind. */
   confirmLeave: () => confirm(m.dialogs.leaveQuestion, { title: m.dialogs.leaveTitle, kind: 'warning' }),

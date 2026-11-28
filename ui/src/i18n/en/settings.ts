@@ -202,7 +202,7 @@ export const settings = {
   calmHint: 'The editor looks cleaner; everything still works the same. Warnings stay.',
   shownTabs: 'Tabs of the side panel',
   shownTabsHint: 'A tab you untick is only out of the row: what it holds stays as it is, and the log is kept as before. Its shortcut still opens it, and Live review is in the row while it is on. "Ask" is always there.',
-  tabNames: { experts: 'Experts', live: 'Live review', scope: 'Plan', sources: 'Sources', log: 'Log' },
+  tabNames: { experts: 'Experts', live: 'Live review', scope: 'Plan', project: 'Project', sources: 'Sources', log: 'Log' },
   onlyThisDocument: (name: string) => `Only for ${name}`,
   ownLanguagesHint: 'The three languages below then hold for this document alone; the editor’s own language is the same everywhere.',
   ownAiHint: 'This document is then asked with the provider and model below, whatever the general settings say. A key is kept in this computer’s key store, one for each provider.',

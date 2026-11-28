@@ -103,7 +103,34 @@ impl Bridge {
                 Ok(models.into_iter().map(|(id, name)| json!({ "status": model_status(&tested, &settings.backend, &id), "id": id, "name": name })).collect())
             }
             "pick_document" => Ok(json!(*self.document.lock().unwrap())),
-            "open_document" | "new_document" => self.open(),
+            // a path that is given is opened: another file of the project, or a new one
+            "open_document" | "new_document" => {
+                let path = text("path");
+                if !path.is_empty() {
+                    if name == "new_document" && !std::path::Path::new(&path).exists() {
+                        std::fs::write(&path, "").map_err(|e| format!("{path} could not be created: {e}"))?;
+                    }
+                    *self.document.lock().unwrap() = path;
+                }
+                self.open()
+            }
+            // no dialogs here: the project is named after the document, a new file gets the first free name beside it
+            "pick_project" => Ok(json!(std::path::Path::new(&*self.document.lock().unwrap()).with_extension("cowriting.json").to_string_lossy())),
+            "pick_new_document" => {
+                let document = self.document.lock().unwrap().clone();
+                let free = (1..100).map(|n| std::path::Path::new(&document).with_file_name(format!("chapter-{n}.md"))).find(|file| !file.exists());
+                Ok(free.map_or(Value::Null, |file| json!(file.to_string_lossy())))
+            }
+            "project_files" => self.session()?.project_overview(&text("documentText")).map(|overview| json!(overview)),
+            "make_project" => self.session()?.make_project(&text("path")).map(|path| json!(path)),
+            "add_project_file" => self.session()?.add_project_file(&text("path")).map(|_| Value::Null),
+            "remove_project_file" => self.session()?.remove_project_file(&text("path")).map(|_| Value::Null),
+            "order_project_files" => serde_json::from_value::<Vec<String>>(args["paths"].clone())
+                .map_err(|e| e.to_string())
+                .and_then(|paths| self.session()?.order_project_files(&paths))
+                .map(|_| Value::Null),
+            "rename_project_file" => self.session()?.rename_project_file(&text("path"), &text("name")).map(|path| json!(path)),
+            "set_project_goal" => self.session()?.set_project_goal(&text("goal"), args["words"].as_u64().map(|words| words as u32)).map(|_| Value::Null),
             "save_document" => self.session()?.save(&text("text")).map(|found| json!(found)),
             "report_paste" => self.session()?.report_paste(&text("pasted"), args["line"].as_u64().unwrap_or(0) as usize, &text("documentText")).map(|found| json!(found)),
             "state_external" => {

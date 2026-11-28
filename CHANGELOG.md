@@ -103,6 +103,21 @@ to a new heading with its version and date; the release workflow does that (see 
   yet tried with a real export; Claude Code's was tried with real transcripts. Classifying such
   chats like the editor's own turns, and merging the plugin's log, are not part of this. (#4, open)
 
+- **Projects of several files.** A thesis, a book or a long report can be a project of several
+  markdown files. "Make a project of several files…" in the new **Project** tab writes a file
+  `<name>.cowriting.json` beside the open document that lists the project's files in their
+  order; the document becomes the first one. Experts and their wording, background files,
+  bibliography files, live review and the project's own AI and languages are set once and hold
+  in every file; each file keeps its own plan, check, AI log and notes. The tab shows every file
+  with its words against its plan and all files together against a goal and a number of words
+  for the whole, and there files are opened (what is open is saved first), added, put in order,
+  renamed and taken out; a renamed file keeps its log and plan. "Open…" takes a project's file
+  too. A single document stays as it is and becomes a project's first file without losing
+  settings or log. Tried in the browser; the file dialogs of the app's own window were not.
+  The disclosure and the export for a whole project, and the AI reading the other files, are
+  not part of this: each file still has its own. The Project tab can be hidden like the others.
+  (#26, open)
+
 ### Fixed
 
 - **PDF export with Typst and pictures.** Every export with Typst failed as soon as the document

@@ -200,7 +200,7 @@ tab) these are the only web pages the editor ever opens, and their addresses are
 
 ## Projects
 
-A project is one markdown file. Its AI log, the AI's notes and the snapshots stay in the hidden
+A project is one markdown file, or several (see below). Its AI log, the AI's notes and the snapshots stay in the hidden
 `.cowriting` folder beside it, so the record of AI use travels with the text. Its settings are
 kept in the editor's own folder (`projects/<file name>-<fingerprint>/` beside `settings.json`):
 the experts and what you told them, the plan, the bibliography files, live review, and
@@ -225,6 +225,42 @@ editor together with its `.cowriting` folder (a whole folder renamed or moved, s
 folder notes where its document was, and the settings follow when the document is opened at the
 new place and is gone from the old one. A file moved without that folder starts with fresh
 settings (a log left in the same folder is offered as before).
+
+### A project of several files
+
+A thesis, a book or a long report can be a project of several markdown files, each chapter in a
+file of its own. "Make a project of several files…" in the **Project** tab writes one small file
+beside the open document, `<name>.cowriting.json`, which lists the project's files in their order
+by their way from its folder. The open document becomes the first file, and its experts, their
+wording, the background files, the bibliography files, live review and its own AI and languages
+become the project's: they are set once and hold in every file. They are kept in the editor's
+folder under `projects/project-<id>/`; the id is in the project's file, so they stay with the
+project when its file is renamed or its folder moved on the same computer.
+
+Every file keeps what is its own: its plan and the check of its points, its AI log, the AI's
+notes and its snapshots, in the `.cowriting` folder beside it as for a single document. Nothing
+in a manuscript is changed by any of this.
+
+The Project tab shows the files in their order with their words, the words their own plan sets,
+how far each plan is and how many of its points are made; and the words of all files together
+against a goal and a number of words you set for the whole. The open file is counted as it is in
+the window, the others as they are on disk. There you also
+
+- **open** another file with a click (what is open is saved first),
+- **add** a markdown file that is there, or a new, empty one; a file can be in one project only,
+- **order** the files with the arrows,
+- **rename** a file; its log and its plan go with it (the open one through "Move…", which takes
+  the text as it is in the window),
+- **take a file out**; the file, its log and its plan stay where they are, and it is a project of
+  its own again. A file that joined later has the settings it had before; the first file's
+  became the project's and stay there.
+
+"Open…" takes the project's file as well and opens the first of its files. A document is found
+to be a file of a project when a project's file in its folder, or up to three folders above it,
+lists it. A markdown file no project lists is a project of its own, as before.
+
+Not yet there for the whole project: the disclosure, the export to PDF and Word, and the AI
+reading the other files. Each file still has its own disclosure and export.
 
 ## AI use outside the editor
 

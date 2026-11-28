@@ -302,7 +302,28 @@ dialog:has(.syntax) { width: min(44rem, calc(94vw / var(--ui-zoom, 1))); }
 .ai-text button.link { text-align: left; display: inline; }
 
 .sprite { flex: none; image-rendering: pixelated; vertical-align: middle; }
-.experts, .live, .scope, .sources { overflow: auto; }
+.experts, .live, .scope, .sources, .project { overflow: auto; }
+.project section { display: grid; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--rule); }
+.project section:first-child { border-top: 0; }
+.project h3, .project p { margin: 0; }
+.project .goal { display: grid; gap: 8px; }
+.project .goal label { display: grid; gap: 3px; font-size: 12.5px; color: var(--soft); }
+.project .files { list-style: decimal; margin: 0; padding: 0 0 0 1.6em; display: grid; gap: 10px; }
+.project .files li { padding: 2px 0 2px 2px; }
+.project .files li > * { display: block; }
+.project .files li > .row { display: flex; }
+.project .files .top { display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+.project .files .top button.link { text-align: left; font-weight: 650; }
+.project .numbers { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.project progress { appearance: none; -webkit-appearance: none; width: 100%; height: 4px; margin: 4px 0; border: 0; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.project progress::-webkit-progress-bar { background: var(--rule); }
+.project progress::-webkit-progress-value { background: var(--ink); }
+.project progress::-moz-progress-bar { background: var(--ink); }
+.project .files .actions { gap: 6px; align-items: center; font-size: 12.5px; }
+.project .files .actions button:not(.link) { padding: 0 6px; min-width: 0; }
+.project .files input { flex: 1; min-width: 0; }
+.bar .name .of-project { margin-right: 6px; color: var(--soft); }
+.bar .name .of-project::after { content: ' /'; }
 .expert { display: flex; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--rule); }
 .expert.out { opacity: 0.55; }
 .expert .who { display: grid; gap: 4px; min-width: 0; flex: 1; font-size: 12.5px; }

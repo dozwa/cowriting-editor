@@ -38,12 +38,15 @@ let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 /** What the stand-in finds in an export of another tool. */
 const CHATS = { form: 'chatgpt', name: 'conversations.json', list: [{ index: 0, title: 'Mixed model in R', tool: 'ChatGPT', date: '2026-11-01', turns: 2 }, { index: 1, title: 'Holiday plans', tool: 'ChatGPT', date: '2026-11-02', turns: 1 }], canKeepAsFile: true }
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string; /** The files of a project of several files the document is one of, by name. */ book?: string[] } = {}) {
   let exportChoice: PdfChoice | null = options.exportChoice ?? null
+  let book: { goal: string; words?: number; files: string[] } | null = options.book === undefined ? null : { goal: '', files: [...options.book] }
+  let openPath = ''
+  const last = (path: string) => path.split('/').pop()!
   let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; files: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], files: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -187,7 +190,49 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     pickDocument: async folder => (calls.picked.push(`open in ${folder}`), null),
     pickNewDocument: async folder => (calls.picked.push(`new in ${folder}`), null),
     confirmLeave: async () => true,
-    openDocument: async path => ({ path, name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: options.orphans ?? [], notices: options.notices ?? [] }),
+    openDocument: async path => {
+      openPath = path
+      const other = book !== null && last(path) !== 'thesis.md'
+      return { path, name: other ? last(path) : 'thesis.md', text: other ? `# ${last(path)}\n` : '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: options.orphans ?? [], notices: options.notices ?? [] }
+    },
+    pickProject: async document => document.replace(/thesis\.md$/, 'book.cowriting.json'),
+    pickProjectFile: async folder => `${folder}/results.md`,
+    projectFiles: async text => {
+      if (book === null) return null
+      const files = book.files.map(name => {
+        const isOpen = openPath === `/work/${name}`
+        const planned = name === 'method.md' ? { target: 400, progress: 0.25, points: 4, pointsMade: 1 } : { points: 0, pointsMade: 0 }
+        return { path: `/work/${name}`, name, words: isOpen ? text.split(/\s+/).filter(Boolean).length : 100, ...planned, isMissing: false, isOpen }
+      })
+      return { path: '/work/book.cowriting.json', name: 'book', goal: book.goal, ...(book.words === undefined ? {} : { wordsTarget: book.words }), words: files.reduce((sum, file) => sum + file.words, 0), chars: 9000, files }
+    },
+    makeProject: async path => {
+      calls.files.push(['make', path])
+      book = { goal: '', files: ['thesis.md'] }
+      return path
+    },
+    addProjectFile: async path => {
+      calls.files.push(['add', path])
+      book!.files.push(last(path))
+    },
+    removeProjectFile: async path => {
+      calls.files.push(['remove', path])
+      book!.files = book!.files.filter(name => name !== last(path))
+    },
+    orderProjectFiles: async paths => {
+      calls.files.push(['order', ...paths])
+      book!.files = paths.map(last)
+    },
+    renameProjectFile: async (path, name) => {
+      calls.files.push(['rename', path, name])
+      if (!name.endsWith('.md')) throw 'The file needs a name that ends in .md, without a folder.'
+      book!.files = book!.files.map(file => (file === last(path) ? name : file))
+      return `/work/${name}`
+    },
+    setProjectGoal: async (goal, words) => {
+      calls.files.push(['goal', goal, words])
+      book = { ...book!, goal, ...(words === null ? {} : { words }) }
+    },
     adoptLog: async name => {
       calls.adopted.push(name)
       return { path: '/work/thesis.md', name: 'thesis.md', text: '# Thesis\n\nWe recruited 48 subjects.\n', language: 'en', orphans: [], notices: [] }
@@ -1563,7 +1608,7 @@ test('a tab the author hides is out of the row, and comes back while it is opene
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
   const row = () => within(screen.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent?.replace(/\d+$/, ''))
-  expect(row()).toEqual(['Ask', 'Experts', 'Live review', 'Plan', 'Sources', 'Log'])
+  expect(row()).toEqual(['Ask', 'Experts', 'Live review', 'Plan', 'Project', 'Sources', 'Log'])
 
   // hidden in the settings while it is the open one: the panel moves to the next tab that is shown
   await user.click(screen.getByRole('tab', { name: 'Experts' }))
@@ -1574,22 +1619,22 @@ test('a tab the author hides is out of the row, and comes back while it is opene
   for (const name of ['Experts', 'Live review', 'Log']) await user.click(dialog.getByRole('checkbox', { name }))
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(calls.preferences.at(-1)).toMatchObject({ hiddenTabs: ['experts', 'live', 'log'] }))
-  await waitFor(() => expect(row()).toEqual(['Ask', 'Plan', 'Sources']))
+  await waitFor(() => expect(row()).toEqual(['Ask', 'Plan', 'Project', 'Sources']))
   expect(screen.getByRole('tab', { name: 'Plan' }).getAttribute('aria-selected')).toBe('true')
 
   // its shortcut still opens it, and it is in the row for as long as it is open
   await user.click(screen.getByLabelText('Document'))
   await user.keyboard('{Control>}6{/Control}')
-  expect(row()).toEqual(['Ask', 'Plan', 'Sources', 'Log'])
+  expect(row()).toEqual(['Ask', 'Plan', 'Project', 'Sources', 'Log'])
   expect(screen.getByRole('tab', { name: /Log/ }).getAttribute('aria-selected')).toBe('true')
   await user.click(screen.getByRole('tab', { name: 'Ask' }))
-  expect(row()).toEqual(['Ask', 'Plan', 'Sources'])
+  expect(row()).toEqual(['Ask', 'Plan', 'Project', 'Sources'])
 
   // live review that is on keeps its tab in the row
   await user.keyboard('{Control>}3{/Control}')
   await user.click(await screen.findByRole('checkbox', { name: /Live review/ }))
   await user.click(screen.getByRole('tab', { name: 'Ask' }))
-  await waitFor(() => expect(row()).toEqual(['Ask', 'Live review', 'Plan', 'Sources']))
+  await waitFor(() => expect(row()).toEqual(['Ask', 'Live review', 'Plan', 'Project', 'Sources']))
 })
 
 test('shortcuts do what their buttons do, and the author can give them other keys', async () => {
@@ -2251,4 +2296,84 @@ test('a classification can be changed afterwards', async () => {
   await user.click(screen.getByRole('button', { name: '✓ used' }))
   await waitFor(() => expect(calls.annotated).toEqual([['t1', 'rejected', ''], ['t1', 'adopted', 'took it after all']]))
   await screen.findByText(/as suggested/)
+})
+
+test('a document on its own becomes the first file of a project, and files are added to it', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Project' }))
+  expect(screen.getByText(/This document is a project of its own/)).toBeTruthy()
+
+  // what is typed is saved before the document is opened again as the project's first file
+  await user.type(screen.getByLabelText('Document'), 'More.')
+  await user.click(screen.getByRole('button', { name: 'Make a project of several files…' }))
+  await waitFor(() => expect(calls.files).toEqual([['make', '/work/book.cowriting.json']]))
+  expect(calls.saved.at(-1)).toContain('More.')
+  const files = within(await screen.findByRole('list', { name: 'Files' }))
+  expect(files.getByText('thesis.md').getAttribute('aria-current')).toBe('true')
+  expect(screen.getByRole('button', { name: 'book' }).getAttribute('title')).toContain('files of this project')
+  // a project keeps at least one file
+  expect(files.getByRole('button', { name: 'Take out' })).toHaveProperty('disabled', true)
+
+  await user.click(screen.getByRole('button', { name: 'Add a file…' }))
+  await waitFor(() => expect(calls.files.at(-1)).toEqual(['add', '/work/results.md']))
+  expect(await files.findByRole('button', { name: 'results.md' })).toBeTruthy()
+})
+
+test('the project tab shows every file against its plan and the whole against its target, and opens, orders, renames and takes out files', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ book: ['thesis.md', 'method.md', 'results.md'] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByText('thesis.md')
+  await user.click(screen.getByRole('tab', { name: 'Project' }))
+  const rows = () => within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem').map(row => row.textContent ?? '')
+  await waitFor(() => expect(rows()).toHaveLength(3))
+  expect(rows()[0]).toMatch(/^thesis\.mdopen.*no plan/)
+  expect(rows()[1]).toMatch(/method\.md100 of 400 words · 25 % of its plan · 1 of 4 points/)
+  expect(screen.getByText('No goal for the whole project yet.')).toBeTruthy()
+  expect(screen.getByText('The files’ own plans add up to 400 words.')).toBeTruthy()
+
+  // the whole: a goal in the author's words and a number of words
+  await user.click(screen.getByRole('button', { name: 'Goal and words of the whole' }))
+  await user.type(screen.getByLabelText('What the whole is to say or reach'), 'A book on walking breaks.')
+  await user.type(screen.getByLabelText('Words in all files together'), '40.000')
+  await user.click(screen.getByRole('button', { name: 'Save the goal' }))
+  await waitFor(() => expect(calls.files.at(-1)).toEqual(['goal', 'A book on walking breaks.', 40000]))
+  expect(await screen.findByText('A book on walking breaks.')).toBeTruthy()
+  expect(screen.getByText(/of 40,000 words in all files/)).toBeTruthy()
+  expect(screen.getByRole('progressbar', { name: 'Words in all files' })).toBeTruthy()
+
+  // the order of the text
+  await user.click(screen.getByRole('button', { name: 'Move results.md up' }))
+  await waitFor(() => expect(calls.files.at(-1)).toEqual(['order', '/work/thesis.md', '/work/results.md', '/work/method.md']))
+  await waitFor(() => expect(rows()[1]).toMatch(/^results\.md/))
+  expect(screen.getByRole('button', { name: 'Move thesis.md up' })).toHaveProperty('disabled', true)
+
+  // another file gets a new name here; a name the app refuses stays to be corrected
+  await user.click(within(within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Rename' }))
+  const name = screen.getByLabelText('New name for results.md')
+  await user.clear(name)
+  await user.type(name, 'findings')
+  await user.click(within(within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Rename' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('ends in .md')
+  await user.type(screen.getByLabelText('New name for results.md'), '.md')
+  await user.click(within(within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Rename' }))
+  await waitFor(() => expect(calls.files.at(-1)).toEqual(['rename', '/work/results.md', 'findings.md']))
+  await waitFor(() => expect(rows()[1]).toMatch(/^findings\.md/))
+  // the open document is renamed with the window's own "Move…", which takes the text as it is
+  await user.click(within(within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Rename' }))
+  await waitFor(() => expect(calls.moved).toHaveLength(1))
+
+  // a click opens another file, and what was typed in this one is saved first
+  await user.type(screen.getByLabelText('Document'), 'Unsaved.')
+  await user.click(screen.getByRole('button', { name: 'method.md' }))
+  await waitFor(() => expect(screen.getByText('method.md', { selector: '[aria-current]' })).toBeTruthy())
+  expect(calls.saved.at(-1)).toContain('Unsaved.')
+  expect((screen.getByLabelText('Document') as HTMLTextAreaElement).value).toBe('# method.md\n')
+
+  await user.click(within(within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Take out' }))
+  await waitFor(() => expect(calls.files.at(-1)).toEqual(['remove', '/work/findings.md']))
+  await waitFor(() => expect(rows()).toHaveLength(2))
 })

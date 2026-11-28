@@ -125,8 +125,11 @@ impl Preferences {
         self.ui_font = one_of(&self.ui_font, &["hanken", "system"], &standard.ui_font);
         self.ui_size = one_of(&self.ui_size, &["small", "standard", "large", "larger"], &standard.ui_size);
         // "ask" is not among them, so the panel is never empty
-        self.hidden_tabs =
-            ["experts", "live", "scope", "sources", "log"].iter().filter(|tab| self.hidden_tabs.iter().any(|hidden| hidden == *tab)).map(|tab| tab.to_string()).collect();
+        self.hidden_tabs = ["experts", "live", "scope", "project", "sources", "log"]
+            .iter()
+            .filter(|tab| self.hidden_tabs.iter().any(|hidden| hidden == *tab))
+            .map(|tab| tab.to_string())
+            .collect();
         self.autosave_seconds = if self.autosave_seconds == 0 { 0 } else { self.autosave_seconds.clamp(2, 600) };
         self.documents_folder = self.documents_folder.trim().to_string();
         self.export_folder = self.export_folder.trim().to_string();

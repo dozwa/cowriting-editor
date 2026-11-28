@@ -204,7 +204,7 @@ export const settings: typeof pattern = {
   calmHint: 'Der Editor wirkt aufgeräumter; alles funktioniert wie zuvor. Warnungen bleiben.',
   shownTabs: 'Reiter der Seitenleiste',
   shownTabsHint: 'Ein Reiter ohne Haken fehlt nur in der Leiste: Was er enthält, bleibt, wie es ist, und das Protokoll wird weiter geführt. Sein Tastenkürzel öffnet ihn weiterhin, und Live-Review steht in der Leiste, solange es eingeschaltet ist. „Fragen“ ist immer da.',
-  tabNames: { experts: 'Experten', live: 'Live-Review', scope: 'Plan', sources: 'Quellen', log: 'Protokoll' },
+  tabNames: { experts: 'Experten', live: 'Live-Review', scope: 'Plan', project: 'Projekt', sources: 'Quellen', log: 'Protokoll' },
   onlyThisDocument: name => `Nur für ${name}`,
   ownLanguagesHint: 'Die drei Sprachen unten gelten dann nur für dieses Dokument; die Sprache des Editors selbst ist überall dieselbe.',
   ownAiHint: 'Dieses Dokument wird dann mit dem Anbieter und dem Modell unten gefragt, was auch immer die allgemeinen Einstellungen sagen. Ein Schlüssel liegt im Schlüsselbund dieses Computers, je Anbieter einer.',

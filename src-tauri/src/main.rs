@@ -740,6 +740,43 @@ async fn live_review(app: tauri::AppHandle, editor: State<'_, Editor>, document_
     Ok(outcome)
 }
 
+/// The project of several files the open document is one of, with all its files; null for a document on its own.
+#[tauri::command]
+fn project_files(editor: State<Editor>, document_text: String) -> Result<Option<cowriting_app::project_files::Overview>, String> {
+    editor.session()?.project_overview(&document_text)
+}
+
+/// Makes a project of several files with the open document as its first. The window opens the document again afterwards.
+#[tauri::command]
+fn make_project(editor: State<Editor>, path: String) -> Result<String, String> {
+    editor.session()?.make_project(&path)
+}
+
+#[tauri::command]
+fn add_project_file(editor: State<Editor>, path: String) -> Result<(), String> {
+    editor.session()?.add_project_file(&path)
+}
+
+#[tauri::command]
+fn remove_project_file(editor: State<Editor>, path: String) -> Result<(), String> {
+    editor.session()?.remove_project_file(&path)
+}
+
+#[tauri::command]
+fn order_project_files(editor: State<Editor>, paths: Vec<String>) -> Result<(), String> {
+    editor.session()?.order_project_files(&paths)
+}
+
+#[tauri::command]
+fn rename_project_file(editor: State<Editor>, path: String, name: String) -> Result<String, String> {
+    editor.session()?.rename_project_file(&path, &name)
+}
+
+#[tauri::command]
+fn set_project_goal(editor: State<Editor>, goal: String, words: Option<u32>) -> Result<(), String> {
+    editor.session()?.set_project_goal(&goal, words)
+}
+
 #[tauri::command]
 fn scope(editor: State<Editor>, document_text: String) -> Result<ScopeView, String> {
     Ok(editor.session()?.scope_view(&document_text))
@@ -983,6 +1020,13 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            project_files,
+            make_project,
+            add_project_file,
+            remove_project_file,
+            order_project_files,
+            rename_project_file,
+            set_project_goal,
             get_settings,
             set_settings,
             set_preferences,

@@ -105,12 +105,12 @@ export function applyLook(preferences: Preferences, root: HTMLElement = document
 }
 
 /** What a shortcut can do. The markdown buttons carry their `Format`; the rest is the window's. */
-export type Tab = 'ask' | 'experts' | 'live' | 'scope' | 'sources' | 'log'
+export type Tab = 'ask' | 'experts' | 'live' | 'scope' | 'project' | 'sources' | 'log'
 export type TabAction = 'tabAsk' | 'tabExperts' | 'tabLive' | 'tabPlan' | 'tabSources' | 'tabLog'
 export type Action = 'save' | 'open' | 'new' | 'export' | 'settings' | 'ask' | 'buttons' | 'lineNumbers' | 'source' | 'calm' | 'find' | TabAction | Format
 
 /** The tabs in the order of the row. */
-export const TABS: Tab[] = ['ask', 'experts', 'live', 'scope', 'sources', 'log']
+export const TABS: Tab[] = ['ask', 'experts', 'live', 'scope', 'project', 'sources', 'log']
 /** "Ask" cannot be hidden, so the panel is never empty. */
 export type HideableTab = Exclude<Tab, 'ask'>
 export const HIDEABLE_TABS = TABS.filter((tab): tab is HideableTab => tab !== 'ask')

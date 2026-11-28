@@ -92,7 +92,12 @@ fn sidecar(projects: Option<&str>, document: &str) -> Sidecar {
 /// What "Open" opens for this path: the document itself, or the first file of a project that is still there.
 pub fn document_to_open(host: &dyn Host, path: &str) -> Result<String, String> {
     if !is_project_file(path) {
-        return Ok(path.to_string());
+        // the open dialog lets .json through for the projects' files; no other one is a document
+        return if path.to_lowercase().ends_with(".json") {
+            Err(format!("{path} is not a project of the editor's (its name would end in {ENDING})."))
+        } else {
+            Ok(path.to_string())
+        };
     }
     let file = load(host, path)?;
     file.files.iter().map(|entry| member(path, entry)).find(|document| host.exists(document)).ok_or_else(|| format!("None of the files {path} lists is there any more."))

@@ -1,8 +1,9 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectView as Project, Counted, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { ProjectView as Project, ProjectOverview, Counted, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
+import { ProjectPanel } from './project'
 import { seeView } from './diagnostics'
 import { DisclosureDialog, ExportDialog, FeedbackDialog, MovePicturesDialog, PictureDialog, SupportDialog, UsageDialog } from './dialogs'
 import { Tour, TOUR } from './tour'
@@ -87,6 +88,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
   /** The editor asked for support at this start, and the author answered. */
   const [isAsked, setAsked] = useState(false)
   const [project, setProject] = useState<Project | null>(null)
+  // the project of several files this document is one of; null for a document on its own
+  const [files, setFiles] = useState<ProjectOverview | null>(null)
   const [isWithoutTools, setWithoutTools] = useState(false)
   const [party, setParty] = useState<PartyView | null>(null)
   const [watching, setWatching] = useState<LiveView | null>(null)
@@ -154,6 +157,8 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setLog(await api.logView(text))
       setScope(await api.scope(text))
       setSources(await api.sources(text))
+      // the other files are read from disk for this, so only while the overview is looked at
+      if (tabRef.current === 'project') setFiles(await api.projectFiles(text))
     } catch (e) {
       fail(e)
     }
@@ -310,6 +315,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
       setWatching(await api.liveView())
       setScope(await api.scope(opened.text))
       setSources(await api.sources(opened.text))
+      setFiles(await api.projectFiles(opened.text))
       setWatchStatus('')
       setNewHints(0)
       editor.current?.focus()
@@ -516,6 +522,66 @@ export function App({ api, makeEditor = createEditor }: Props) {
     setTab(to)
     if (to === 'live') setNewHints(0)
     if (to === 'sources') void refreshLog()
+    if (to === 'project') void api.projectFiles(editor.current?.getText() ?? '').then(setFiles, fail)
+  }
+
+  // a project of several files: what is open is saved before another file takes its place
+  const folderOf = (path: string) => path.replace(/[\\/][^\\/]*$/, '')
+  const saveIfChanged = async () => {
+    if (!isDirty || editor.current === null) return
+    const rows = await api.saveDocument(editor.current.getText())
+    setDirty(false)
+    if (rows.length > 0) setFound(foundNotice(rows))
+  }
+  const openFile = async (path: string) => {
+    try {
+      await saveIfChanged()
+      await show(await api.openDocument(path))
+    } catch (e) {
+      fail(e)
+    }
+  }
+  /** A change to the project's list, then the overview as it is now. */
+  const withFiles = async (change: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await change()
+      setFiles(await api.projectFiles(editor.current?.getText() ?? ''))
+      setError('')
+      return true
+    } catch (e) {
+      fail(e)
+      return false
+    }
+  }
+  /** The open document joins or leaves a project: it is opened again, because its experts and settings are other ones then. */
+  const reopened = async (change: () => Promise<unknown>) => {
+    if (doc === null) return
+    try {
+      await saveIfChanged()
+      await change()
+      await show(await api.openDocument(doc.path))
+      setError('')
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const makeProject = async () => {
+    if (doc === null) return
+    try {
+      const path = await api.pickProject(doc.path)
+      if (path !== null) await reopened(() => api.makeProject(path))
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const addFile = async (pick: (folder: string) => Promise<string | null>) => {
+    if (files === null) return
+    try {
+      const path = await pick(folderOf(files.path))
+      if (path !== null) await withFiles(() => api.addProjectFile(path))
+    } catch (e) {
+      fail(e)
+    }
   }
 
   // the picture button: the author chooses the file, and the editor writes its path as seen from the document
@@ -705,6 +771,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
         <button onClick={() => void save()} disabled={!isDirty}>{m.app.save}</button>
         <button onClick={() => void move()} title={m.app.moveTitle}>{m.app.move}</button>
         <span className="name" title={doc.path}>
+          {files !== null && <button className="link of-project" title={m.app.tabProjectTitle} onClick={() => showTab('project')}>{files.name}</button>}
           {doc.name}
           <span className={isDirty ? 'state dirty' : 'state'}>{isDirty ? m.app.notSaved : m.app.saved}</span>
         </span>
@@ -791,6 +858,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
               </button>
             )}
             {inRow('scope') && <button role="tab" title={m.app.tabPlanTitle} aria-selected={tab === 'scope'} onClick={() => showTab('scope')}>{m.app.tabPlan}</button>}
+            {inRow('project') && <button role="tab" title={m.app.tabProjectTitle} aria-selected={tab === 'project'} onClick={() => showTab('project')}>{m.app.tabProject}</button>}
             {inRow('sources') && <button role="tab" title={m.app.tabSourcesTitle} aria-selected={tab === 'sources'} onClick={() => showTab('sources')}>{m.app.tabSources}</button>}
             {inRow('log') && (
               <button role="tab" title={m.app.tabLogTitle} aria-selected={tab === 'log'} onClick={() => showTab('log')}>
@@ -829,6 +897,19 @@ export function App({ api, makeEditor = createEditor }: Props) {
             <LivePanel view={watching} party={shownParty} status={watchStatus} isReady={settings?.isReady ?? true} onChange={(isOn, personas) => void changeWatching(isOn, personas)} onJump={line => editor.current?.jumpToLine(line)} onOpen={openTurn} />
           ) : tab === 'scope' && scope !== null ? (
             <ScopePanel view={scope} canCheck={settings?.isReady ?? true} isChecking={isChecking} note={checkNote} onSave={saveScope} onCheck={() => void checkPoints()} onJump={line => editor.current?.jumpToLine(line)} />
+          ) : tab === 'project' ? (
+            <ProjectPanel
+              view={files}
+              onMake={() => void makeProject()}
+              onOpen={path => void openFile(path)}
+              onAdd={() => void addFile(api.pickProjectFile)}
+              onAddNew={() => void addFile(api.pickNewDocument)}
+              onRemove={path => void (files?.files.find(file => file.path === path)?.isOpen === true ? reopened(() => api.removeProjectFile(path)) : withFiles(() => api.removeProjectFile(path)))}
+              onOrder={paths => void withFiles(() => api.orderProjectFiles(paths))}
+              onRename={(path, name) => withFiles(() => api.renameProjectFile(path, name))}
+              onMoveOpen={() => void move()}
+              onGoal={(goal, words) => withFiles(() => api.setProjectGoal(goal, words))}
+            />
           ) : tab === 'sources' && sources !== null ? (
             <SourcesPanel
               view={sources}
