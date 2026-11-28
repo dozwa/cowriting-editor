@@ -103,7 +103,10 @@ to a new heading with its version and date; the release workflow does that (see 
   yet tried with a real export; Claude Code's was tried with real transcripts. A kept chat or
   pasted text is classified like an answer of the editor's own AI (used, changed, not used, only
   informed, with a comment), as one whole; the disclosure and the appendix say what was done
-  with it, and "not annotated" where nothing was said. (#4, open)
+  with it, and "not annotated" where nothing was said. The AI log of the CoWriting plugin for
+  Claude Code (and of another document of the editor) is read like an export, one conversation
+  for each session, so that work done with the plugin can be kept with a statement; the two
+  logs are not merged into one. (#4, open)
 
 - **Projects of several files.** A thesis, a book or a long report can be a project of several
   markdown files. "Make a project of several files…" in the new **Project** tab writes a file

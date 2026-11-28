@@ -297,6 +297,12 @@ form):
   not copied. Tool calls, files and pictures inside a chat are left out and counted, and of a
   chat with regenerated answers the branch you went on with is kept. The two exports are read
   as their form is known; they were not yet tried with a real export, and such forms change.
+- **The AI log of the CoWriting plugin.** A paper written partly in Claude Code with the plugin
+  has its own log there (`ai-log/<month>.jsonl` in the paper's folder). The editor reads such a
+  file like an export: one conversation for each session, of which you keep the ones that
+  belong to this document. The same goes for the log of another document of the editor
+  (`.cowriting/<file>/ai-log/`). Nothing of it becomes an entry in this document's own log: it
+  is use you state, with the chat kept as the record.
 - **A chat pasted as text**, from any tool. Begin a line with "Prompt:" where you asked and
   "Answer:" where the tool answered (also "Frage:", "Antwort:", "You:", "ChatGPT:") and it is
   kept as a chat; without such marks the text is kept as it is.

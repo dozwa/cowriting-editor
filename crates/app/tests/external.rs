@@ -253,3 +253,36 @@ fn a_kept_chat_is_classified_like_an_answer_and_the_disclosure_says_what_was_don
     session.state_external(&ExternalUse { id, checked: "Recomputed by hand".into(), ..view.external[0].clone() }).unwrap();
     assert_eq!(session.log_view("").unwrap().external[0].attachments[0].use_, "adapted");
 }
+
+#[test]
+fn the_ai_log_of_the_plugin_is_read_as_chats_that_can_be_kept_with_a_statement() {
+    use cowriting_app::outside::{conversations, NewAttachment};
+    let (_folder, session) = opened("plugin-log");
+    let log = fixture("cowriting-plugin-log.jsonl");
+    let found = conversations(&log).unwrap();
+    // one conversation for each session; the plugin's housekeeping and a question without an answer are not exchanges
+    assert_eq!(found.form, "cowriting-log");
+    assert_eq!(
+        found.list.iter().map(|chat| (chat.tool.as_str(), chat.title.as_str(), chat.date.as_str(), chat.turns)).collect::<Vec<_>>(),
+        [("Claude Code with the CoWriting plugin", "Walking breaks", "2026-10-01", 2), ("Claude Code with the CoWriting plugin", "Walking breaks", "2026-10-03", 1)]
+    );
+    // the plugin's own fixture log is read too
+    let own = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/logs/full.jsonl");
+    assert_eq!(conversations(&own.to_string_lossy()).unwrap().form, "cowriting-log");
+
+    let stated = ExternalUse {
+        tool: "Claude Code with the CoWriting plugin".into(),
+        purpose: "Feedback on the first draft".into(),
+        add: vec![NewAttachment::Chats { path: log, conversations: vec![0] }],
+        ..Default::default()
+    };
+    session.state_external(&stated).unwrap();
+    let view = session.log_view("").unwrap();
+    let kept = &view.external[0].attachments[0];
+    assert_eq!((kept.kind.as_str(), kept.turns, kept.from.as_str(), kept.title.as_str()), ("chat", 2, "cowriting-log", "Walking breaks"));
+    assert_eq!(view.stats.turns, 0, "nothing of it became a turn of this document's own log");
+    let (register, appendix) = exported(&session, "en", "md");
+    assert!(register.contains("chat “Walking breaks” (AI log of the CoWriting plugin or editor, 2 exchanges, file "), "{register}");
+    assert!(appendix.contains("> Give me feedback on the introduction.") && appendix.contains("> Most journals now ask for 'participants'."), "{appendix}");
+    assert!(appendix.contains("Tool calls, files and pictures left out: 2") && !appendix.contains("/cowrite:stats") && !appendix.contains("48 participants"), "{appendix}");
+}

@@ -66,7 +66,7 @@ export const panels: typeof pattern = {
   noLongerInText: 'Nicht mehr in Ihrem Text',
   fromAnswerTo: (question: ReactNode) => <>aus der Antwort auf {question}</>,
   fromKeptChat: (tool: string, question: ReactNode) => <>aus einem abgelegten Chat mit {tool}, Antwort auf {question}</>,
-  chatForms: { chatgpt: 'ChatGPT-Export', 'claude-ai': 'Claude.ai-Export', 'claude-code': 'Claude-Code-Transkript', cowriting: 'vom Editor abgelegter Chat', pasted: 'eingefügter Text' } as Record<string, string>,
+  chatForms: { chatgpt: 'ChatGPT-Export', 'claude-ai': 'Claude.ai-Export', 'claude-code': 'Claude-Code-Transkript', cowriting: 'vom Editor abgelegter Chat', 'cowriting-log': 'KI-Protokoll des CoWriting-Plugins oder -Editors', pasted: 'eingefügter Text' } as Record<string, string>,
   keptHeading: 'Chats und Dateien',
   keptExplained: 'Sie können den Chat selbst zu Ihrer Angabe ablegen. Er liegt dann im .cowriting-Ordner dieses Dokuments und ist für alle sichtbar, die diesen Ordner bekommen.',
   keptExplainedMore: 'Das kann ein Export aus ChatGPT oder Claude.ai sein, ein Transkript von Claude Code, ein als Text eingefügter Chat oder eine beliebige andere Datei. Abgelegt werden nur die Unterhaltungen, die Sie auswählen. Die Offenlegung nennt jede Datei mit einer Prüfsumme.',

@@ -71,7 +71,7 @@ export const panels = {
   noLongerInText: 'No longer in your text',
   fromAnswerTo: (question: ReactNode) => <>from the answer to {question}</>,
   fromKeptChat: (tool: string, question: ReactNode) => <>from a chat with {tool} that you kept, answer to {question}</>,
-  chatForms: { chatgpt: 'ChatGPT export', 'claude-ai': 'Claude.ai export', 'claude-code': 'Claude Code transcript', cowriting: 'chat kept by the editor', pasted: 'pasted text' } as Record<string, string>,
+  chatForms: { chatgpt: 'ChatGPT export', 'claude-ai': 'Claude.ai export', 'claude-code': 'Claude Code transcript', cowriting: 'chat kept by the editor', 'cowriting-log': 'AI log of the CoWriting plugin or editor', pasted: 'pasted text' } as Record<string, string>,
   keptHeading: 'Chats and files',
   keptExplained: 'You can keep the chat itself with your statement. It then lies in this document’s .cowriting folder and is seen by whoever gets that folder.',
   keptExplainedMore: 'It can be an export of ChatGPT or Claude.ai, a transcript of Claude Code, a chat pasted as text, or any other file. Only the conversations you choose are kept. The disclosure names each with a checksum.',

@@ -1,0 +1,10 @@
+{"type": "prompt", "id": "p1", "ts": "2026-10-01T10:00:00Z", "session": "s1", "paper": "Walking breaks", "category": "feedback", "text": "Give me feedback on the introduction."}
+{"type": "response", "ref": "p1", "ts": "2026-10-01T10:00:05Z", "model": "claude-opus-5-5", "plugin": "0.1.0", "claude_code": "2.1.300", "personas": ["reviewer-2"], "tools_used": ["Read", "Grep"], "ai_text_flag": false, "answer": "Line 4: the claim comes before any evidence."}
+{"type": "annotation", "ref": "p1", "ts": "2026-10-01T10:02:00Z", "use": "adapted"}
+{"type": "prompt", "id": "p2", "ts": "2026-10-01T10:05:00Z", "session": "s1", "paper": "Walking breaks", "category": "meta", "text": "/cowrite:stats"}
+{"type": "response", "ref": "p2", "ts": "2026-10-01T10:05:01Z", "model": "claude-opus-5-5", "plugin": "0.1.0", "personas": [], "tools_used": [], "ai_text_flag": false, "answer": "3 turns today."}
+{"type": "prompt", "id": "p3", "ts": "2026-10-01T10:06:00Z", "session": "s1", "paper": "Walking breaks", "category": "language", "text": "Is 'subjects' still the usual word?"}
+{"type": "response", "ref": "p3", "ts": "2026-10-01T10:06:04Z", "model": "claude-opus-5-5", "plugin": "0.1.0", "personas": [], "tools_used": [], "ai_text_flag": false, "answer": "Most journals now ask for 'participants'."}
+{"type": "prompt", "id": "p4", "ts": "2026-10-03T09:00:00Z", "session": "s2", "paper": "Walking breaks", "category": "methods", "text": "Are 48 participants enough for a pilot?"}
+{"type": "response", "ref": "p4", "ts": "2026-10-03T09:00:07Z", "model": "claude-sonnet-5-5", "plugin": "0.1.0", "personas": [], "tools_used": [], "ai_text_flag": false, "answer": "For a pilot, yes; say why you chose 48."}
+{"type": "prompt", "id": "p5", "ts": "2026-10-03T09:10:00Z", "session": "s2", "paper": "Walking breaks", "category": "general", "text": "A question that was never answered."}

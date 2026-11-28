@@ -243,6 +243,39 @@ fn claude_code(lines: &[Value]) -> Option<Chat> {
     Some(chat)
 }
 
+/// An AI log in CoWriting's own form: a month's file of the CoWriting plugin for Claude Code
+/// (`ai-log/2026-11.jsonl` in a paper's folder) or of this editor for another document. It is read
+/// like any other tool's chats, one conversation for each session, so that work done with the
+/// plugin can be stated and kept with a document written on in the editor. Nothing of it becomes
+/// an entry in this document's own log. What was asked without an answer, and the plugin's own
+/// housekeeping (`meta`), is left out.
+fn ai_log(lines: &[Value]) -> Vec<Chat> {
+    let answers: std::collections::HashMap<&str, &Value> = lines.iter().filter(|line| line["type"] == "response").filter_map(|line| Some((line["ref"].as_str()?, line))).collect();
+    let mut chats: Vec<(String, Chat)> = Vec::new();
+    for asked in lines.iter().filter(|line| line["type"] == "prompt" && line["category"] != "meta") {
+        let Some(answer) = asked["id"].as_str().and_then(|id| answers.get(id)) else { continue };
+        let session = text_of(asked, "session");
+        let at = match chats.iter().position(|(of, _)| *of == session) {
+            Some(at) => at,
+            None => {
+                let tool = if answer["plugin"].is_string() { "Claude Code with the CoWriting plugin" } else { "CoWriting Editor" };
+                let mut chat = Chat::new(tool);
+                chat.title = text_of(asked, "paper");
+                chat.date = day(&text_of(asked, "ts"));
+                chats.push((session, chat));
+                chats.len() - 1
+            }
+        };
+        let chat = &mut chats[at].1;
+        if let Some(model) = answer["model"].as_str().filter(|model| !model.is_empty()) {
+            chat.model = model.to_string();
+        }
+        let left_out = answer["tools_used"].as_array().map_or(0, |tools| tools.len() as u32);
+        chat.turns.push(ChatTurn { at: text_of(asked, "ts"), prompt: text_of(asked, "text"), answer: text_of(answer, "answer"), left_out });
+    }
+    chats.into_iter().map(|(_, chat)| chat).collect()
+}
+
 /// The form of pasted text with the author's marks, among the forms `read` names.
 pub const PASTED: &str = "pasted";
 
@@ -257,6 +290,8 @@ pub fn form_label(form: &str, german: bool) -> &str {
         ("claude-code", true) => "Claude-Code-Transkript",
         ("cowriting", false) => "chat kept by the editor",
         ("cowriting", true) => "vom Editor abgelegter Chat",
+        ("cowriting-log", false) => "AI log of the CoWriting plugin or editor",
+        ("cowriting-log", true) => "KI-Protokoll des CoWriting-Plugins oder -Editors",
         ("pasted", false) => "pasted text",
         ("pasted", true) => "eingefügter Text",
         (other, _) => other,
@@ -276,7 +311,11 @@ pub fn read(text: &str) -> Option<(&'static str, Vec<Chat>)> {
         Ok(_) => return None,
         Err(_) => {
             let lines: Vec<Value> = text.lines().filter(|line| !line.trim().is_empty()).filter_map(|line| serde_json::from_str(line).ok()).filter(Value::is_object).collect();
-            ("claude-code", claude_code(&lines).into_iter().collect())
+            if lines.iter().any(|line| line["type"] == "prompt" && line["id"].is_string()) && lines.iter().any(|line| line["type"] == "response" && line["ref"].is_string()) {
+                ("cowriting-log", ai_log(&lines))
+            } else {
+                ("claude-code", claude_code(&lines).into_iter().collect())
+            }
         }
     };
     let chats: Vec<Chat> = chats.into_iter().filter(|chat| !chat.turns.is_empty()).collect();
