@@ -159,6 +159,34 @@ pub struct AiTextEntry {
     pub extra: Map<String, Value>,
 }
 
+/// A file kept with a statement of outside AI use, in the sidecar's `external/`. The log names it
+/// with its size and its SHA-256, so a change to the file after it was kept shows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Attachment {
+    /// The file's name in `external/`.
+    pub file: String,
+    /// 'chat' (a conversation the editor read, in its own form), 'text' (pasted text, as it was) or 'file' (any file, unchanged).
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub bytes: u64,
+    #[serde(default)]
+    pub sha256: String,
+    /// The exchanges of a chat.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub turns: u32,
+    /// What it is called: a chat's title, a file's own name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub title: String,
+    /// The form of what a chat was taken from: 'chatgpt', 'claude-ai', 'claude-code', 'pasted'.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub from: String,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// AI use outside the editor, as the author states it: another tool, used for something that belongs to this work.
 /// The editor cannot see such use; this is the author's own word, and the disclosure says so.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -190,6 +218,9 @@ pub struct ExternalEntry {
     /// How the author checked the result.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub checked: String,
+    /// What the author kept with the statement: chats with the tool, or other files.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<Attachment>,
     /// The earlier statement this one takes the place of: a correction, or (with no tool) a withdrawal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replaces: Option<String>,

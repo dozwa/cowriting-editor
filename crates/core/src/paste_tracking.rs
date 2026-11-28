@@ -6,7 +6,8 @@
 //! What is compared: runs of words from an answer that the author had not written themselves
 //! (feedback quotes the author back, so whatever was in the document or the question at the
 //! time is left out). Code, references, DOIs, links and citation keys are never compared.
-//! Text from other AI tools cannot be detected.
+//! Text from other AI tools is found only where the author kept the chat with a statement of
+//! outside use; the app adds those answers to the sources (`cowriting_app::outside`).
 
 use crate::sidecar::content_hash;
 use crate::text::squash;

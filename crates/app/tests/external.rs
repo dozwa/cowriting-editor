@@ -56,3 +56,149 @@ fn the_author_states_outside_ai_use_corrects_it_and_takes_it_back_and_the_disclo
     assert_eq!(std::fs::read_to_string(&document).unwrap(), "# Walking breaks\n");
     let _ = std::fs::remove_dir_all(&folder);
 }
+
+/// A document in a folder of its own, and its open session.
+fn opened(name: &str) -> (std::path::PathBuf, Session) {
+    let folder = std::env::temp_dir().join(format!("cowriting-external-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let document = folder.join("thesis.md").to_string_lossy().into_owned();
+    std::fs::write(&document, "# Walking breaks\n").unwrap();
+    let (session, _) = Session::open(Arc::new(DiskHost), &document).unwrap();
+    (folder, session)
+}
+
+fn fixture(name: &str) -> String {
+    format!("{}/../../fixtures/chats/{name}", env!("CARGO_MANIFEST_DIR"))
+}
+
+fn exported(session: &Session, language: &str, format: &str) -> (String, String) {
+    let options: ExportOptions =
+        serde_json::from_value(serde_json::json!({ "language": language, "format": format, "withPrompts": false, "withAnswers": false, "withOutside": true })).unwrap();
+    let written = session.export(&options).unwrap();
+    assert!(written.paths[1].ends_with(&format!("ai-outside.{language}.{format}")), "{:?}", written.paths);
+    (written.register, std::fs::read_to_string(&written.paths[1]).unwrap())
+}
+
+#[test]
+fn chats_chosen_from_an_export_are_kept_with_a_statement_and_printed_in_the_appendix() {
+    use cowriting_app::outside::{conversations, NewAttachment};
+    let (folder, session) = opened("chats");
+    let export = fixture("chatgpt-conversations.json");
+
+    // the author sees what the export holds, and chooses
+    let offered = conversations(&export).unwrap();
+    assert_eq!(offered.form, "chatgpt");
+    assert_eq!(
+        offered.list.iter().map(|c| (c.title.as_str(), c.date.as_str(), c.turns)).collect::<Vec<_>>(),
+        [("Mixed model in R", "2026-11-01", 2), ("Holiday plans", "2026-11-02", 1)]
+    );
+    assert_eq!(conversations(&folder.join("thesis.md").to_string_lossy()).unwrap().form, "", "a file that is no chat can only be kept as a file");
+
+    let stated = ExternalUse {
+        tool: "ChatGPT".into(),
+        purpose: "R code for the mixed model".into(),
+        add: vec![
+            NewAttachment::Chats { path: export.clone(), conversations: vec![0] },
+            NewAttachment::Chats { path: fixture("claude-code-session.jsonl"), conversations: vec![0] },
+            NewAttachment::Text { text: "Frage: Reichen 48?\nAntwort: Für eine Pilotstudie ja.".into() },
+            NewAttachment::Text { text: "Notes I took while using the tool.".into() },
+            NewAttachment::File { path: folder.join("thesis.md").to_string_lossy().into_owned() },
+        ],
+        ..Default::default()
+    };
+    session.state_external(&stated).unwrap();
+    let view = session.log_view("").unwrap();
+    let kept = &view.external[0].attachments;
+    assert_eq!(
+        kept.iter().map(|a| (a.kind.as_str(), a.turns, a.from.as_str(), a.state.as_str())).collect::<Vec<_>>(),
+        [("chat", 2, "chatgpt", "intact"), ("chat", 2, "claude-code", "intact"), ("chat", 1, "pasted", "intact"), ("text", 0, "", "intact"), ("file", 0, "", "intact"),]
+    );
+    assert_eq!(kept[4].title, "thesis.md");
+    let external = folder.join(".cowriting/thesis.md/external");
+    assert_eq!(std::fs::read_dir(&external).unwrap().count(), 5);
+    // only what was chosen is beside the document: not the other conversation, not the branch left behind, not the tools' output
+    let everything: String = std::fs::read_dir(&external).unwrap().map(|file| std::fs::read_to_string(file.unwrap().path()).unwrap()).collect();
+    for absent in ["Lisbon", "regenerated", "exit code 0", "id,a,b", "/work/analysis"] {
+        assert!(!everything.contains(absent), "{absent} was kept");
+    }
+    let chat = std::fs::read_to_string(external.join(&kept[0].file)).unwrap();
+    assert!(chat.contains("\"from\": \"chatgpt-conversations.json\"") && chat.contains("\"fromSha256\""), "{chat}");
+    assert_eq!(kept[0].sha256.len(), 64);
+
+    // the register names each file, the appendix prints the chats
+    let (register, appendix) = exported(&session, "en", "md");
+    let short: String = kept[0].sha256.chars().take(12).collect();
+    assert!(
+        register
+            .contains(&format!("Kept with it: chat “Mixed model in R” (ChatGPT export, 2 exchanges, file {}, SHA-256 {short}…); chat “Limits of agreement script”", kept[0].file)),
+        "{register}"
+    );
+    assert!(register.contains("file “thesis.md”") && register.contains("pasted text (file text-"), "{register}");
+    assert!(appendix.starts_with("# Appendix: AI use outside the editor"), "{appendix}");
+    assert!(appendix.contains("The editor did not see this use.") && appendix.contains(&kept[0].sha256), "{appendix}");
+    assert!(appendix.contains("## ChatGPT\n\nUsed for: R code for the mixed model"), "{appendix}");
+    assert!(appendix.contains("Model: gpt-x · Begun: 2026-11-01 · Tool calls, files and pictures left out: 3 · Messages on branches not continued, left out: 1"), "{appendix}");
+    assert!(appendix.contains("**1. Asked · 2026-11-01 09:00:**\n\n> How do I fit a mixed model with a random slope in R?\n\n**Answered:**\n\n> Use lme4:"), "{appendix}");
+    assert!(
+        appendix.contains("> Für eine Pilotstudie ja.") && appendix.contains("> Notes I took while using the tool.") && appendix.contains("Kept as a file; not printed here."),
+        "{appendix}"
+    );
+    assert!(appendix.contains("### chat (pasted text, 1 exchange, file chat-"), "{appendix}");
+    let (german_register, _) = exported(&session, "de", "md");
+    assert!(
+        german_register.contains("Dazu abgelegt: Chat „Mixed model in R“ (ChatGPT-Export, 2 Wechsel, Datei ")
+            && german_register.contains("Chat (eingefügter Text, 1 Wechsel, Datei "),
+        "{german_register}"
+    );
+    let (_, german) = exported(&session, "de", "tex");
+    assert!(german.contains("\\section*{Anhang: KI-Nutzung außerhalb des Editors}") && german.contains("\\item \\textit{Gefragt (2026-11-01 09:00):} How do I fit"), "{german}");
+    assert!(german.contains("\\allowbreak{}"), "the checksum can break: {german}");
+
+    // a file changed after it was kept is said to be changed, and is not printed
+    std::fs::write(external.join(&kept[0].file), chat.replace("lme4", "nlme")).unwrap();
+    assert_eq!(session.log_view("").unwrap().external[0].attachments[0].state, "changed");
+    let (_, appendix) = exported(&session, "en", "md");
+    assert!(appendix.contains("This file was changed after it was kept; it is not printed.") && !appendix.contains("nlme") && !appendix.contains("random slope"), "{appendix}");
+
+    // a correction that leaves a file out takes it away; a withdrawal takes all of them
+    let mut corrected = view.external[0].clone();
+    corrected.attachments.remove(0);
+    corrected.add = vec![NewAttachment::Chats { path: export, conversations: vec![7] }];
+    assert!(session.state_external(&corrected).is_err(), "there is no eighth conversation");
+    assert_eq!(std::fs::read_dir(&external).unwrap().count(), 5, "a statement that did not come about leaves the files as they were");
+    corrected.add = Vec::new();
+    session.state_external(&corrected).unwrap();
+    assert_eq!(std::fs::read_dir(&external).unwrap().count(), 4);
+    let view = session.log_view("").unwrap();
+    assert_eq!(view.external[0].attachments.len(), 4);
+    session.withdraw_external(&view.external[0].id).unwrap();
+    assert_eq!(std::fs::read_dir(&external).unwrap().count(), 0);
+    assert_eq!(std::fs::read_to_string(folder.join("thesis.md")).unwrap(), "# Walking breaks\n");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn text_pasted_from_a_kept_chat_is_found_and_the_disclosure_says_where_it_is_from() {
+    use cowriting_app::outside::NewAttachment;
+    let (folder, session) = opened("paste");
+    let answer = "A random slope lets the effect of walking breaks differ between participants, which a random intercept alone cannot express in the model.";
+    session
+        .state_external(&ExternalUse {
+            tool: "ChatGPT".into(),
+            purpose: "Explaining the model".into(),
+            add: vec![NewAttachment::Text { text: format!("Prompt: Why a random slope?\nAnswer: {answer}") }],
+            ..Default::default()
+        })
+        .unwrap();
+    let text = format!("# Walking breaks\n\n{answer}\n");
+    let found = session.report_paste(answer, 3, &text).unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!((found[0].outside.as_str(), found[0].asked.as_str(), found[0].turn.as_str()), ("ChatGPT", "Why a random slope?", ""));
+    assert!(session.report_paste(answer, 3, &text).unwrap().is_empty(), "found once");
+    let (register, _) = exported(&session, "en", "md");
+    assert!(register.contains("from a kept chat with ChatGPT, answer to “Why a random slope?”"), "{register}");
+    // what the author wrote in the question is theirs
+    assert!(session.report_paste("Why a random slope?", 5, &text).unwrap().is_empty());
+    let _ = std::fs::remove_dir_all(&folder);
+}

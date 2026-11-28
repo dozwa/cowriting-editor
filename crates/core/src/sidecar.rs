@@ -142,6 +142,12 @@ impl Sidecar {
         format!("{}/disclosure", self.dir())
     }
 
+    /// What the author kept with statements of AI use outside the editor: chats and other files.
+    /// Neither the AI nor a turn writes here.
+    pub fn external_dir(&self) -> String {
+        format!("{}/external", self.dir())
+    }
+
     pub fn rewrites_dir(&self) -> String {
         format!("{}/log-rewrites", self.dir())
     }

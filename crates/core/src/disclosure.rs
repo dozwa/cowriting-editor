@@ -5,8 +5,9 @@
 //! tests compare. `Profile::Editor` says the same about a document written in the editor, where
 //! the wording about Claude Code, the plugin and git would be untrue.
 
+use crate::chats::Chat;
 use crate::text::{first_chars, py_splitlines, py_squash, py_strip};
-use crate::types::{AnnotationEntry, GuardEntry, LogEntry, PromptEntry, ResponseEntry};
+use crate::types::{AnnotationEntry, Attachment, ExternalEntry, GuardEntry, LogEntry, PromptEntry, ResponseEntry};
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -418,10 +419,34 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 (false, false) => "; no longer in the text",
                 (false, true) => "; nicht mehr im Text",
             });
-            let mut line = if de {
-                format!("{}: „{}“ ({how}, {} Wörter, {closeness}; aus der Antwort auf „{asked}“{})", day(&found.ts), found.excerpt, found.words, state.unwrap_or(""))
-            } else {
-                format!("{}: “{}” ({how}, {} words, {closeness}; from the answer to “{asked}”{})", day(&found.ts), found.excerpt, found.words, state.unwrap_or(""))
+            // a passage from a chat with another tool, which the author kept with a statement
+            let outside = found.extra.get("outside").and_then(|tool| tool.as_str());
+            let asked = found.extra.get("asked").and_then(|asked| asked.as_str()).map_or(asked, |asked| py_squash(asked, Some(80)));
+            let mut line = match (outside, de) {
+                (Some(tool), true) => {
+                    format!(
+                        "{}: „{}“ ({how}, {} Wörter, {closeness}; aus einem abgelegten Chat mit {tool}, Antwort auf „{asked}“{})",
+                        day(&found.ts),
+                        found.excerpt,
+                        found.words,
+                        state.unwrap_or("")
+                    )
+                }
+                (Some(tool), false) => {
+                    format!(
+                        "{}: “{}” ({how}, {} words, {closeness}; from a kept chat with {tool}, answer to “{asked}”{})",
+                        day(&found.ts),
+                        found.excerpt,
+                        found.words,
+                        state.unwrap_or("")
+                    )
+                }
+                (None, true) => {
+                    format!("{}: „{}“ ({how}, {} Wörter, {closeness}; aus der Antwort auf „{asked}“{})", day(&found.ts), found.excerpt, found.words, state.unwrap_or(""))
+                }
+                (None, false) => {
+                    format!("{}: “{}” ({how}, {} words, {closeness}; from the answer to “{asked}”{})", day(&found.ts), found.excerpt, found.words, state.unwrap_or(""))
+                }
             };
             if let Some(comment) = comment.filter(|c| !c.trim().is_empty()) {
                 line.push_str(&if de { format!(" – Kommentar: {}", comment.trim()) } else { format!(" – comment: {}", comment.trim()) });
@@ -435,8 +460,8 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
     }
     let corrections_head = pick("Language corrections taken over from AI answers", "Aus KI-Antworten übernommene Sprachkorrekturen");
     let detection_note = pick(
-        "The editor compares what is pasted or typed into the document with the AI's logged answers and lists matches here. Text from other AI tools cannot be detected.",
-        "Der Editor vergleicht, was in das Dokument eingefügt oder getippt wird, mit den protokollierten KI-Antworten und führt Übereinstimmungen hier auf. Text aus anderen KI-Werkzeugen kann nicht erkannt werden.",
+        "The editor compares what is pasted or typed into the document with the AI's logged answers and lists matches here. Text from other AI tools is found only where the author kept the chat with a statement of outside use.",
+        "Der Editor vergleicht, was in das Dokument eingefügt oder getippt wird, mit den protokollierten KI-Antworten und führt Übereinstimmungen hier auf. Text aus anderen KI-Werkzeugen wird nur gefunden, wo der Chat zu einer Angabe über die Nutzung außerhalb abgelegt wurde.",
     );
     let guards: Vec<&GuardEntry> = entries.iter().filter_map(|e| if let LogEntry::Guard(g) = e { Some(g) } else { None }).collect();
     let changed = guards.iter().filter(|g| !g.refused);
@@ -540,6 +565,10 @@ pub fn disclosure_with_document(entries: &[LogEntry], name: &str, lang: Lang, fo
                 if !text.trim().is_empty() {
                     line.push_str(&format!(" {label} {}", ended(&py_squash(text, None))));
                 }
+            }
+            if !stated.attachments.is_empty() {
+                let kept: Vec<String> = stated.attachments.iter().map(|attachment| attachment_line(attachment, lang, false)).collect();
+                line.push_str(&format!(" {} {}.", pick("Kept with it:", "Dazu abgelegt:"), kept.join("; ")));
             }
             line
         })
@@ -777,4 +806,186 @@ pub fn prompts_appendix(entries: &[LogEntry], name: &str, lang: Lang, format: Do
         }
     }
     out.join("\n")
+}
+
+/// One kept file as the disclosure names it. The register has the beginning of the hash, the appendix all of it.
+fn attachment_line(attachment: &Attachment, lang: Lang, whole_hash: bool) -> String {
+    let de = lang == Lang::De;
+    let hash = if whole_hash { attachment.sha256.clone() } else { format!("{}…", attachment.sha256.chars().take(12).collect::<String>()) };
+    let name = if attachment.title.is_empty() { attachment.file.clone() } else { attachment.title.clone() };
+    let from = if attachment.from.is_empty() { String::new() } else { format!("{}, ", crate::chats::form_label(&attachment.from, de)) };
+    // a chat without a title is named by its file only
+    let titled = match (attachment.title.is_empty(), de) {
+        (true, _) => String::new(),
+        (false, false) => format!(" “{name}”"),
+        (false, true) => format!(" „{name}“"),
+    };
+    let exchanges = match (attachment.turns, de) {
+        (1, false) => "1 exchange".to_string(),
+        (n, false) => format!("{n} exchanges"),
+        (1, true) => "1 Wechsel".to_string(),
+        (n, true) => format!("{n} Wechsel"),
+    };
+    match (attachment.kind.as_str(), de) {
+        ("chat", false) => format!("chat{titled} ({from}{exchanges}, file {}, SHA-256 {hash})", attachment.file),
+        ("chat", true) => format!("Chat{titled} ({from}{exchanges}, Datei {}, SHA-256 {hash})", attachment.file),
+        ("text", false) => format!("pasted text (file {}, SHA-256 {hash})", attachment.file),
+        ("text", true) => format!("eingefügter Text (Datei {}, SHA-256 {hash})", attachment.file),
+        (_, false) => format!("file “{name}” ({}, SHA-256 {hash})", attachment.file),
+        (_, true) => format!("Datei „{name}“ ({}, SHA-256 {hash})", attachment.file),
+    }
+}
+
+/// A kept file as it is found when the appendix is written.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Kept {
+    /// A conversation the editor read when it was kept.
+    Chat(Chat),
+    /// Pasted text, as it was.
+    Text(String),
+    /// Another file: named, not printed.
+    File,
+    /// The file is no longer what the log says it was.
+    Changed,
+    Missing,
+}
+
+/// The appendix of AI use outside the editor: every statement that has files kept with it, each
+/// file by name and SHA-256, and the chats among them in full. `kept` gives a file as it is now.
+/// None of this was seen by the editor, and the appendix says so. Editor profile only.
+pub fn outside_appendix(entries: &[LogEntry], kept: &dyn Fn(&Attachment) -> Kept, name: &str, lang: Lang, format: DocFormat) -> String {
+    let de = lang == Lang::De;
+    let pick = |en: &str, german: &str| if de { german.to_string() } else { en.to_string() };
+    let title = pick("Appendix: AI use outside the editor", "Anhang: KI-Nutzung außerhalb des Editors");
+    let intro = if de {
+        format!(
+            "Chats und Dateien aus anderen KI-Werkzeugen zur Arbeit „{name}“, wie die Autorin oder der Autor sie abgelegt hat. Der Editor hat diese Nutzung nicht gesehen. \
+             Die Prüfsumme (SHA-256) zeigt, dass eine Datei seit dem Ablegen unverändert ist, nicht, dass der Chat so stattgefunden hat. \
+             Werkzeugaufrufe, Dateien und Bilder innerhalb eines Chats sind ausgelassen und gezählt."
+        )
+    } else {
+        format!(
+            "Chats and files from other AI tools for “{name}”, as the author kept them. The editor did not see this use. \
+             The checksum (SHA-256) shows that a file is unchanged since it was kept, not that the chat took place as it says. \
+             Tool calls, files and pictures inside a chat are left out and counted."
+        )
+    };
+    let (asked_head, answer_head) = (pick("Asked", "Gefragt"), pick("Answered", "Geantwortet"));
+    let changed = pick("This file was changed after it was kept; it is not printed.", "Diese Datei wurde nach dem Ablegen verändert; sie wird nicht abgedruckt.");
+    let missing = pick("This file is no longer there.", "Diese Datei ist nicht mehr vorhanden.");
+    let not_printed = pick("Kept as a file; not printed here.", "Als Datei abgelegt; hier nicht abgedruckt.");
+    let about = |chat: &Chat| -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if !chat.model.is_empty() {
+            parts.push(format!("{} {}", pick("Model:", "Modell:"), chat.model));
+        }
+        if !chat.date.is_empty() {
+            parts.push(format!("{} {}", pick("Begun:", "Begonnen:"), chat.date));
+        }
+        if chat.left_out() > 0 {
+            parts.push(format!("{} {}", pick("Tool calls, files and pictures left out:", "Ausgelassene Werkzeugaufrufe, Dateien und Bilder:"), chat.left_out()));
+        }
+        if chat.other_branches > 0 {
+            parts.push(format!("{} {}", pick("Messages on branches not continued, left out:", "Ausgelassene Nachrichten auf nicht fortgeführten Zweigen:"), chat.other_branches));
+        }
+        parts.join(" · ")
+    };
+    let or_dash = |text: &str| if text.trim().is_empty() { "–".to_string() } else { text.trim().to_string() };
+    let quoted = |text: &str| -> Vec<String> { py_splitlines(&or_dash(text)).iter().map(|line| format!("> {line}")).collect() };
+    let statements: Vec<ExternalEntry> = crate::types::external_uses(entries).into_iter().filter(|stated| !stated.attachments.is_empty()).collect();
+    let heading = |stated: &ExternalEntry| {
+        let model = if stated.model.trim().is_empty() { String::new() } else { format!(" ({})", stated.model.trim()) };
+        let date = if stated.date.trim().is_empty() { String::new() } else { format!("{}: ", stated.date.trim()) };
+        format!("{date}{}{model}", stated.tool.trim())
+    };
+
+    let mut out: Vec<String> = Vec::new();
+    match format {
+        DocFormat::Md => {
+            out.extend([format!("# {title}"), String::new(), intro, String::new()]);
+            for stated in &statements {
+                out.extend([
+                    format!("## {}", heading(stated)),
+                    String::new(),
+                    format!("{} {}", pick("Used for:", "Verwendet für:"), py_squash(&stated.purpose, None)),
+                    String::new(),
+                ]);
+                for attachment in &stated.attachments {
+                    out.extend([format!("### {}", attachment_line(attachment, lang, true)), String::new()]);
+                    match kept(attachment) {
+                        Kept::Chat(chat) => {
+                            if !about(&chat).is_empty() {
+                                out.extend([about(&chat), String::new()]);
+                            }
+                            for (number, turn) in chat.turns.iter().enumerate() {
+                                let when = if turn.at.is_empty() { String::new() } else { format!(" · {}", minute(&turn.at)) };
+                                out.extend([format!("**{}. {asked_head}{when}:**", number + 1), String::new()]);
+                                out.extend(quoted(&turn.prompt));
+                                out.extend([String::new(), format!("**{answer_head}:**"), String::new()]);
+                                out.extend(quoted(&turn.answer));
+                                out.push(String::new());
+                            }
+                        }
+                        Kept::Text(text) => {
+                            out.extend(quoted(&text));
+                            out.push(String::new());
+                        }
+                        Kept::File => out.extend([not_printed.clone(), String::new()]),
+                        Kept::Changed => out.extend([changed.clone(), String::new()]),
+                        Kept::Missing => out.extend([missing.clone(), String::new()]),
+                    }
+                }
+            }
+        }
+        DocFormat::Tex => {
+            let e = tex_escape;
+            out.extend(tex_note(lang));
+            out.extend([format!("\\section*{{{}}}", e(&title)), String::new(), e(&intro), String::new()]);
+            for stated in &statements {
+                out.extend([
+                    format!("\\subsection*{{{}}}", e(&heading(stated))),
+                    format!("{} {}", e(&pick("Used for:", "Verwendet für:")), e(&py_squash(&stated.purpose, None))),
+                    String::new(),
+                ]);
+                for attachment in &stated.attachments {
+                    // a checksum has no place to break; the line is ragged so it need not be stretched
+                    out.extend(["{\\raggedright\\sloppy".to_string(), format!("\\textbf{{{}}}\\par}}", breakable_hash(&e(&attachment_line(attachment, lang, true))))]);
+                    match kept(attachment) {
+                        Kept::Chat(chat) => {
+                            if !about(&chat).is_empty() {
+                                out.push(format!("{}\\par", e(&about(&chat))));
+                            }
+                            out.push("\\begin{enumerate}".into());
+                            for turn in &chat.turns {
+                                let when = if turn.at.is_empty() { String::new() } else { format!(" ({})", minute(&turn.at)) };
+                                out.push(format!("  \\item \\textit{{{}{}:}} {}", e(&asked_head), e(&when), e(&py_squash(&or_dash(&turn.prompt), None))));
+                                out.push(format!("  \\\\ \\textit{{{}:}} {}", e(&answer_head), e(&py_squash(&or_dash(&turn.answer), None))));
+                            }
+                            out.push("\\end{enumerate}".into());
+                        }
+                        Kept::Text(text) => out.extend(["\\begin{quote}".to_string(), e(&py_squash(&or_dash(&text), None)), "\\end{quote}".to_string()]),
+                        Kept::File => out.push(e(&not_printed)),
+                        Kept::Changed => out.push(e(&changed)),
+                        Kept::Missing => out.push(e(&missing)),
+                    }
+                    out.push(String::new());
+                }
+            }
+        }
+    }
+    out.join("\n")
+}
+
+/// A checksum may be broken after every eight characters.
+fn breakable_hash(escaped: &str) -> String {
+    let mut out = String::new();
+    let mut run = 0;
+    for c in escaped.chars() {
+        run = if c.is_ascii_hexdigit() { run + 1 } else { 0 };
+        out.push(c);
+        if run > 0 && run % 8 == 0 {
+            out.push_str("\\allowbreak{}");
+        }
+    }
+    out
 }

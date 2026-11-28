@@ -7,6 +7,7 @@ pub mod export;
 pub mod feedback;
 pub mod layouts;
 pub mod linked;
+pub mod outside;
 pub mod picture;
 pub mod preferences;
 pub mod shown;
@@ -19,10 +20,10 @@ use cowriting_backends::fake::FakeBackend;
 use cowriting_backends::openai::{OpenAiBackend, OPENAI_BASE_URL};
 use cowriting_core::backend::Backend;
 use cowriting_core::briefs::{parse_briefs, set_brief};
-use cowriting_core::disclosure::{disclosure_with_document, prompts_appendix, turns, DocFormat, Lang, Profile};
+use cowriting_core::disclosure::{disclosure_with_document, outside_appendix, prompts_appendix, turns, DocFormat, Kept, Lang, Profile};
 use cowriting_core::host::Host;
 use cowriting_core::log::{flatten, readable};
-use cowriting_core::paste_tracking::{check, is_logged, sources, still_in_text, Found};
+use cowriting_core::paste_tracking::{check, is_logged, sources, still_in_text, Found, Source};
 use cowriting_core::personas::{id_from_name, is_custom_id, persona_file, shared_palette, Persona};
 use cowriting_core::project::{LinkedFile, Project, LONGEST_FILE};
 use cowriting_core::review::{check_points, live_review, read_check, read_plan, CheckSummary, LiveHint, LiveOutcome, LiveSettings, LiveState};
@@ -144,6 +145,27 @@ pub struct ExternalUse {
     pub material: String,
     pub result: String,
     pub checked: String,
+    /// What is kept with the statement. In a correction: the ones that stay; one that is left out is taken away.
+    pub attachments: Vec<Attached>,
+    /// What the author adds with this statement.
+    #[serde(skip_serializing)]
+    pub add: Vec<outside::NewAttachment>,
+}
+
+/// A file kept with a statement of outside AI use, as the log names it and as it is now.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Attached {
+    pub file: String,
+    /// 'chat', 'text' or 'file'.
+    pub kind: String,
+    pub bytes: u64,
+    pub sha256: String,
+    pub turns: u32,
+    pub title: String,
+    pub from: String,
+    /// 'intact', 'changed' (the file is not what was kept) or 'missing'.
+    pub state: String,
 }
 
 /// A passage of the document that matches a logged answer.
@@ -164,6 +186,8 @@ pub struct AiTextRow {
     pub line: usize,
     /// The turn whose answer it matches, and what the author had asked.
     pub turn: String,
+    /// The tool, when the passage is from a chat the author kept with a statement of outside use.
+    pub outside: String,
     pub asked: String,
     /// The author's comment on it.
     pub note: String,
@@ -181,6 +205,9 @@ pub struct ExportOptions {
     pub with_prompts: bool,
     /// The appendix includes the AI's answers.
     pub with_answers: bool,
+    /// Also write the appendix of AI use outside the editor: the chats and files kept with the statements.
+    #[serde(default)]
+    pub with_outside: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -425,9 +452,12 @@ pub const SCOPE_TEMPLATE: &str = "## Goal\n\n\n## Targets\n- Words: \n- Figures:
 pub const SCOPE_TEMPLATE_DE: &str = "## Ziel\n\n\n## Umfang\n- Wörter: \n- Abbildungen: \n- Tabellen: \n- Quellen: \n- Abgabe: \n\n## Abschnitte\n\n\n## Kernaussagen\n";
 
 fn ai_text_row(found: &AiTextEntry, entries: &[LogEntry], document_text: &str) -> AiTextRow {
-    let asked = entries.iter().find_map(|e| match e {
-        LogEntry::Prompt(p) if p.id == found.reference => Some(readable(&p.text)),
-        _ => None,
+    let outside = found.extra.get("outside").and_then(|tool| tool.as_str());
+    let asked = found.extra.get("asked").and_then(|asked| asked.as_str()).map(str::to_string).or_else(|| {
+        entries.iter().find_map(|e| match e {
+            LogEntry::Prompt(p) if p.id == found.reference => Some(readable(&p.text)),
+            _ => None,
+        })
     });
     let note = entries.iter().rev().find_map(|e| match e {
         LogEntry::Annotation(a) if a.reference == found.id => a.note.clone(),
@@ -442,7 +472,9 @@ fn ai_text_row(found: &AiTextEntry, entries: &[LogEntry], document_text: &str) -
         words: found.words,
         excerpt: found.excerpt.clone(),
         line: found.line,
-        turn: found.reference.clone(),
+        // a passage from a kept chat has no turn in this log to open
+        turn: if outside.is_some() { String::new() } else { found.reference.clone() },
+        outside: outside.unwrap_or_default().to_string(),
         asked: asked.unwrap_or_default(),
         note: note.unwrap_or_default(),
         still_in_text: still_in_text(found, document_text),
@@ -541,7 +573,9 @@ impl Session {
         let host = self.workspace.host.as_ref();
         let mut entries = self.workspace.log.read().map_err(error)?;
         let snapshots = self.workspace.sidecar.snapshots_dir();
-        let known = sources(&entries, &|id| host.read(&format!("{snapshots}/{id}.md")).ok());
+        let mut known = sources(&entries, &|id| host.read(&format!("{snapshots}/{id}.md")).ok());
+        let (outside, about) = self.outside_sources(&entries);
+        known.extend(outside);
         let mut rows = Vec::new();
         for (passage, line) in passages {
             let Some(found) = check(passage, &known).filter(|found| !is_logged(&entries, found)) else { continue };
@@ -562,6 +596,11 @@ impl Session {
                 line,
                 ..Default::default()
             };
+            let mut entry = entry;
+            if let Some((tool, asked)) = about.get(&entry.reference) {
+                entry.extra.insert("outside".into(), serde_json::json!(tool));
+                entry.extra.insert("asked".into(), serde_json::json!(readable(asked).chars().take(200).collect::<String>()));
+            }
             self.workspace.log.append(&LogEntry::AiText(entry.clone())).map_err(error)?;
             entries.push(LogEntry::AiText(entry.clone()));
             rows.push(ai_text_row(&entry, &entries, document_text));
@@ -1164,38 +1203,72 @@ impl Session {
     }
 
     /// The author states AI use outside the editor, or corrects an earlier statement (`id` given).
-    /// The log only grows: a correction is a new entry that names the one it replaces.
+    /// The log only grows: a correction is a new entry that names the one it replaces. What the
+    /// author adds (`add`) is kept in the sidecar's `external/`; a kept file that a correction no
+    /// longer names is taken away, and the log still says that it was there.
     pub fn state_external(&self, stated: &ExternalUse) -> Result<(), String> {
         let one_line = |text: &str, most: usize| text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(most).collect::<String>();
         let (tool, purpose) = (one_line(&stated.tool, 80), one_line(&stated.purpose, 600));
         if tool.is_empty() || purpose.is_empty() {
             return Err("A statement of AI use needs the tool and what it was used for.".into());
         }
-        self.append_external(ExternalEntry {
-            tool,
-            purpose,
-            model: one_line(&stated.model, 80),
-            date: one_line(&stated.date, 40),
-            material: one_line(&stated.material, 600),
-            result: one_line(&stated.result, 600),
-            checked: one_line(&stated.checked, 600),
-            replaces: Some(stated.id.clone()).filter(|id| !id.is_empty()),
-            ..Default::default()
-        })
+        let (host, folder) = (self.workspace.host.as_ref(), self.workspace.sidecar.external_dir());
+        let before = if stated.id.is_empty() { Vec::new() } else { self.standing(&stated.id)?.attachments };
+        let (mut attachments, dropped): (Vec<_>, Vec<_>) = before.into_iter().partition(|old| stated.attachments.iter().any(|kept| kept.file == old.file));
+        if !stated.add.is_empty() {
+            self.workspace.sidecar.ensure(host, &self.saved.lock().unwrap()).map_err(error)?;
+        }
+        let mut added = Vec::new();
+        let kept = stated.add.iter().try_for_each(|new| {
+            added.extend(outside::keep(&folder, new, &|| host.new_id())?);
+            if attachments.len() + added.len() > outside::MOST {
+                return Err(format!("A statement holds {} files at most.", outside::MOST));
+            }
+            Ok(())
+        });
+        attachments.extend(added.iter().cloned());
+        let logged = kept.and_then(|()| {
+            self.append_external(ExternalEntry {
+                tool,
+                purpose,
+                model: one_line(&stated.model, 80),
+                date: one_line(&stated.date, 40),
+                material: one_line(&stated.material, 600),
+                result: one_line(&stated.result, 600),
+                checked: one_line(&stated.checked, 600),
+                attachments,
+                replaces: Some(stated.id.clone()).filter(|id| !id.is_empty()),
+                ..Default::default()
+            })
+        });
+        // what was written for a statement that did not come about is not left behind
+        for gone in if logged.is_ok() { &dropped } else { &added } {
+            outside::remove(&folder, gone);
+        }
+        logged
     }
 
-    /// The author takes a statement of outside AI use back. It stays in the log, and is no longer in the disclosure.
+    /// The author takes a statement of outside AI use back. It stays in the log, and is no longer
+    /// in the disclosure; what was kept with it is taken away.
     pub fn withdraw_external(&self, id: &str) -> Result<(), String> {
-        self.append_external(ExternalEntry { replaces: Some(id.to_string()), ..Default::default() })
+        let kept = self.standing(id)?.attachments;
+        self.append_external(ExternalEntry { replaces: Some(id.to_string()), ..Default::default() })?;
+        for gone in &kept {
+            outside::remove(&self.workspace.sidecar.external_dir(), gone);
+        }
+        Ok(())
+    }
+
+    /// The statement with this id, if it holds now.
+    fn standing(&self, id: &str) -> Result<ExternalEntry, String> {
+        let entries = self.workspace.log.read().map_err(error)?;
+        cowriting_core::types::external_uses(&entries).into_iter().find(|e| e.id == id).ok_or_else(|| "That statement is not in the log, or was already replaced.".to_string())
     }
 
     fn append_external(&self, mut entry: ExternalEntry) -> Result<(), String> {
         let (host, workspace) = (self.workspace.host.as_ref(), &self.workspace);
-        let entries = workspace.log.read().map_err(error)?;
         if let Some(old) = &entry.replaces {
-            if !cowriting_core::types::external_uses(&entries).iter().any(|e| &e.id == old) {
-                return Err("That statement is not in the log, or was already replaced.".into());
-            }
+            self.standing(old)?;
         }
         workspace.sidecar.ensure(host, &self.saved.lock().unwrap()).map_err(error)?;
         entry.id = host.new_id();
@@ -1203,6 +1276,24 @@ impl Session {
         entry.session = workspace.session.clone();
         entry.paper = workspace.sidecar.name.clone();
         workspace.log.append(&LogEntry::External(entry)).map_err(error)
+    }
+
+    /// The answers in the chats the author kept, to compare what enters the document with; and
+    /// for each, the tool and what was asked.
+    fn outside_sources(&self, entries: &[LogEntry]) -> (Vec<Source>, BTreeMap<String, (String, String)>) {
+        let folder = self.workspace.sidecar.external_dir();
+        let (mut sources, mut about) = (Vec::new(), BTreeMap::new());
+        for stated in cowriting_core::types::external_uses(entries) {
+            for attachment in stated.attachments.iter().filter(|attachment| attachment.kind == "chat") {
+                let Kept::Chat(chat) = outside::found(&folder, attachment) else { continue };
+                for (number, turn) in chat.turns.iter().enumerate() {
+                    let reference = format!("external:{}#{}", attachment.file, number + 1);
+                    sources.push(Source::new(&reference, "text", &turn.answer, &[&turn.prompt]));
+                    about.insert(reference, (if chat.tool.is_empty() { stated.tool.clone() } else { chat.tool.clone() }, turn.prompt.clone()));
+                }
+            }
+        }
+        (sources, about)
     }
 
     /// Ends the answer under way: what was read so far is logged as an incomplete answer.
@@ -1349,7 +1440,21 @@ impl Session {
         let ai_text = entries.iter().rev().filter_map(|e| if let LogEntry::AiText(found) = e { Some(ai_text_row(found, &entries, document_text)) } else { None }).collect();
         let external = cowriting_core::types::external_uses(&entries)
             .into_iter()
-            .map(|e| ExternalUse { id: e.id, tool: e.tool, model: e.model, date: e.date, purpose: e.purpose, material: e.material, result: e.result, checked: e.checked })
+            .map(|e| {
+                let attachments = e.attachments.iter().map(|a| self.attached(a)).collect();
+                ExternalUse {
+                    id: e.id,
+                    tool: e.tool,
+                    model: e.model,
+                    date: e.date,
+                    purpose: e.purpose,
+                    material: e.material,
+                    result: e.result,
+                    checked: e.checked,
+                    attachments,
+                    add: Vec::new(),
+                }
+            })
             .collect();
         Ok(LogView {
             stats: compute_stats(&entries, &today, &party),
@@ -1362,7 +1467,12 @@ impl Session {
         })
     }
 
-    /// Writes the AI register, and the prompts appendix if asked for, into the sidecar's `disclosure/`.
+    fn attached(&self, a: &cowriting_core::types::Attachment) -> Attached {
+        let state = outside::state(&self.workspace.sidecar.external_dir(), a).to_string();
+        Attached { file: a.file.clone(), kind: a.kind.clone(), bytes: a.bytes, sha256: a.sha256.clone(), turns: a.turns, title: a.title.clone(), from: a.from.clone(), state }
+    }
+
+    /// Writes the AI register, and the appendices asked for, into the sidecar's `disclosure/`.
     pub fn export(&self, options: &ExportOptions) -> Result<Exported, String> {
         let lang = if options.language == "de" { Lang::De } else { Lang::En };
         let (format, extension) = if options.format == "tex" { (DocFormat::Tex, "tex") } else { (DocFormat::Md, "md") };
@@ -1378,6 +1488,13 @@ impl Session {
             let appendix = prompts_appendix(&entries, name, lang, format, options.with_answers, Profile::Editor);
             paths.push(format!("{folder}/ai-prompts.{language}.{extension}"));
             host.write(&paths[1], &appendix).map_err(|e| format!("The prompts appendix could not be written: {e}"))?;
+        }
+        if options.with_outside {
+            let kept = self.workspace.sidecar.external_dir();
+            let appendix = outside_appendix(&entries, &|attachment| outside::found(&kept, attachment), name, lang, format);
+            let path = format!("{folder}/ai-outside.{language}.{extension}");
+            host.write(&path, &appendix).map_err(|e| format!("The appendix of outside AI use could not be written: {e}"))?;
+            paths.push(path);
         }
         Ok(Exported { paths, register })
     }

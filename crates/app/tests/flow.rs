@@ -114,7 +114,7 @@ async fn open_ask_classify_export_and_everything_is_on_disk() {
     assert!(std::fs::read_to_string(folder.path(log_file)).unwrap().starts_with(&log), "the log only grew");
 
     // the disclosure, read from the file it was written to
-    let exported = session.export(&ExportOptions { language: "en".into(), format: "md".into(), with_prompts: true, with_answers: true }).unwrap();
+    let exported = session.export(&ExportOptions { language: "en".into(), format: "md".into(), with_prompts: true, with_answers: true, with_outside: false }).unwrap();
     assert_eq!(exported.paths.len(), 2);
     let register = std::fs::read_to_string(&exported.paths[0]).unwrap();
     assert!(exported.paths[0].ends_with(".cowriting/thesis.md/disclosure/ai-register.en.md"));
@@ -294,15 +294,19 @@ async fn ai_text_that_enters_the_document_is_logged_once_and_declared() {
     for (language, gone, head) in
         [("en", "no longer in the text", "## Language corrections taken over from AI answers"), ("de", "nicht mehr im Text", "## Aus KI-Antworten übernommene Sprachkorrekturen")]
     {
-        let exported = session.export(&ExportOptions { language: language.into(), format: "md".into(), with_prompts: false, with_answers: false }).unwrap();
+        let exported = session.export(&ExportOptions { language: language.into(), format: "md".into(), with_prompts: false, with_answers: false, with_outside: false }).unwrap();
         let register = exported.register;
         let (ai_text, corrections) = register.split_once(head).unwrap_or_else(|| panic!("no section {head:?} in\n{register}"));
         assert!(ai_text.contains(&SENTENCE[..SENTENCE.len() - 1]) && ai_text.contains(gone) && ai_text.contains("Kept as a placeholder, to be rewritten."), "{register}");
         assert!(ai_text.contains("Write me a sentence on assignment."));
         assert!(corrections.contains(&CORRECTED[..CORRECTED.len() - 1]) && !ai_text.contains(&CORRECTED[..CORRECTED.len() - 1]));
-        assert!(ai_text.contains(if language == "en" { "Text from other AI tools cannot be detected." } else { "Text aus anderen KI-Werkzeugen kann nicht erkannt werden." }));
+        assert!(ai_text.contains(if language == "en" {
+            "Text from other AI tools is found only where the author kept the chat"
+        } else {
+            "Text aus anderen KI-Werkzeugen wird nur gefunden, wo der Chat"
+        }));
     }
-    let tex = session.export(&ExportOptions { language: "en".into(), format: "tex".into(), with_prompts: false, with_answers: false }).unwrap().register;
+    let tex = session.export(&ExportOptions { language: "en".into(), format: "tex".into(), with_prompts: false, with_answers: false, with_outside: false }).unwrap().register;
     assert!(tex.contains("\\subsection*{\\raggedright Language corrections taken over from AI answers}") && tex.contains("still in the text"));
 }
 
