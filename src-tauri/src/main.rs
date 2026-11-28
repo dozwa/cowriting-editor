@@ -914,6 +914,12 @@ fn set_project_goal(editor: State<Editor>, goal: String, words: Option<u32>) -> 
     editor.session()?.set_project_goal(&goal, words)
 }
 
+/// Whether the AI may read the project's other files when it is asked in one of them.
+#[tauri::command]
+fn set_project_ai_reads_files(editor: State<Editor>, may: bool) -> Result<(), String> {
+    editor.session()?.set_project_ai_reads_files(may)
+}
+
 #[tauri::command]
 fn scope(editor: State<Editor>, document_text: String) -> Result<ScopeView, String> {
     Ok(editor.session()?.scope_view(&document_text))
@@ -1174,6 +1180,7 @@ fn main() {
             order_project_files,
             rename_project_file,
             set_project_goal,
+            set_project_ai_reads_files,
             get_settings,
             set_settings,
             set_preferences,

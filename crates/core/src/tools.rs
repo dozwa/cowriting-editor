@@ -75,12 +75,19 @@ pub fn tool_defs() -> Vec<ToolDef> {
     ]
 }
 
+/// Whether the AI may read the other files of the project this document is one of: only where the
+/// author switched that on for the project (the Project tab).
+pub fn reads_project(host: &dyn Host, sidecar: &Sidecar) -> bool {
+    sidecar.shared.as_ref().and_then(|shared| crate::project_file::ProjectFile::load(host, &shared.file)).is_some_and(|project| project.ai_reads_files)
+}
+
 /// The tools for a document: those every document has, and for one file of a project of several
-/// the tools that read the project's other files. They only read: no tool takes a path, a file is
-/// named as the project's own list names it, and nothing but that list's files is reached.
-pub fn tool_defs_for(sidecar: &Sidecar) -> Vec<ToolDef> {
+/// whose author allowed it, the tools that read the project's other files. They only read: no
+/// tool takes a path, a file is named as the project's own list names it, and nothing but that
+/// list's files is reached.
+pub fn tool_defs_for(host: &dyn Host, sidecar: &Sidecar) -> Vec<ToolDef> {
     let mut tools = tool_defs();
-    if sidecar.shared.is_some() {
+    if reads_project(host, sidecar) {
         let no_input = json!({ "type": "object", "properties": {}, "additionalProperties": false });
         tools.extend([
             ToolDef {
@@ -129,7 +136,7 @@ pub fn project_files(context: &ToolContext) -> Option<Vec<(String, Option<String
 /// What the AI is told about the project in its instructions, for a file of a project: nothing for a document on its own.
 pub fn project_section(context: &ToolContext) -> String {
     let (Some(shared), Some(files)) = (context.sidecar.shared.as_ref(), project_files(context)) else { return String::new() };
-    if files.len() < 2 {
+    if files.len() < 2 || !reads_project(context.host, context.sidecar) {
         return String::new();
     }
     let names: Vec<&str> = files.iter().map(|(name, _, _)| name.as_str()).collect();
@@ -190,6 +197,10 @@ pub fn execute(context: &ToolContext, name: &str, input: &Value) -> ToolResult {
             }
         }
         "list_project_files" | "read_project_file" | "search_project" => {
+            // not offered, so not run: the author did not allow the other files to be read
+            if !reads_project(context.host, context.sidecar) {
+                return ToolResult::refused(format!("There is no tool called {name}. {NOTE_REFUSAL}"), &format!("{name} {input}"));
+            }
             let Some(files) = project_files(context) else { return ToolResult::failed("This document is not a file of a project of several files.") };
             match name {
                 "list_project_files" => ToolResult::ok(

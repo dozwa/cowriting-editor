@@ -29,6 +29,7 @@ export const bridgeApi: Api = {
   orderProjectFiles: paths => call('order_project_files', { paths }),
   renameProjectFile: (path, name) => call('rename_project_file', { path, name }),
   setProjectGoal: (goal, words) => call('set_project_goal', { goal, words }),
+  setProjectAiReadsFiles: may => call('set_project_ai_reads_files', { may }),
   confirmLeave: async () => true,
   openDocument: path => call('open_document', { path }),
   newDocument: path => call('new_document', { path }),

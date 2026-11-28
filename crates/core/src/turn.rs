@@ -340,7 +340,7 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
     let mut request = if without_tools {
         ModelRequest { system: system_without_tools(&contract, &ask.document_text) + &closing, messages, tools: Vec::new(), model: ask.model.clone() }
     } else {
-        ModelRequest { system: format!("{contract}{closing}"), messages, tools: tool_defs_for(&workspace.sidecar), model: ask.model.clone() }
+        ModelRequest { system: format!("{contract}{closing}"), messages, tools: tool_defs_for(host, &workspace.sidecar), model: ask.model.clone() }
     };
 
     let mut answer: Vec<String> = Vec::new();

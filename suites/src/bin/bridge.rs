@@ -164,6 +164,7 @@ impl Bridge {
                 .and_then(|paths| self.session()?.order_project_files(&paths))
                 .map(|_| Value::Null),
             "rename_project_file" => self.session()?.rename_project_file(&text("path"), &text("name")).map(|path| json!(path)),
+            "set_project_ai_reads_files" => self.session()?.set_project_ai_reads_files(args["may"].as_bool().unwrap_or(false)).map(|_| Value::Null),
             "set_project_goal" => self.session()?.set_project_goal(&text("goal"), args["words"].as_u64().map(|words| words as u32)).map(|_| Value::Null),
             "save_document" => self.session()?.save(&text("text")).map(|found| json!(found)),
             "report_paste" => self.session()?.report_paste(&text("pasted"), args["line"].as_u64().unwrap_or(0) as usize, &text("documentText")).map(|found| json!(found)),

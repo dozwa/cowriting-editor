@@ -49,7 +49,7 @@ async function documentOpened(name = 'thesis.md') {
 
 function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string; /** The files of a project of several files the document is one of, by name. */ book?: string[]; /** What the server says about a newer version, or (a text) why it cannot be asked. Without it the editor does not check. */ update?: UpdateFound | string; installFails?: string } = {}) {
   let exportChoice: PdfChoice | null = options.exportChoice ?? null
-  let book: { goal: string; words?: number; files: string[] } | null = options.book === undefined ? null : { goal: '', files: [...options.book] }
+  let book: { goal: string; words?: number; files: string[]; aiReadsFiles?: boolean } | null = options.book === undefined ? null : { goal: '', files: [...options.book] }
   let openPath = ''
   const last = (path: string) => path.split('/').pop()!
   let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
@@ -234,7 +234,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
         const planned = name === 'method.md' ? { target: 400, progress: 0.25, points: 4, pointsMade: 1 } : { points: 0, pointsMade: 0 }
         return { path: `/work/${name}`, name, words: isOpen ? text.split(/\s+/).filter(Boolean).length : 100, ...planned, isMissing: false, isOpen }
       })
-      return { path: '/work/book.cowriting.json', name: 'book', goal: book.goal, ...(book.words === undefined ? {} : { wordsTarget: book.words }), words: files.reduce((sum, file) => sum + file.words, 0), chars: 9000, files }
+      return { path: '/work/book.cowriting.json', name: 'book', goal: book.goal, ...(book.words === undefined ? {} : { wordsTarget: book.words }), words: files.reduce((sum, file) => sum + file.words, 0), chars: 9000, aiReadsFiles: book.aiReadsFiles ?? false, files }
     },
     makeProject: async path => {
       calls.files.push(['make', path])
@@ -258,6 +258,10 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
       if (!name.endsWith('.md')) throw 'The file needs a name that ends in .md, without a folder.'
       book!.files = book!.files.map(file => (file === last(path) ? name : file))
       return `/work/${name}`
+    },
+    setProjectAiReadsFiles: async may => {
+      calls.files.push(['aiReads', may])
+      book = { ...book!, aiReadsFiles: may }
     },
     setProjectGoal: async (goal, words) => {
       calls.files.push(['goal', goal, words])
@@ -2395,6 +2399,21 @@ test('a file of a project can be exported and disclosed alone or with the whole 
   await user.click(screen.getByLabelText(/appendix of AI use outside the editor/))
   await user.click(screen.getByRole('button', { name: 'Write the disclosure' }))
   await waitFor(() => expect(calls.exported).toEqual([{ language: 'en', format: 'md', withPrompts: false, withAnswers: false, withOutside: true, wholeProject: true }]))
+})
+
+test('the AI reads the other files of a project only when the author allows it', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ book: ['thesis.md', 'method.md'] })
+  render(<App api={api} makeEditor={plainEditor} />)
+  await documentOpened()
+  await user.click(screen.getByRole('tab', { name: 'Project' }))
+  const allow = (await screen.findByLabelText('The AI may read the other files of the project')) as HTMLInputElement
+  // off until it is switched on: asked in a file, the AI stays with that file
+  expect(allow.checked).toBe(false)
+  expect(screen.getByText(/what it reads goes to your AI provider/)).toBeTruthy()
+  await user.click(allow)
+  await waitFor(() => expect(calls.files.at(-1)).toEqual(['aiReads', true]))
+  await waitFor(() => expect((screen.getByLabelText('The AI may read the other files of the project') as HTMLInputElement).checked).toBe(true))
 })
 
 test('an explanation shows one line, and the rest only when it is asked for', async () => {

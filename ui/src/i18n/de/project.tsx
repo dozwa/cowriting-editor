@@ -21,7 +21,9 @@ export const project = {
 
   // the files
   files: 'Dateien',
-  filesHint: 'In der Reihenfolge des Textes. Ein Klick öffnet eine Datei; was offen ist, wird vorher gespeichert. Die KI, die Sie fragen, kann alle lesen.',
+  filesHint: 'In der Reihenfolge des Textes. Ein Klick öffnet eine Datei; was offen ist, wird vorher gespeichert.',
+  aiReads: 'Die KI darf die anderen Dateien des Projekts lesen',
+  aiReadsNote: 'Aus: In einer Datei gefragt, sieht die KI nur diese Datei. An: Sie kann auch die anderen durchsuchen und lesen, und was sie liest, geht an Ihren KI-Anbieter.',
   filesHintMore: 'Jede Datei hat ihren eigenen Plan und ihr eigenes Protokoll; Experten, verknüpfte Dateien, Quellen und die KI sind in allen dieselben.',
   open: (name: string) => `${name} öffnen`,
   isOpen: 'offen',

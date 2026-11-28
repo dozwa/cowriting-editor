@@ -25,6 +25,10 @@ pub struct ProjectFile {
     /// How many words the whole project is to have.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub words: Option<u32>,
+    /// Whether the AI, asked in one file, may read the project's other files. Off unless the
+    /// author switches it on: asked about a chapter, the AI stays with that chapter.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ai_reads_files: bool,
     /// What a newer version of the editor wrote here and this one does not know: kept as it is.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,

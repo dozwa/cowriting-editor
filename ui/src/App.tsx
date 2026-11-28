@@ -945,6 +945,7 @@ export function App({ api, makeEditor = createEditor }: Props) {
               onRename={(path, name) => withFiles(() => api.renameProjectFile(path, name))}
               onMoveOpen={() => void move()}
               onGoal={(goal, words) => withFiles(() => api.setProjectGoal(goal, words))}
+              onAiReads={may => void withFiles(() => api.setProjectAiReadsFiles(may))}
             />
           ) : tab === 'sources' && sources !== null ? (
             <SourcesPanel

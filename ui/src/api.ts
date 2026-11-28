@@ -245,6 +245,8 @@ export interface ProjectOverview {
   name: string
   goal: string
   wordsTarget?: number
+  /** Whether the AI may read the other files when it is asked in one. */
+  aiReadsFiles: boolean
   words: number
   chars: number
   files: ProjectFileRow[]
@@ -320,6 +322,8 @@ export const api = {
   /** Renames a file of the project that is not open; returns its new path. */
   renameProjectFile: (path: string, name: string) => invoke<string>('rename_project_file', { path, name }),
   setProjectGoal: (goal: string, words: number | null) => invoke<void>('set_project_goal', { goal, words }),
+  /** Whether the AI may read the project's other files when it is asked in one of them. */
+  setProjectAiReadsFiles: (may: boolean) => invoke<void>('set_project_ai_reads_files', { may }),
   pickNewDocument: (folder = '') => save({ filters: markdown(), defaultPath: folder === '' ? 'untitled.md' : `${folder}${folder.includes('\\') ? '\\' : '/'}untitled.md` }),
   /** Asks before unsaved changes are left behind. */
   confirmLeave: () => confirm(m.dialogs.leaveQuestion, { title: m.dialogs.leaveTitle, kind: 'warning' }),

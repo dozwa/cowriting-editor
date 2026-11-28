@@ -21,7 +21,9 @@ export const project = {
 
   // the files
   files: 'Files',
-  filesHint: 'In the order of the text. A click opens a file; what is open is saved first. The AI you ask can read all of them.',
+  filesHint: 'In the order of the text. A click opens a file; what is open is saved first.',
+  aiReads: 'The AI may read the other files of the project',
+  aiReadsNote: 'Off: asked in a file, the AI sees that file only. On: it can also search and read the others, and what it reads goes to your AI provider.',
   filesHintMore: 'Every file has its own plan and log; experts, linked files, sources and the AI are the same in all of them.',
   open: (name: string) => `Open ${name}`,
   isOpen: 'open',

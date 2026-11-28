@@ -1298,6 +1298,11 @@ impl Session {
         project_files::rename(self.workspace.host.as_ref(), self.projects.as_deref(), self.in_project()?, path, name)
     }
 
+    /// Whether the AI may read the project's other files when it is asked in one of them.
+    pub fn set_project_ai_reads_files(&self, may: bool) -> Result<(), String> {
+        project_files::set_ai_reads_files(self.workspace.host.as_ref(), self.in_project()?, may)
+    }
+
     pub fn set_project_goal(&self, goal: &str, words: Option<u32>) -> Result<(), String> {
         project_files::set_goal(self.workspace.host.as_ref(), self.in_project()?, goal, words)
     }

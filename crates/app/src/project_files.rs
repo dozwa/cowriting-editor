@@ -245,6 +245,13 @@ pub fn set_goal(host: &dyn Host, project: &str, goal: &str, words: Option<u32>) 
     save(host, project, &file)
 }
 
+/// Whether the AI, asked in one file, may read the project's other files.
+pub fn set_ai_reads_files(host: &dyn Host, project: &str, may: bool) -> Result<(), String> {
+    let mut file = load(host, project)?;
+    file.ai_reads_files = may;
+    save(host, project, &file)
+}
+
 /// One file of the project in the overview.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -279,6 +286,8 @@ pub struct Overview {
     /// The words and characters (with spaces) of all files together.
     pub words: usize,
     pub chars: usize,
+    /// Whether the AI may read the other files when it is asked in one.
+    pub ai_reads_files: bool,
     pub files: Vec<FileRow>,
 }
 
@@ -313,7 +322,16 @@ pub fn overview(host: &dyn Host, projects: Option<&str>, project: &str, open: Op
         }
         files.push(row);
     }
-    Ok(Overview { path: project.to_string(), name: ProjectFile::name_of(project).to_string(), goal: file.goal, words_target: file.words, words, chars, files })
+    Ok(Overview {
+        path: project.to_string(),
+        name: ProjectFile::name_of(project).to_string(),
+        goal: file.goal,
+        words_target: file.words,
+        words,
+        chars,
+        ai_reads_files: file.ai_reads_files,
+        files,
+    })
 }
 
 /// A project's files as one text, in their order: what an export of the whole is made of.

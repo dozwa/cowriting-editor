@@ -16,13 +16,15 @@ type Props = {
   onRename(path: string, name: string): Promise<boolean>
   onMoveOpen(): void
   onGoal(goal: string, words: number | null): Promise<boolean>
+  /** The author allows or forbids the AI to read the project's other files. */
+  onAiReads(may: boolean): void
 }
 
 const percent = (share: number) => `${Math.round(share * 100)} %`
 const fileName = (name: string) => name.split('/').pop() ?? name
 
 /** The project of several files: the whole against its target, and every file with its words and its plan. */
-export function ProjectPanel({ view, onMake, onOpen, onAdd, onAddNew, onRemove, onOrder, onRename, onMoveOpen, onGoal }: Props) {
+export function ProjectPanel({ view, onMake, onOpen, onAdd, onAddNew, onRemove, onOrder, onRename, onMoveOpen, onGoal, onAiReads }: Props) {
   const [goal, setGoal] = useState<{ goal: string; words: string } | null>(null)
   const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null)
   if (view === null) {
@@ -125,6 +127,12 @@ export function ProjectPanel({ view, onMake, onOpen, onAdd, onAddNew, onRemove, 
           <button onClick={onAdd}>{m.project.add}</button>
           <button onClick={onAddNew}>{m.project.addNew}</button>
         </span>
+      </section>
+      <section>
+        <label className="check">
+          <input type="checkbox" checked={view.aiReadsFiles} onChange={e => onAiReads(e.target.checked)} /> {m.project.aiReads}
+        </label>
+        <p className="muted">{m.project.aiReadsNote}</p>
       </section>
     </div>
   )

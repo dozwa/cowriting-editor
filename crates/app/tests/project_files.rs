@@ -326,6 +326,22 @@ async fn the_ai_can_read_the_other_files_of_a_project_and_nothing_else_and_chang
         call("read_project_file", serde_json::json!({ "name": "../book/secret.md" })),
         { "text": "The method chapter says 48 participants; the introduction names no number." }
     ] });
+    // until the author allows it, the AI is offered nothing of the other files and told nothing of them: it stays with the file it is asked in
+    let focused = FakeBackend::from_json(
+        &serde_json::json!({ "replies": [call("read_project_file", serde_json::json!({ "name": "chapters/method.md" })), { "text": "Only this file." }] }).to_string(),
+    )
+    .unwrap();
+    let outcome = intro
+        .ask(&focused, Ask { text: "What does the method chapter say?".into(), document_text: INTRO.into(), model: "scripted".into(), ..Default::default() }, &mut |_| {})
+        .await
+        .unwrap();
+    let request = &focused.requests()[0];
+    assert!(!request.tools.iter().any(|tool| tool.name.contains("project")) && !request.system.contains("# The project"), "nothing of the project without the author's word");
+    assert_eq!(outcome.refused, 1, "a call for it all the same is refused and on the record");
+    assert!(!intro.project_overview(INTRO).unwrap().unwrap().ai_reads_files);
+    intro.set_project_ai_reads_files(true).unwrap();
+    assert!(intro.project_overview(INTRO).unwrap().unwrap().ai_reads_files);
+
     let backend = FakeBackend::from_json(&script.to_string()).unwrap();
     // what is in the window counts for the open file, saved or not
     let in_window = format!("{INTRO}\nNot saved yet.\n");
