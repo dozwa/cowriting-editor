@@ -60,7 +60,8 @@ to a new heading with its version and date; the release workflow does that (see 
   margins, columns, indented paragraphs, numbered headings, page numbers. Or it takes all that
   from a Word template of yours, chosen in the export dialog and kept with the project. Before,
   a Word file always had pandoc's styles on US Letter. Checked by reading the files the export
-  makes, not yet by opening them in Word itself. (#34)
+  makes, not yet by opening them in Word itself. On Windows the first paragraph after a heading
+  kept its indent; the styles are now read whatever line ends they have. (#34)
 - **Hints can be ticked off.** Every list item and table row of an answer has a box to mark it
   as done, with "Mark all" and "Unmark all" for the whole answer and a count of what is left.
   The ticks are kept beside the log (`marks.json`) and survive closing the document; they are a

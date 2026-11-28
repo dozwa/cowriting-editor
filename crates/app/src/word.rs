@@ -62,7 +62,8 @@ fn set_fonts(xml: &str, mark: &str, font: &str, from: usize, to: usize) -> Strin
 
 /// `word/styles.xml` with the layout's typefaces, size, line spacing and paragraphs.
 fn styles(xml: &str, layout: &Layout) -> String {
-    let mut xml = xml.to_string();
+    // pandoc for Windows has the file with Windows line ends, and one of the places below spans lines
+    let mut xml = xml.replace("\r\n", "\n");
     let defaults_end = xml.find("</w:docDefaults>").unwrap_or(0);
     if !layout.font.is_empty() {
         xml = set_fonts(&xml, "minorHAnsi", &layout.font, 0, defaults_end);
@@ -189,4 +190,18 @@ pub fn styled(reference: &[u8], layout: &Layout, paper: Paper) -> Result<Vec<u8>
         writer.write_all(content).map_err(|e| format!("The Word styles could not be written: {e}"))?;
     }
     Ok(writer.finish().map_err(|e| format!("The Word styles could not be written: {e}"))?.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_first_paragraph_after_a_heading_has_no_indent_whatever_line_ends_the_styles_have() {
+        let style = "<w:style w:type=\"paragraph\" w:styleId=\"FirstParagraph\">\n    <w:next w:val=\"BodyText\" />\n    <w:qFormat />\n  </w:style>";
+        let layout = Layout { indent: true, ..Layout::default() };
+        for xml in [style.to_string(), style.replace('\n', "\r\n")] {
+            assert!(styles(&xml, &layout).contains("<w:ind w:firstLine=\"0\" />"), "{xml:?}");
+        }
+    }
 }
