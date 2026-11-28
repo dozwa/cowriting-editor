@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Api, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, KeptLayout, PageNumbers, PdfChoice, PdfLayout } from './api'
+import Markdown, { type Components } from 'react-markdown'
+import type { Api, UpdateFound, SettingsView, ExportOptions, Exported, DocumentExport, ExportTools, FileFormat, KeptLayout, PageNumbers, PdfChoice, PdfLayout } from './api'
 import { language, m } from './i18n'
 import type { Preferences } from './preferences'
 
@@ -808,6 +809,71 @@ export function UsageDialog({ api, onAnswered }: { api: Api; onAnswered(saved: P
       <div className="row end">
         <button onClick={() => answer(false, false)}>{t.usageNo}</button>
         <button className="primary" disabled={!ping && !figures} onClick={() => answer(ping, figures)}>{t.usageYes}</button>
+      </div>
+    </Dialog>
+  )
+}
+
+/** A release's notes are shown as text only: no link in them leads anywhere and no picture is fetched. */
+const NOTES_PARTS: Components = { a: ({ children }) => <span>{children}</span>, img: () => null }
+
+/**
+ * A newer version, or the check for one. With `found` the dialog shows that version; without it,
+ * it asks the server itself and says what it found: a newer version, that this is the newest, or
+ * why it could not ask. Nothing is fetched until the author says so here.
+ */
+export function UpdateDialog({ api, version, found, beforeInstall, onFound, onClose }: { api: Api; version: string; found: UpdateFound | null; /** What has to be safe before the editor starts again: the open document is saved. */ beforeInstall(): Promise<void>; onFound?(found: UpdateFound): void; onClose(): void }) {
+  const t = m.dialogs
+  const [now, setNow] = useState<UpdateFound | null>(found)
+  const [error, setError] = useState('')
+  const [isInstalling, setInstalling] = useState(false)
+  const foundRef = useRef(onFound)
+  foundRef.current = onFound
+  useEffect(() => {
+    if (found !== null) return
+    let isOpen = true
+    api.checkForUpdate().then(
+      next => isOpen && (setNow(next), foundRef.current?.(next)),
+      e => isOpen && setError(t.updateNotChecked(String(e))),
+    )
+    return () => {
+      isOpen = false
+    }
+  }, [api, found, t])
+  const install = async () => {
+    setError('')
+    setInstalling(true)
+    try {
+      await beforeInstall()
+      await api.installUpdate()
+    } catch (e) {
+      setError(String(e))
+    }
+    setInstalling(false)
+  }
+  const releases = <button onClick={() => void api.openGuide('releases').catch(e => setError(String(e)))}>{t.updateReleases}</button>
+  return (
+    <Dialog title={t.updateTitle} onClose={onClose} mayClose={() => !isInstalling}>
+      {now === null && error === '' && <p role="status">{t.updateChecking}</p>}
+      {now?.state === 'newest' && <p role="status">{t.updateNewest(version)}</p>}
+      {now?.state === 'newer' && (
+        <>
+          <p>{t.updateNewer(now.version, version, now.date)}</p>
+          {now.notes !== '' && (
+            <div className="notes" aria-label={t.updateNotes}>
+              <Markdown components={NOTES_PARTS}>{now.notes}</Markdown>
+            </div>
+          )}
+          <p className="muted">{now.canInstall ? t.updateHow : t.updateByHand}</p>
+        </>
+      )}
+      {isInstalling && <p role="status">{t.updateInstalling}</p>}
+      {error !== '' && <p className="error" role="alert">{error}</p>}
+      <div className="row end">
+        {(now?.state === 'newer' || error !== '') && releases}
+        <span className="spacer" />
+        <button onClick={onClose} disabled={isInstalling}>{now?.state === 'newer' ? t.updateLater : t.updateClose}</button>
+        {now?.state === 'newer' && now.canInstall && <button className="primary" disabled={isInstalling} onClick={() => void install()}>{t.updateInstall}</button>}
       </div>
     </Dialog>
   )

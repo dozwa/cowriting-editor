@@ -49,6 +49,17 @@ was darin über andere Personen steht.
 Kommt eine Meldung an, sieht der Server die Internetadresse, von der sie kam, wie jeder Server.
 [[ob und wie lange der Server Internetadressen speichert]]
 
+## Die Prüfung auf eine neuere Version
+
+Unabhängig von den Zahlen oben und ohne die Nummer der Installation: Eine veröffentlichte Version
+des Editors fragt bei jedem Start den Server des Herstellers, ob es eine neuere Version gibt,
+solange Sie das in den Einstellungen unter „Über“ nicht abgeschaltet haben. Die Anfrage nennt
+nichts: keine Version, keine Nummer, nichts über Ihr System oder Ihre Dokumente. Wie bei jeder
+Anfrage sieht der Server die Internetadresse, von der sie kommt. Wenn Sie selbst ein Update
+starten, wird die neue Version von den Releases des Projekts auf GitHub geholt (GitHub, Inc.,
+USA); dann sieht auch GitHub Ihre Internetadresse.
+[[Rechtsgrundlage für die Prüfung auf eine neuere Version, und ob und wie lange der Server Internetadressen dieser Anfragen speichert]]
+
 ## Rechtsgrundlage, Speicherung, Empfänger
 
 Rechtsgrundlage ist Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO; für das Auslesen der Nummer der Installation von Ihrem Computer § 25 Abs. 1 TDDDG).

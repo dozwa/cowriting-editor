@@ -118,6 +118,19 @@ to a new heading with its version and date; the release workflow does that (see 
   not part of this: each file still has its own. The Project tab can be hidden like the others.
   (#26, open)
 
+- **Updates from inside the app.** A released version asks the editor's own server at each start
+  whether a newer version exists, with a request that carries nothing about you, the
+  installation or the version you have. A newer version is shown once, with what changed, and
+  afterwards in the status bar; "Check for updates…" in Settings under About asks at any time and
+  says when the server cannot be reached, and the check at start can be switched off there.
+  Nothing is fetched by itself: "Install and restart" saves the open document, fetches the new
+  version from the project's releases on GitHub, installs it only with the signature of the
+  editor's own key, and starts the editor again. A copy that cannot update itself points to the
+  releases page. Switched off as built: there is no server address and no key for updates yet,
+  so no version asks or updates itself. The check and its dialog were tried in the browser
+  against a server on the same computer; fetching and installing was never run. The dev app
+  does not check. (#38, #33, open)
+
 ### Fixed
 
 - **PDF export with Typst and pictures.** Every export with Typst failed as soon as the document

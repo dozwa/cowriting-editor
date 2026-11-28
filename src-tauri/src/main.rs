@@ -7,6 +7,7 @@
 
 use cowriting_app::diagnostics::{name_only, Diagnostics, Seen};
 use cowriting_app::preferences::{in_export_folder, last_document, remember_document, Preferences, SettingsFile};
+use cowriting_app::update_check;
 use cowriting_app::usage::{self, Counted, Sender};
 use cowriting_app::{
     export_tools, list_models, make_backend, model_status, tested_models, AiTextRow, BackendSettings, DocumentExport, ExportOptions, ExportTools, Exported, FileFormat, LiveView,
@@ -44,6 +45,8 @@ struct Editor {
     written: cowriting_app::shown::Written,
     /// What the start found about the editor's own files: one set aside, one from a newer version.
     notices: Mutex<Vec<cowriting_core::stored::Notice>>,
+    /// The newer version the last check found, with the server's answer: the update is installed from it.
+    newer: Mutex<Option<update_check::Release>>,
 }
 
 impl Editor {
@@ -108,6 +111,95 @@ fn send_session(app: &tauri::AppHandle) {
             note("usage", &format!("figures of this session not sent, they wait: {e}"));
         }
     }
+}
+
+/// Where the editor asks for a newer version, if it asks: see `update_check::server`. `COWRITING_UPDATE_SERVER` names one on this computer, for tests and trials.
+fn update_server(app: &tauri::AppHandle) -> Option<String> {
+    update_check::server(std::env::var("COWRITING_UPDATE_SERVER").ok().as_deref(), &app.package_info().version.to_string())
+}
+
+/// What a check for a newer version found.
+#[derive(Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+enum UpdateFound {
+    /// There is a newer version. `is_news`: the author was not told about it before.
+    #[serde(rename_all = "camelCase")]
+    Newer { version: String, notes: String, date: String, is_news: bool, can_install: bool },
+    /// The editor is the newest version.
+    Newest,
+}
+
+/// Asks the server and keeps what it found for the update. The technical log says that the check ran and how it ended, never where it asked.
+async fn look_for_update(app: &tauri::AppHandle) -> Result<UpdateFound, String> {
+    let server = update_server(app).ok_or("This version does not check for updates.")?;
+    let found = update_check::check(&server, &app.package_info().version.to_string()).await;
+    note(
+        "update",
+        &match &found {
+            Ok(Some(_)) => "checked: there is a newer version".to_string(),
+            Ok(None) => "checked: this is the newest version".to_string(),
+            Err(e) => format!("check failed: {e}"),
+        },
+    );
+    let found = found?;
+    *app.state::<Editor>().newer.lock().unwrap() = found.clone();
+    Ok(match found {
+        Some(release) => {
+            let is_news = state_file(app).is_some_and(|state| !update_check::was_told(&state, &release.version));
+            if let (true, Some(state)) = (is_news, state_file(app)) {
+                update_check::told(&state, &release.version);
+            }
+            UpdateFound::Newer { version: release.version, notes: release.notes, date: release.date, is_news, can_install: can_update_itself(app) }
+        }
+        None => UpdateFound::Newest,
+    })
+}
+
+/// Whether this copy can fetch and install an update by itself: only a release is built with the updater and the key its files are signed with.
+fn can_update_itself(app: &tauri::AppHandle) -> bool {
+    app.config().plugins.0.contains_key("updater")
+}
+
+/// Fetches the newer version the last check found from the project's releases on GitHub, installs
+/// it and starts the editor again. Only the author starts this. The updater installs a file only
+/// if it carries the signature of the editor's own key, for exactly the version announced.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let by_hand = format!("The installer is on {}.", update_check::RELEASES);
+    if !can_update_itself(&app) {
+        return Err(format!("This copy of the editor cannot update itself. {by_hand}"));
+    }
+    let release = app.state::<Editor>().newer.lock().unwrap().clone().ok_or("No newer version is known yet. Check for updates first.")?;
+    if !update_check::files_are_ours(&release.answer) {
+        note("update", "refused: the answer names files outside the project's releases");
+        return Err(format!("The server names files that are not among the project's releases on GitHub, so nothing was fetched. {by_hand}"));
+    }
+    let failed = |e: tauri_plugin_updater::Error| {
+        note("update", &format!("update failed: {e}"));
+        format!("The update could not be installed: {e}. {by_hand}")
+    };
+    let update = app.updater().and_then(|updater| updater.restore_update(release.answer.clone())).map_err(failed)?.ok_or("The version found is not newer than this one.")?;
+    note("update", "download started");
+    update.download_and_install(|_, _| {}, || {}).await.map_err(failed)?;
+    note("update", "installed, starting again");
+    // on Windows the installer has taken over by now and this is not reached
+    app.restart()
+}
+
+/// The check at start: only if the author left it on, and silent when it fails. Nothing is fetched or installed by it.
+#[tauri::command]
+async fn update_at_start(app: tauri::AppHandle) -> Result<Option<UpdateFound>, String> {
+    if !read_file(&app).preferences.update_check || update_server(&app).is_none() {
+        return Ok(None);
+    }
+    Ok(look_for_update(&app).await.ok())
+}
+
+/// The check the author asks for: it says what it found, or why it could not ask.
+#[tauri::command]
+async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateFound, String> {
+    look_for_update(&app).await
 }
 
 /// The editor's technical log, once the folder for it is known.
@@ -213,6 +305,8 @@ struct SettingsView {
     /// The tour of the editor was not seen yet: the window starts with it.
     show_tour: bool,
     usage: UsageView,
+    /// This version can ask whether a newer one exists: a released version with a server to ask.
+    can_check_for_update: bool,
     /// The editor's own files that could not be read and were set aside, or that a newer version wrote.
     notices: Vec<cowriting_core::stored::Notice>,
 }
@@ -264,6 +358,7 @@ fn get_settings(app: tauri::AppHandle, editor: State<Editor>) -> SettingsView {
             is_asked: state_file(&app).is_some_and(|state| usage::was_asked(&state)),
             installation: state_file(&app).and_then(|state| usage::installation(&state)),
         },
+        can_check_for_update: update_server(&app).is_some(),
         notices: editor.notices.lock().unwrap().clone(),
     }
 }
@@ -520,6 +615,7 @@ fn open_guide(which: String) -> Result<(), String> {
         "styles" => "https://www.zotero.org/styles",
         "repository" => cowriting_app::feedback::REPOSITORY,
         "coffee" => cowriting_app::feedback::COFFEE,
+        "releases" => update_check::RELEASES,
         _ => return Err("There is no such guide.".into()),
     };
     show(url).map_err(|e| format!("The page could not be opened in your browser ({e}). Its address is {url}"))
@@ -1012,6 +1108,10 @@ fn main() {
                     before(panic);
                 }));
             }
+            // only a release names the updater and its key in its configuration; the dev app has neither and never updates itself
+            if can_update_itself(app.handle()) {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             let _ = STARTED.set(std::time::Instant::now());
             send_start(app.handle());
             if let Some(state) = state_file(app.handle()) {
@@ -1054,6 +1154,9 @@ fn main() {
             recent_diagnostics,
             clear_diagnostics,
             write_report_file,
+            update_at_start,
+            check_for_update,
+            install_update,
             usage_answered,
             usage_preview,
             privacy_statement,

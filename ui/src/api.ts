@@ -214,7 +214,7 @@ export type AskResult = { id: string; answer: string; isAiText: boolean; refused
 export type Settings = { backend: string; model: string; baseUrl: string; maxTokens: number }
 /** Whether a model kept to the assist-only rules in the behaviour suite. */
 export type ModelStatus = 'tested' | 'failed' | 'untested'
-export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; notices: StoredNotice[] }
+export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; /** This version can ask whether a newer one exists. */ canCheckForUpdate: boolean; notices: StoredNotice[] }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean; withOutside: boolean }
@@ -273,7 +273,12 @@ export const GUIDES = {
 }
 export type Guide = keyof typeof GUIDES
 /** A page the app opens in the browser: a guide, the project's page, or the page for a coffee. */
-export type Page = Guide | 'repository' | 'coffee'
+export type Page = Guide | 'repository' | 'coffee' | 'releases'
+
+/** What a check for a newer version found: one, with what changed, or that this is the newest. */
+export type UpdateFound =
+  | { state: 'newer'; version: string; /** what changed, in markdown */ notes: string; /** the day of the release, or '' */ date: string; /** the author was not told about it before */ isNews: boolean; /** this copy can fetch and install it by itself */ canInstall: boolean }
+  | { state: 'newest' }
 
 export const api = {
   getSettings: () => invoke<SettingsView>('get_settings'),
@@ -330,6 +335,12 @@ export const api = {
   pickReportFile: () => save({ filters: [{ name: 'Text', extensions: ['txt'] }], defaultPath: 'cowriting-report.txt' }),
   /** Writes that file: the log's last minutes and, only if the author agreed, the text given here. */
   writeReportFile: (target: string, minutes: number, documentText: string | null) => invoke<void>('write_report_file', { target, minutes, documentText }),
+  /** The check at start: null when it is switched off, when this version does not check, or when the server could not be asked. */
+  updateAtStart: () => invoke<UpdateFound | null>('update_at_start'),
+  /** The check the author asks for; it fails with the reason when the server cannot be asked. */
+  checkForUpdate: () => invoke<UpdateFound>('check_for_update'),
+  /** Fetches and installs the newer version the last check found, then starts the editor again. */
+  installUpdate: () => invoke<void>('install_update'),
   /** The author's answer about usage figures: a sign of use at start, and a session's figures at closing, each a yes or a no. Returns the preferences as kept. */
   usageAnswered: (ping: boolean, figures: boolean) => invoke<Preferences>('usage_answered', { ping, figures }),
   /** The two messages as they would be sent now: the sign of use, and this session's figures so far. */

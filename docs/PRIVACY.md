@@ -48,6 +48,16 @@ and mind what they say about other people.
 When a message arrives, the server sees the internet address it came from, as every server does.
 [[whether and how long the server keeps internet addresses]]
 
+## The check for a newer version
+
+Apart from the figures above, and without the installation's number: a released version of the
+editor asks the maker's server at each start whether a newer version exists, unless you switched
+that off in Settings under About. The request names nothing: no version, no number, nothing about
+your system or your documents. As with every request, the server sees the internet address it
+comes from. When you start an update yourself, the new version is fetched from the project's
+releases on GitHub (GitHub, Inc., USA), which then sees your internet address too.
+[[legal basis for the check for a newer version, and whether and how long the server keeps internet addresses of these requests]]
+
 ## Legal basis, storage, recipients
 
 Legal basis is your consent (Art. 6 (1) (a) GDPR; for reading the installation's number from your computer § 25 (1) TDDDG).

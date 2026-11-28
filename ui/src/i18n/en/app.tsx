@@ -115,6 +115,8 @@ export const app = {
   reportBug: 'Report a bug',
   reportBugTitle: 'Something went wrong? Tell it here: a short form, sent by you as a mail',
   alpha: (version: string) => `alpha ${version}`,
+  updateAvailable: (version: string) => `${version} is available`,
+  updateAvailableTitle: 'A newer version of the editor exists. Shows what changed and how to get it.',
   alphaTitle: 'An early version: things are missing and can break. Reports help.',
   calm: 'Calm',
   calmTitle: 'Hide the explanations and hints around the controls',

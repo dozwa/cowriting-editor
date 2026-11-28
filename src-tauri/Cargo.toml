@@ -16,6 +16,7 @@ tauri-plugin-dialog = "2"
 serde.workspace = true
 serde_json.workspace = true
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+tauri-plugin-updater = "2"
 
 # macOS: the app's own defaults, where WebKit keeps whether it marks spelling
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -3,7 +3,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
-import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, KeptLayout, PdfChoice, SourcesView, StoredNotice, PicturesToMove } from './api'
+import type { ExternalUse, ProjectView, AiTextRow, Api, AskEvent, Expert, LiveHint, LiveOutcome, ScopeProgress, LogView, Settings, SettingsView, ThreadMessage, TurnRow, Use, BibFile, Orphan, KeptLayout, PdfChoice, SourcesView, StoredNotice, PicturesToMove, UpdateFound } from './api'
 import { App, shownVersion } from './App'
 import { layoutInFrontMatter } from './dialogs'
 import type { Editor, EditorHandlers, Format, View } from './editor'
@@ -38,7 +38,7 @@ let dropFiles: (paths: string[], x: number, y: number) => void = () => {}
 /** What the stand-in finds in an export of another tool. */
 const CHATS = { form: 'chatgpt', name: 'conversations.json', list: [{ index: 0, title: 'Mixed model in R', tool: 'ChatGPT', date: '2026-11-01', turns: 2 }, { index: 1, title: 'Holiday plans', tool: 'ChatGPT', date: '2026-11-02', turns: 1 }], canKeepAsFile: true }
 
-function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string; /** The files of a project of several files the document is one of, by name. */ book?: string[] } = {}) {
+function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: string; refuse?: boolean; settings?: Partial<SettingsView>; withoutTools?: boolean; review?: LiveOutcome; hasPandoc?: boolean; pdfEngines?: string[]; orphans?: Orphan[]; stylePicked?: string; picturePicked?: string | null; notices?: StoredNotice[]; picturesToMove?: PicturesToMove; marks?: Record<string, number[]>; exportChoice?: PdfChoice; keptLayouts?: KeptLayout[]; chatPicked?: string; /** The files of a project of several files the document is one of, by name. */ book?: string[]; /** What the server says about a newer version, or (a text) why it cannot be asked. Without it the editor does not check. */ update?: UpdateFound | string; installFails?: string } = {}) {
   let exportChoice: PdfChoice | null = options.exportChoice ?? null
   let book: { goal: string; words?: number; files: string[] } | null = options.book === undefined ? null : { goal: '', files: [...options.book] }
   let openPath = ''
@@ -46,7 +46,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
   let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; reportFiles: [string, number, string | null][]; project: unknown[][]; files: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], reportFiles: [], project: [], files: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; updates: string[]; reportFiles: [string, number, string | null][]; project: unknown[][]; files: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], updates: [], reportFiles: [], project: [], files: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -88,9 +88,24 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     words: 7,
     chars: { withSpaces: 12345, withoutSpaces: 10321 },
   })
-  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, notices: [], settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, canCheckForUpdate: options.update !== undefined, notices: [], settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
     sendFeedback: async (way, title, text) => void calls.feedback.push([way, title, text]),
+    // the stand-in's server: what `update` says, or the reason it cannot be asked; the check at start is silent then
+    updateAtStart: async () => {
+      if (options.update === undefined || !settings.preferences.updateCheck) return null
+      calls.updates.push('start')
+      return typeof options.update === 'string' ? null : options.update
+    },
+    checkForUpdate: async () => {
+      calls.updates.push('check')
+      if (options.update === undefined || typeof options.update === 'string') throw options.update ?? 'This version does not check for updates.'
+      return options.update
+    },
+    installUpdate: async () => {
+      calls.updates.push('install')
+      if (options.installFails !== undefined) throw options.installFails
+    },
     usageAnswered: async (ping, figures) => {
       calls.usage.push([ping, figures])
       settings = { ...settings, preferences: { ...settings.preferences, usagePing: ping, usageFigures: figures }, usage: { isAvailable: true, isAsked: true, installation: ping || figures ? 'a1b2c3' : null } }
@@ -2376,4 +2391,112 @@ test('the project tab shows every file against its plan and the whole against it
   await user.click(within(within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')[1]!).getByRole('button', { name: 'Take out' }))
   await waitFor(() => expect(calls.files.at(-1)).toEqual(['remove', '/work/findings.md']))
   await waitFor(() => expect(rows()).toHaveLength(2))
+})
+
+const NEWER: UpdateFound = { state: 'newer', version: '0.2.0-alpha', notes: '### Added\n\n- **Tables** can be sorted. See [the guide](https://example.org/guide).', date: '2026-12-01', isNews: true, canInstall: true }
+
+test('a newer version is shown by itself once, with what changed, and installing saves the document first', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ update: NEWER })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'Updates' }))
+  expect(dialog.getByText('Version 0.2.0-alpha is available, released on 2026-12-01. You have 0.1.0.')).toBeTruthy()
+  const notes = within(dialog.getByLabelText('What changed'))
+  expect(notes.getByText('Tables')).toBeTruthy()
+  // the notes are text: a link in them leads nowhere
+  expect(notes.queryByRole('link')).toBeNull()
+  expect(notes.getByText('the guide')).toBeTruthy()
+  expect(calls.updates).toEqual(['start'])
+
+  // not now: the notice is gone, and the footer still says that there is a newer version
+  await user.click(dialog.getByRole('button', { name: 'Later' }))
+  expect(screen.queryByRole('dialog', { name: 'Updates' })).toBeNull()
+  expect(calls.updates).toEqual(['start'])
+  await user.type(await screen.findByRole('textbox', { name: 'Document' }), 'More.')
+  await user.click(screen.getByRole('button', { name: '0.2.0-alpha is available' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Updates' })).getByRole('button', { name: 'Install and restart' }))
+  await waitFor(() => expect(calls.updates).toEqual(['start', 'install']))
+  expect(calls.saved.at(-1)).toContain('More.')
+})
+
+test('a version the author was told about before only stands in the footer, and one that cannot install itself points to the releases', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ update: { ...NEWER, isNews: false, canInstall: false } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const more = await screen.findByRole('button', { name: '0.2.0-alpha is available' })
+  expect(screen.queryByRole('dialog', { name: 'Updates' })).toBeNull()
+  await user.click(more)
+  const dialog = within(screen.getByRole('dialog', { name: 'Updates' }))
+  expect(dialog.queryByRole('button', { name: 'Install and restart' })).toBeNull()
+  expect(dialog.getByText(/cannot update itself/)).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Releases page' }))
+  expect(calls.pages).toEqual(['releases'])
+})
+
+test('checking by hand says that this is the newest version, or why the server could not be asked', async () => {
+  const user = userEvent.setup()
+  const newest = standIn({ update: { state: 'newest' } })
+  const first = render(<App api={newest.api} makeEditor={plainEditor} />)
+  await screen.findByRole('textbox', { name: 'Document' })
+  expect(screen.queryByRole('dialog', { name: 'Updates' })).toBeNull()
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('tab', { name: 'About' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Check for updates…' }))
+  expect(await within(await screen.findByRole('dialog', { name: 'Updates' })).findByText('You have the newest version (0.1.0).')).toBeTruthy()
+  expect(newest.calls.updates).toEqual(['start', 'check'])
+  first.unmount()
+
+  // the server is down: the start says nothing, the check by hand says why
+  const down = standIn({ update: 'The server could not be reached.' })
+  render(<App api={down.api} makeEditor={plainEditor} />)
+  await screen.findByRole('textbox', { name: 'Document' })
+  expect(screen.queryByRole('dialog', { name: 'Updates' })).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('tab', { name: 'About' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Check for updates…' }))
+  const dialog = within(await screen.findByRole('dialog', { name: 'Updates' }))
+  expect((await dialog.findByRole('alert')).textContent).toBe('The check did not work. The server could not be reached.')
+  expect(dialog.getByRole('button', { name: 'Releases page' })).toBeTruthy()
+})
+
+test('with the check at start switched off nothing is asked, and a version that does not check shows nothing about updates', async () => {
+  const user = userEvent.setup()
+  const off = standIn({ update: NEWER, settings: { preferences: { ...STANDARD, updateCheck: false } } })
+  const first = render(<App api={off.api} makeEditor={plainEditor} />)
+  await screen.findByRole('textbox', { name: 'Document' })
+  expect(off.calls.updates).toEqual([])
+  expect(screen.queryByRole('dialog', { name: 'Updates' })).toBeNull()
+  // the settings say what the check sends, and switching it on again is saved
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(settings.getByRole('tab', { name: 'About' }))
+  const check = settings.getByRole('checkbox', { name: 'Ask at each start whether there is a newer version' }) as HTMLInputElement
+  expect(check.checked).toBe(false)
+  expect(settings.getByText(/one request to the editor’s maker/)).toBeTruthy()
+  await user.click(check)
+  await user.click(settings.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(off.calls.preferences.at(-1)).toMatchObject({ updateCheck: true }))
+  first.unmount()
+
+  const without = standIn()
+  render(<App api={without.api} makeEditor={plainEditor} />)
+  await screen.findByRole('textbox', { name: 'Document' })
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  const none = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(none.getByRole('tab', { name: 'About' }))
+  expect(none.queryByRole('button', { name: 'Check for updates…' })).toBeNull()
+  expect(none.queryByText(/one request to the editor’s maker/)).toBeNull()
+  expect(without.calls.updates).toEqual([])
+})
+
+test('an update that fails says why and leaves the editor as it is', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ update: NEWER, installFails: 'The update could not be installed: the signature does not fit.' })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'Updates' }))
+  await user.click(dialog.getByRole('button', { name: 'Install and restart' }))
+  expect((await dialog.findByRole('alert')).textContent).toBe('The update could not be installed: the signature does not fit.')
+  expect(calls.updates).toEqual(['start', 'install'])
+  expect((dialog.getByRole('button', { name: 'Install and restart' }) as HTMLButtonElement).disabled).toBe(false)
 })

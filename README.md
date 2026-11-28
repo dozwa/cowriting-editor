@@ -410,6 +410,27 @@ first author and year, to crossref.org, and nothing of your text. Zotero is aske
 computer only. Nothing is sent otherwise. An API key is kept in the system's
 key store. The disclosure names the provider and the model that answered.
 
+## Updates
+
+A released version asks the editor's own server at each start whether a newer version exists.
+The request is a plain GET of a fixed address: it carries no version, no number of the
+installation and nothing about your system or your documents; the server sees the internet
+address it comes from, as every server does. The check can be switched off in Settings under
+About, and "Check for updates…" there asks at any time. A check that fails at start says nothing
+and holds nothing up.
+
+When there is a newer version, the editor shows it once with what changed, and afterwards in the
+status bar. Nothing is fetched or installed by itself. "Install and restart" saves the open
+document, fetches the new version from the project's releases on GitHub (so GitHub sees your
+internet address then), installs it only if it carries the signature of the editor's own key for
+exactly that version, and starts the editor again. Files from anywhere but the project's
+releases are refused, whatever the server answers. Documents, logs and settings stay as they
+are; how stored files survive a change of version is in `RELEASING.md`.
+
+As built now this is switched off: there is no server address yet (`SERVER` in
+`crates/app/src/update_check.rs`), and without one the editor does not ask. The dev app
+("CoWriting Editor Dev") never checks and never updates itself.
+
 ## Claude Code as the AI
 
 If Claude Code is installed and signed in on your computer, the editor can ask it instead of an

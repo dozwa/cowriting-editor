@@ -41,6 +41,8 @@ export type Preferences = {
   usagePing: boolean
   /** The author agreed, separately: a session's figures go there when the editor closes. */
   usageFigures: boolean
+  /** Ask the editor's server at each start whether a newer version exists. */
+  updateCheck: boolean
 }
 
 export const STANDARD: Preferences = {
@@ -69,6 +71,7 @@ export const STANDARD: Preferences = {
   diagnostics: true,
   usagePing: false,
   usageFigures: false,
+  updateCheck: true,
 }
 
 export const LIMITS = {

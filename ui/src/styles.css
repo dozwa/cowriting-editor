@@ -429,6 +429,12 @@ dialog small.over { color: var(--red); }
 .settings input[aria-invalid='true'] { border-color: var(--red); }
 .settings h3 { font-size: 13px; font-weight: 650; margin: 18px 0 4px; }
 .settings .version { font: 600 19px/1.3 var(--serif); margin-bottom: 8px; }
+dialog .notes { max-height: 40vh; overflow: auto; margin: 4px 0 12px; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 6px; font-size: 14px; }
+dialog .notes h1, dialog .notes h2, dialog .notes h3, dialog .notes h4 { font: 600 14px/1.4 var(--ui); letter-spacing: 0; margin: 10px 0 4px; }
+dialog .notes > :first-child { margin-top: 0; }
+dialog .notes ul { padding-left: 18px; }
+dialog .notes li { margin-bottom: 6px; }
+.status .newer, .welcome .foot .newer { white-space: nowrap; }
 .settings .version .muted { font: 400 13px var(--ui); margin-left: 6px; }
 .keys { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: 13.5px; }
 .keys caption { text-align: left; font-weight: 650; font-size: 13px; padding-bottom: 4px; }

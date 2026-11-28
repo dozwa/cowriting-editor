@@ -29,6 +29,13 @@ struct Bridge {
     is_first_run: Mutex<bool>,
     /// What opening found about stored files, kept for the run: the page opens the document more than once while it is developed.
     notices: Mutex<Vec<cowriting_core::stored::Notice>>,
+    /// The newer version the page was told about in this run.
+    told: Mutex<Option<String>>,
+}
+
+/// Where the bridge asks for a newer version: a server on this computer, named by `COWRITING_UPDATE_SERVER`, or nowhere.
+fn update_server() -> Option<String> {
+    cowriting_app::update_check::server(std::env::var("COWRITING_UPDATE_SERVER").ok().as_deref(), env!("CARGO_PKG_VERSION"))
 }
 
 impl Bridge {
@@ -69,6 +76,7 @@ impl Bridge {
         view["usage"] = json!({ "isAvailable": false, "isAsked": false, "installation": null });
         view["asking"] = json!(cowriting_app::support::Asking::default());
         view["feedbackByMail"] = json!(cowriting_app::feedback::has_mail());
+        view["canCheckForUpdate"] = json!(update_server().is_some());
         view["settingsFolder"] = json!("(the bridge keeps its settings in memory)");
         view
     }
@@ -78,6 +86,22 @@ impl Bridge {
         let text = |key: &str| args[key].as_str().unwrap_or_default().to_string();
         match name {
             "get_settings" => Ok(self.settings_view()),
+            // the check for a newer version, against a server on this computer (COWRITING_UPDATE_SERVER); the bridge installs nothing
+            "update_at_start" | "check_for_update" => {
+                let at_start = name == "update_at_start";
+                let Some(server) = update_server().filter(|_| !at_start || self.preferences.lock().unwrap().update_check) else {
+                    return if at_start { Ok(Value::Null) } else { Err("This version does not check for updates.".into()) };
+                };
+                match runtime.block_on(cowriting_app::update_check::check(&server, env!("CARGO_PKG_VERSION"))) {
+                    Ok(Some(release)) => {
+                        let is_news = self.told.lock().unwrap().replace(release.version.clone()).as_ref() != Some(&release.version);
+                        Ok(json!({ "state": "newer", "version": release.version, "notes": release.notes, "date": release.date, "isNews": is_news, "canInstall": false }))
+                    }
+                    Ok(None) => Ok(json!({ "state": "newest" })),
+                    Err(_) if at_start => Ok(Value::Null),
+                    Err(e) => Err(e),
+                }
+            }
             "set_settings" => {
                 *self.settings.lock().unwrap() = serde_json::from_value(args["settings"].clone()).map_err(|e| e.to_string())?;
                 if let Some(key) = args["apiKey"].as_str().filter(|k| !k.trim().is_empty()) {
@@ -362,6 +386,7 @@ fn main() {
         session: Mutex::default(),
         settings: Mutex::new(settings),
         preferences: Mutex::default(),
+        told: Mutex::default(),
         key: Mutex::new(std::env::var("COWRITING_API_KEY").ok().filter(|k| !k.trim().is_empty())),
         is_first_run: Mutex::new(args.iter().any(|a| a == "--first-run")),
         notices: Mutex::default(),

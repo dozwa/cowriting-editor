@@ -199,12 +199,14 @@ type Props = {
   onClose(saved: SettingsView | null): void
   /** The author wants the tour of the editor: the settings close without saving, and it starts. */
   onTour(): void
+  /** Closes the settings and asks whether there is a newer version. */
+  onUpdate(): void
 }
 
 const LANGUAGES_OF_A_PROJECT = ['writingLanguage', 'aiLanguage', 'disclosureLanguage'] as const
 const PACE_OF_A_PROJECT = ['livePauseSeconds', 'liveGapSeconds', 'livePerHour'] as const
 
-export function SettingsDialog({ api, settings, project, documentName, getText, onPreview, onClose, onTour }: Props) {
+export function SettingsDialog({ api, settings, project, documentName, getText, onPreview, onClose, onTour, onUpdate }: Props) {
   const [isLogDeleted, setLogDeleted] = useState(false)
   const ai = useAi(api, settings)
   const [section, setSection] = useState<Section>('ai')
@@ -550,13 +552,25 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                 <dt>{m.settings.whereDiagnostics}</dt>
                 <dd>{m.settings.whereDiagnosticsIs}</dd>
                 <dt>{m.settings.sent}</dt>
-                <dd>{m.settings.sentWhat}{settings.usage.isAvailable && m.settings.sentUsage}</dd>
+                <dd>{m.settings.sentWhat}{settings.canCheckForUpdate && m.settings.sentUpdate}{settings.usage.isAvailable && m.settings.sentUsage}</dd>
               </dl>
               <h3>{m.settings.tourHeading}</h3>
               <p className="muted">{m.settings.tourAbout}</p>
               <div className="row">
                 <button onClick={() => (onPreview(null), onTour())}>{m.settings.tourAgain}</button>
               </div>
+              {settings.canCheckForUpdate && (
+                <>
+                  <h3>{m.settings.updateHeading}</h3>
+                  <p className="muted">{m.settings.updateAbout}</p>
+                  <label className="check">
+                    <input type="checkbox" checked={draft.updateCheck} onChange={e => set('updateCheck', e.target.checked)} /> {m.settings.updateCheck}
+                  </label>
+                  <div className="row">
+                    <button onClick={() => (onPreview(null), onUpdate())}>{m.settings.updateNow}</button>
+                  </div>
+                </>
+              )}
               {settings.usage.isAvailable && (
                 <>
                   <h3>{m.settings.usageHeading}</h3>

@@ -1,11 +1,11 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectView as Project, ProjectOverview, Counted, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, Use } from './api'
+import type { ProjectView as Project, ProjectOverview, Counted, Picture, PicturesToMove, AiTextRow, Api, AskEvent, LiveView, LogView, ScopeView, SourcesView, Opened, PartyView, SettingsView, ThreadMessage, UpdateFound, Use } from './api'
 import { ExpertsPanel } from './experts'
 import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
 import { ProjectPanel } from './project'
 import { seeView } from './diagnostics'
-import { DisclosureDialog, ExportDialog, FeedbackDialog, MovePicturesDialog, PictureDialog, SupportDialog, UsageDialog } from './dialogs'
+import { DisclosureDialog, ExportDialog, FeedbackDialog, MovePicturesDialog, PictureDialog, SupportDialog, UpdateDialog, UsageDialog } from './dialogs'
 import { Tour, TOUR } from './tour'
 import { createEditor, type Editor, type Format } from './editor'
 import { FormatBar, MarkdownHelp } from './formatbar'
@@ -87,6 +87,10 @@ export function App({ api, makeEditor = createEditor }: Props) {
   const [tourStep, setTourStep] = useState<number | null>(null)
   /** The editor asked for support at this start, and the author answered. */
   const [isAsked, setAsked] = useState(false)
+  /** The newer version of the editor a check found, if one did. */
+  const [newer, setNewer] = useState<Extract<UpdateFound, { state: 'newer' }> | null>(null)
+  /** The update dialog: with the newer version that is known, or asking the server itself ('check'). */
+  const [updating, setUpdating] = useState<'known' | 'check' | null>(null)
   const [project, setProject] = useState<Project | null>(null)
   // the project of several files this document is one of; null for a document on its own
   const [files, setFiles] = useState<ProjectOverview | null>(null)
@@ -373,6 +377,18 @@ export function App({ api, makeEditor = createEditor }: Props) {
       })
       .catch(fail)
   }, [api, show])
+
+  // once at each start, unless the author switched it off: is there a newer version? A check that fails says nothing.
+  useEffect(() => {
+    api.updateAtStart().then(
+      found => {
+        if (found?.state !== 'newer') return
+        setNewer(found)
+        if (found.isNews) setUpdating('known')
+      },
+      () => {},
+    )
+  }, [api])
 
   const leaveIsFine = async () => !isDirty || (await api.confirmLeave())
 
@@ -704,16 +720,19 @@ export function App({ api, makeEditor = createEditor }: Props) {
     if (settings !== null && settings.isFirstRun && !settings.isReady) setDialog('settings')
   }
   const settingsDialog = dialog === 'settings' && settings !== null && (
-    <SettingsDialog api={api} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onTour={() => (setDialog(null), toStep(0))} settings={settings} project={doc === null ? null : project} documentName={doc?.name ?? ''} onPreview={setPreview} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false), doc !== null && void api.project().then(setProject, () => {}), void api.liveView().then(setWatching, () => {})))} />
+    <SettingsDialog api={api} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onTour={() => (setDialog(null), toStep(0))} onUpdate={() => (setDialog(null), setUpdating('check'))} settings={settings} project={doc === null ? null : project} documentName={doc?.name ?? ''} onPreview={setPreview} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false), doc !== null && void api.project().then(setProject, () => {}), void api.liveView().then(setWatching, () => {})))} />
   )
   // asked once, and only where there is somewhere to send to and a privacy statement in force
   const isUsageDue = settings !== null && settings.usage.isAvailable && !settings.usage.isAsked && !settings.isFirstRun && dialog === null && tourStep === null
-  const isSupportDue = !isUsageDue && settings !== null && settings.asking.isDue && !isAsked && !settings.isFirstRun && dialog === null && tourStep === null
+  const isSupportDue = !isUsageDue && updating === null && settings !== null && settings.asking.isDue && !isAsked && !settings.isFirstRun && dialog === null && tourStep === null
   const otherDialogs = settings !== null && (
     <>
       {(dialog === 'feedback' || dialog === 'bug') && <FeedbackDialog api={api} settings={settings} kind={dialog === 'bug' ? 'bug' : 'idea'} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
       {tourStep !== null && dialog === null && <Tour step={tourStep} hasDocument={doc !== null} isReady={settings.isReady} onStep={toStep} onSettings={() => setDialog('settings')} onEnd={endTour} />}
       {isUsageDue && <UsageDialog api={api} onAnswered={saved => (setSettings({ ...settings, preferences: saved ?? settings.preferences, usage: { ...settings.usage, isAsked: true } }), void api.getSettings().then(now => setSettings({ ...now, usage: { ...now.usage, isAsked: true } }), () => {}))} />}
+      {updating !== null && dialog === null && tourStep === null && !isUsageDue && !settings.isFirstRun && (
+        <UpdateDialog api={api} version={settings.version} found={updating === 'known' ? newer : null} beforeInstall={saveIfChanged} onFound={found => setNewer(found.state === 'newer' ? found : null)} onClose={() => setUpdating(null)} />
+      )}
       {isSupportDue && <SupportDialog api={api} withStar={settings.asking.withStar} onFeedback={() => (setAsked(true), setDialog('feedback'))} onClose={() => setAsked(true)} />}
     </>
   )
@@ -727,7 +746,12 @@ export function App({ api, makeEditor = createEditor }: Props) {
       {m.app.reportBug}
     </button>
   )
-  const version = settings !== null && <span className="version" title={m.app.alphaTitle}>{shownVersion(settings.version, m.app.alpha)}</span>
+  const version = settings !== null && (
+    <>
+      <span className="version" title={m.app.alphaTitle}>{shownVersion(settings.version, m.app.alpha)}</span>
+      {newer !== null && <button className="link newer" onClick={() => setUpdating('known')} title={m.app.updateAvailableTitle}>{m.app.updateAvailable(newer.version)}</button>}
+    </>
+  )
   const isScripted = settings?.backend.startsWith('fake:') ?? false
   const notice = [
     settings === null || isScripted ? '' : MODEL_NOTICE[settings.modelStatus],

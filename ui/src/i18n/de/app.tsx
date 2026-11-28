@@ -107,6 +107,8 @@ export const app: typeof pattern = {
   reportBug: 'Fehler melden',
   reportBugTitle: 'Etwas ist schiefgegangen? Hier melden: ein kurzes Formular, von Ihnen als E-Mail gesendet',
   alpha: version => `Alpha ${version}`,
+  updateAvailable: (version: string) => `${version} ist verfügbar`,
+  updateAvailableTitle: 'Es gibt eine neuere Version des Editors. Zeigt, was sich geändert hat und wie Sie sie bekommen.',
   alphaTitle: 'Eine frühe Version: Manches fehlt, manches kann brechen. Meldungen helfen.',
   calm: 'Ruhig',
   calmTitle: 'Erklärungen und Hinweise um die Bedienelemente ausblenden',
