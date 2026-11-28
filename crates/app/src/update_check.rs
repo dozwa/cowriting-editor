@@ -1,8 +1,9 @@
-//! Whether a newer version of the editor exists: one question to the editor's own server, and what it answers.
+//! Whether a newer version of the editor exists: one question to a fixed address, and what comes back.
 //!
 //! The request is a plain GET of a fixed address. Nothing goes with it: no version, no number of
-//! the installation, nothing about the system. The server only answers; it holds no installers.
-//! Its answer is the file `latest.json` a release is published with (the form Tauri's updater
+//! the installation, nothing about the system. The address is a file in the project's repository
+//! on GitHub (the branch `updates`, written by `.github/workflows/updates.yml` when a release is
+//! published), so no server of the maker's is asked. The answer is the file `latest.json` a release is published with (the form Tauri's updater
 //! reads): the newest version, what changed, and where its files are on GitHub with their
 //! signatures. Whether the answer is believed is not decided here: an update is installed only if
 //! its file carries the signature of the editor's own key (the updater checks that), and only
@@ -16,7 +17,7 @@ use std::path::Path;
 use std::time::Duration;
 
 /// Where the editor asks. Empty: it does not ask.
-pub const SERVER: &str = "";
+pub const SERVER: &str = "https://raw.githubusercontent.com/dozwa/cowriting-editor/updates/latest.json";
 
 /// The page the releases are on, for an author who gets the installer by hand.
 pub const RELEASES: &str = "https://github.com/dozwa/cowriting-editor/releases";

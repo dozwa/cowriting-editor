@@ -418,8 +418,8 @@ key store. The disclosure names the provider and the model that answered.
 The editor has terms of use (`docs/TERMS.md`, `docs/NUTZUNGSBEDINGUNGEN.md`) and a privacy
 statement (`docs/PRIVACY.md`, `docs/DATENSCHUTZ.md`). At the first start it shows both and goes
 on only when you agree to the terms; the other button closes it. When a newer version comes with
-changed terms or a changed statement, it asks again at its first start. Until you agreed, nothing
-goes to the editor's own server: no check for a newer version and no usage figures. Agreeing to
+changed terms or a changed statement, it asks again at its first start. Until you agreed, the
+editor asks and sends nothing of its own: no check for a newer version and no usage figures. Agreeing to
 the terms is not consent to usage figures, which is asked separately and can be a no. Both texts
 can be read at any time in Settings under About.
 
@@ -430,9 +430,10 @@ name and address among them), and nobody is asked to agree to a draft.
 
 ## Updates
 
-A released version asks the editor's own server at each start whether a newer version exists.
-The request is a plain GET of a fixed address: it carries no version, no number of the
-installation and nothing about your system or your documents; the server sees the internet
+A released version reads a file at each start that names the newest version. The file is in
+this repository on GitHub (the branch `updates`), so the request goes to GitHub and to no
+server of the maker's. It is a plain GET of a fixed address: it carries no version, no number of
+the installation and nothing about your system or your documents; GitHub sees the internet
 address it comes from, as every server does. The check can be switched off in Settings under
 About, and "Check for updates…" there asks at any time. A check that fails at start says nothing
 and holds nothing up.
@@ -442,11 +443,12 @@ status bar. Nothing is fetched or installed by itself. "Install and restart" sav
 document, fetches the new version from the project's releases on GitHub (so GitHub sees your
 internet address then), installs it only if it carries the signature of the editor's own key for
 exactly that version, and starts the editor again. Files from anywhere but the project's
-releases are refused, whatever the server answers. Documents, logs and settings stay as they
+releases are refused, whatever that file says. Documents, logs and settings stay as they
 are; how stored files survive a change of version is in `RELEASING.md`.
 
-As built now this is switched off: there is no server address yet (`SERVER` in
-`crates/app/src/update_check.rs`), and without one the editor does not ask. The dev app
+The address is `SERVER` in `crates/app/src/update_check.rs`. As built now a release checks and
+shows a newer version, but cannot install it by itself: the key that updates are signed with is
+not set yet (`RELEASING.md`), so the notice leads to the releases page. The dev app
 ("CoWriting Editor Dev") never checks and never updates itself.
 
 ## Claude Code as the AI

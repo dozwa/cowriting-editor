@@ -120,17 +120,19 @@ to a new heading with its version and date; the release workflow does that (see 
   is the same from the file dialog and from the Project tab.
   (#26, open)
 
-- **Updates from inside the app.** A released version asks the editor's own server at each start
-  whether a newer version exists, with a request that carries nothing about you, the
+- **Updates from inside the app.** A released version reads a file on GitHub at each start
+  that names the newest version (the branch `updates` of this repository, written when a
+  release is published; no server of the maker's is asked), with a request that carries nothing about you, the
   installation or the version you have. A newer version is shown once, with what changed, and
   afterwards in the status bar; "Check for updates…" in Settings under About asks at any time and
-  says when the server cannot be reached, and the check at start can be switched off there.
+  says when that file cannot be reached, and the check at start can be switched off there.
   Nothing is fetched by itself: "Install and restart" saves the open document, fetches the new
   version from the project's releases on GitHub, installs it only with the signature of the
   editor's own key, and starts the editor again. A copy that cannot update itself points to the
-  releases page. Switched off as built: there is no server address and no key for updates yet,
-  so no version asks or updates itself. The check and its dialog were tried in the browser
-  against a server on the same computer; fetching and installing was never run. The dev app
+  releases page, and so does every release for now: the key for updates is not set yet, so a
+  release checks and shows what is newer but installs nothing by itself. The check and its
+  dialog were tried in the browser against a server on the same computer; fetching and
+  installing, and the workflow that writes the file, were never run. The dev app
   does not check. (#38, #33, open)
 
 - **Usage figures are sealed.** A message to the editor's maker is encrypted on your computer
@@ -143,7 +145,7 @@ to a new heading with its version and date; the release workflow does that (see 
   statement: it is free and comes as it is, keeping copies of your work is yours to do, and the
   provider is not liable for damage or lost data as far as the law allows. At the first start
   the editor shows both texts and goes on only with your agreement; a newer version that comes
-  with changed texts asks again. Until then nothing goes to the editor's own server. This
+  with changed texts asks again. Until then the editor asks and sends nothing of its own. This
   agreement is not the consent to usage figures, which stays a separate and free choice. Both
   texts can be read in Settings under About. The privacy statement now says that the maker's
   service tells installations apart by their random number alone and stores no internet

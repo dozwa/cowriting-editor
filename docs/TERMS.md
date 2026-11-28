@@ -59,7 +59,7 @@ are in the editor's folder `tools`. They are offered by their own makers under t
 
 What the editor sends and to whom is in the privacy statement, which you can read in Settings
 under About. In short: your documents stay on your computer; what you ask goes to the AI
-provider you chose; a released version asks the provider's server at each start whether a newer
+provider you chose; a released version asks GitHub at each start whether a newer
 version exists, which you can switch off; figures about use are sent only if you agree to them
 separately, and you can take that back at any time.
 

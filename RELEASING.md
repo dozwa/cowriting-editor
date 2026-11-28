@@ -101,15 +101,20 @@ How it works, in the order things happen:
    was made for. The workflow puts all of that into the draft release, and the job `updates`
    writes `latest.json` from the signatures (`scripts/latest-json.py`): the version, the
    changelog's entries, and for each system the file on GitHub and its signature.
-2. **The editor asks the server**, at each start and when the author asks: one GET of the
-   address in `SERVER` (`crates/app/src/update_check.rs`), with nothing in it about the editor or
-   the author. The server answers with the `latest.json` of the newest published release and
-   holds no files itself (#15).
-3. **The author starts the update** in the dialog. The updater takes the answer the check got,
+2. **Publishing the release puts its `latest.json` where editors ask.** The workflow
+   `.github/workflows/updates.yml` runs when a release is published (not on a draft) and commits
+   that release's `latest.json` to the branch `updates`, which holds nothing else. It does so
+   only for a version newer than the one that is there, so publishing an old draft late changes
+   nothing. A release without `latest.json` (built without the key) is passed over.
+3. **The editor asks**, at each start and when the author asks: one GET of the address in
+   `SERVER` (`crates/app/src/update_check.rs`), which is that file as GitHub serves it
+   (`raw.githubusercontent.com`, a few minutes behind a change). Nothing in the request is about
+   the editor or the author, and no server of our own is part of it.
+4. **The author starts the update** in the dialog. The updater takes the answer the check got,
    fetches the file from the release on GitHub, and installs it only if the signature fits the
    public key built into the app and names exactly the announced version
    (`requireSignedVersion`). A file from anywhere but this project's releases is refused before
-   anything is fetched. So a server that answers wrongly can at worst offer nothing.
+   anything is fetched. So a wrong answer can at worst offer nothing.
 
 What the maintainer has to do once:
 
@@ -124,16 +129,18 @@ What the maintainer has to do once:
   key in the file and no secret, the release build stops and says so.
 - **Keep the private key and its password safe, outside GitHub too.** Lose them and installed
   copies can no longer be updated: every author would have to install a release by hand once.
-- **The server's address** goes into `SERVER` in `crates/app/src/update_check.rs`, and the
-  privacy statement's part on the check is filled in (`docs/PRIVACY.md`, `docs/DATENSCHUTZ.md`).
-  The first release with both the key and the address is the first one that can be updated
-  *from*; everyone on an older one installs it by hand.
+- **The address** is set: the file on the branch `updates`. The first release with the key is
+  the first one that can be updated *from*; everyone on an older one installs it by hand. A
+  release without the key still checks and shows the newer version, with a link to the releases
+  page.
 
-What the server has to answer: the newest published release's `latest.json`, unchanged, with
-`content-type: application/json`. Alphas are pre-releases, so GitHub's "latest release" does not
-name them; the server has to take the newest release from the list of releases, or be told of a
-new one. A draft's `latest.json` already names the files where they will be once the release is
-published, so nothing has to be rewritten on publishing.
+Why a file and not GitHub's "latest release": alphas are pre-releases, and that address does not
+name them. A draft's `latest.json` already names the files where they will be once the release
+is published, so nothing has to be rewritten on publishing. To take the newest version back
+(a release that should not have gone out), start the workflow `Updates` by hand with the tag of
+the release editors should be told of, and `force` set; an editor that is already on the newer
+one is told nothing. To move the check to a server of our own later (#15), `SERVER` changes; the
+file stays for every version that was released with its address.
 
 To try the check without a server: `COWRITING_UPDATE_SERVER=http://127.0.0.1:<port>/latest.json`
 makes the dev app and the bridge ask a server on this computer (only such an address is

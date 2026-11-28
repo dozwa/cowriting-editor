@@ -7,9 +7,9 @@ Asked for, not built, in no order.
   the export. The log and the disclosure keep the experts' English names, so a log reads the same
   whatever the window was set to. The menu at the top of the screen (File, Edit, View) is the
   system's standard one and English as well.
-- **Updates, what is left.** The key for updates and the server's address are not set, so no
-  version checks or updates itself yet, and fetching and installing was never run (#33, #38; the
-  server is #15). "Check for updates…" is in Settings under About and not in the menu at the top
+- **Updates, what is left.** A release checks for a newer version at a file on GitHub, but the
+  key for updates is not set, so no version updates itself yet, and fetching and installing was
+  never run; neither was the workflow that writes that file (#33, #38). "Check for updates…" is in Settings under About and not in the menu at the top
   of the screen. The dialog shows no progress of the download, and a version cannot be skipped:
   it stays in the status bar until it is installed.
 - **More languages.** A language is a folder in `ui/src/i18n` and one line in its `index.ts`; the

@@ -60,13 +60,14 @@ recognise an installation again, so these figures are pseudonymous, not anonymou
 ## The check for a newer version
 
 Apart from the figures above, and without the installation's number: a released version of the
-editor asks the maker's server at each start whether a newer version exists, unless you switched
-that off in Settings under About. The request names nothing: no version, no number, nothing about
-your system or your documents. As with every request, the server sees the internet address it
-comes from. When you start an update yourself, the new version is fetched from the project's
-releases on GitHub (GitHub, Inc., USA), which then sees your internet address too.
-The maker's service stores nothing about such a request: no internet address, no time, no count.
-[[legal basis for the check for a newer version, and what the hosting provider and the service in front of the server log about a request]]
+editor reads a file at each start that says which version is the newest, unless you switched
+that off in Settings under About. The file is in the project's repository on GitHub (GitHub,
+Inc., USA); no server of the maker's is asked, and the maker learns nothing of the request. The
+request names nothing: no version, no number, nothing about your system or your documents. As
+with every request, GitHub sees the internet address it comes from; what GitHub keeps about it
+is in GitHub's own privacy statement. When you start an update yourself, the new version is
+fetched from the project's releases, on GitHub too.
+[[legal basis for the check for a newer version]]
 
 ## Legal basis, storage, recipients
 

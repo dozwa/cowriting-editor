@@ -227,7 +227,7 @@ export const settings: typeof pattern = {
   termsRead: 'Nutzungsbedingungen',
   privacyRead: 'Datenschutzerklärung',
   updateHeading: 'Updates',
-  updateAbout: 'Bei jedem Start fragt der Editor den Server seines Herstellers, ob es eine neuere Version gibt. Die Anfrage sagt nichts über Sie, Ihre Dokumente oder diese Installation; wie jede Anfrage kommt sie von Ihrer Internetadresse. Geholt oder installiert wird erst, wenn Sie es sagen.',
+  updateAbout: 'Bei jedem Start fragt der Editor bei GitHub, wo seine Versionen liegen, ob es eine neuere Version gibt. Die Anfrage sagt nichts über Sie, Ihre Dokumente oder diese Installation; wie jede Anfrage kommt sie von Ihrer Internetadresse. Geholt oder installiert wird erst, wenn Sie es sagen.',
   updateCheck: 'Bei jedem Start fragen, ob es eine neuere Version gibt',
   updateNow: 'Nach Updates suchen…',
   sentUpdate: ' Bei jedem Start, solange es unter „Updates“ nicht abgeschaltet ist: eine Anfrage an den Hersteller des Editors, die nach der neuesten Version fragt und sonst nichts enthält.',

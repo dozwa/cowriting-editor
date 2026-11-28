@@ -185,7 +185,9 @@ async fn look_for_update(app: &tauri::AppHandle) -> Result<UpdateFound, String> 
             if let (true, Some(state)) = (is_news, state_file(app)) {
                 update_check::told(&state, &release.version);
             }
-            UpdateFound::Newer { version: release.version, notes: release.notes, date: release.date, is_news, can_install: can_update_itself(app) }
+            // a release built without the key names no files: it is shown, and installed by hand
+            let can_install = can_update_itself(app) && update_check::files_are_ours(&release.answer);
+            UpdateFound::Newer { version: release.version, notes: release.notes, date: release.date, is_news, can_install }
         }
         None => UpdateFound::Newest,
     })
@@ -1334,6 +1336,44 @@ mod update_tests {
         assert_eq!(for_updater.version.to_string(), "0.1.2-alpha");
         assert_eq!(for_updater.signature("darwin-aarch64").unwrap(), "signature of CoWriting.Editor.app.tar.gz");
         assert!(for_updater.pub_date.is_some());
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    fn script(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        std::process::Command::new(python).arg(root.join("scripts/latest-json.py")).args(arguments).output().expect("python runs the script")
+    }
+
+    /// Without the key for updates a release has no signatures. Its `latest.json` then names the
+    /// version and no files, so editors still learn of it; and only a newer version replaces the
+    /// file editors read.
+    #[test]
+    fn a_release_without_the_key_is_still_told_of_and_only_a_newer_one_replaces_what_editors_read() {
+        let folder = std::env::temp_dir().join(format!("cowriting-latest-json-newer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("notes.md"), "- Something new.\n").unwrap();
+        let (notes, new, old, other) = (folder.join("notes.md"), folder.join("new.json"), folder.join("old.json"), folder.join("other.json"));
+        let os = |text: &'static str| std::ffi::OsStr::new(text);
+        let ran = script(&[os("write"), os("--tag"), os("v0.3.0-alpha"), os("--no-files"), os("--notes"), notes.as_os_str(), os("--out"), new.as_os_str()]);
+        assert!(ran.status.success(), "{}", String::from_utf8_lossy(&ran.stderr));
+        let release = update_check::read(&std::fs::read_to_string(&new).unwrap(), "0.2.0-alpha").unwrap().expect("0.3.0-alpha is newer");
+        assert_eq!(release.notes, "- Something new.");
+        assert!(!update_check::files_are_ours(&release.answer), "nothing to install from: the author is sent to the releases page");
+
+        let newer = |tag: &'static str, new: &std::path::Path, old: &std::path::Path| {
+            let ran = script(&[os("newer"), os("--tag"), os(tag), os("--new"), new.as_os_str(), os("--old"), old.as_os_str()]);
+            (ran.status.success(), String::from_utf8_lossy(&ran.stdout).trim().to_string())
+        };
+        assert_eq!(newer("v0.3.0-alpha", &new, &old), (true, "yes".into()), "nothing is there yet");
+        for (there, answer) in [("0.2.0-alpha", "yes"), ("0.2.9", "yes"), ("0.3.0-alpha", "no"), ("0.3.0", "no"), ("0.10.0-alpha", "no")] {
+            std::fs::write(&old, format!(r#"{{"version": "{there}"}}"#)).unwrap();
+            assert_eq!(newer("v0.3.0-alpha", &new, &old), (true, answer.into()), "editors are told of {there}");
+        }
+        assert!(!newer("v0.4.0-alpha", &new, &old).0, "the file of another release is refused");
+        std::fs::write(&other, r#"{"version": "0.3.0-alpha", "platforms": {"darwin-aarch64": {"url": "https://example.org/app.tar.gz", "signature": "s"}}}"#).unwrap();
+        assert!(!newer("v0.3.0-alpha", &other, &old).0, "a file from another place is refused");
         let _ = std::fs::remove_dir_all(&folder);
     }
 

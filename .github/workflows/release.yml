@@ -12,7 +12,9 @@ name: Release
 # macOS and Windows installers are signed; without them the same installers are built unsigned.
 # With the key for updates (its public half in src-tauri/tauri.updater.conf.json, its private half
 # the secret TAURI_SIGNING_PRIVATE_KEY) the release can update itself and be updated to: its files
-# get signatures, and `latest.json` is put into the draft. Without the key it is built as before.
+# get signatures, and `latest.json` in the draft names them. Without the key `latest.json` names
+# the version only: editors are told of it and it is installed by hand. Publishing the draft is
+# what tells them (.github/workflows/updates.yml).
 on:
   push:
     branches: [main]
@@ -141,14 +143,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          if [ "$(python3 scripts/latest-json.py key)" != yes ]; then
-            echo "::notice::No key for updates: no latest.json for this release."
-            exit 0
-          fi
-          mkdir signatures
-          gh release download "$TAG" --dir signatures --pattern '*.sig'
           gh release view "$TAG" --json body --jq .body > notes.md
-          python3 scripts/latest-json.py write --tag "$TAG" --signatures signatures --notes notes.md --out latest.json
+          if [ "$(python3 scripts/latest-json.py key)" = yes ]; then
+            mkdir signatures
+            gh release download "$TAG" --dir signatures --pattern '*.sig'
+            python3 scripts/latest-json.py write --tag "$TAG" --signatures signatures --notes notes.md --out latest.json
+          else
+            echo "::notice::No key for updates: latest.json names the version and no files. Editors show it as newer; it is installed by hand."
+            python3 scripts/latest-json.py write --tag "$TAG" --no-files --notes notes.md --out latest.json
+          fi
           gh release upload "$TAG" --clobber latest.json
 
   dev:

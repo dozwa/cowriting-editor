@@ -225,7 +225,7 @@ export const settings = {
   termsRead: 'Terms of use',
   privacyRead: 'Privacy statement',
   updateHeading: 'Updates',
-  updateAbout: 'At each start the editor asks its maker’s server whether a newer version exists. The request says nothing about you, your documents or this installation; like every request it comes from your internet address. Nothing is fetched or installed until you say so.',
+  updateAbout: 'At each start the editor asks GitHub, where its releases are, whether a newer version exists. The request says nothing about you, your documents or this installation; like every request it comes from your internet address. Nothing is fetched or installed until you say so.',
   updateCheck: 'Ask at each start whether there is a newer version',
   updateNow: 'Check for updates…',
   sentUpdate: ' At each start, unless switched off under “Updates”: one request to the editor’s maker that asks for the newest version and carries nothing else.',

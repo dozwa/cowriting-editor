@@ -64,8 +64,8 @@ Lizenzen angeboten.
 
 Was der Editor sendet und an wen, steht in der Datenschutzerklärung, die Sie in den Einstellungen
 unter „Über“ lesen können. Kurz: Ihre Dokumente bleiben auf Ihrem Computer; was Sie fragen, geht
-an den KI-Anbieter, den Sie gewählt haben; eine veröffentlichte Version fragt bei jedem Start den
-Server des Anbieters, ob es eine neuere Version gibt, was Sie abschalten können; Zahlen zur
+an den KI-Anbieter, den Sie gewählt haben; eine veröffentlichte Version fragt bei jedem Start bei
+GitHub, ob es eine neuere Version gibt, was Sie abschalten können; Zahlen zur
 Nutzung werden nur gesendet, wenn Sie dem gesondert zustimmen, und das können Sie jederzeit
 zurücknehmen.
 

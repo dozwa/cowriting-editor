@@ -91,9 +91,10 @@ fn only_files_of_the_projects_releases_on_github_are_ours() {
 }
 
 #[test]
-fn a_dev_version_and_an_editor_without_an_address_do_not_ask() {
-    assert_eq!(update_check::SERVER, "", "no address is set yet: when one is, the README and the privacy statement must name it");
-    assert_eq!(update_check::server(None, "0.1.1-alpha"), None);
+fn a_release_asks_at_the_file_on_github_and_a_dev_version_does_not_ask() {
+    // the README and the privacy statement name this address; a change here changes them too
+    assert_eq!(update_check::SERVER, "https://raw.githubusercontent.com/dozwa/cowriting-editor/updates/latest.json");
+    assert_eq!(update_check::server(None, "0.1.1-alpha").as_deref(), Some(update_check::SERVER));
     assert_eq!(update_check::server(None, "0.1.1-dev"), None);
     // for a trial, only an address on this computer
     assert_eq!(update_check::server(Some("http://127.0.0.1:4010/latest.json"), "0.1.1-dev").as_deref(), Some("http://127.0.0.1:4010/latest.json"));

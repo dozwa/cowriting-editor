@@ -63,15 +63,15 @@ pseudonym, nicht anonym.
 ## Die Prüfung auf eine neuere Version
 
 Unabhängig von den Zahlen oben und ohne die Nummer der Installation: Eine veröffentlichte Version
-des Editors fragt bei jedem Start den Server des Herstellers, ob es eine neuere Version gibt,
-solange Sie das in den Einstellungen unter „Über“ nicht abgeschaltet haben. Die Anfrage nennt
-nichts: keine Version, keine Nummer, nichts über Ihr System oder Ihre Dokumente. Wie bei jeder
-Anfrage sieht der Server die Internetadresse, von der sie kommt. Wenn Sie selbst ein Update
-starten, wird die neue Version von den Releases des Projekts auf GitHub geholt (GitHub, Inc.,
-USA); dann sieht auch GitHub Ihre Internetadresse.
-Der Dienst des Herstellers speichert zu einer solchen Anfrage nichts: keine Internetadresse,
-keine Zeit, keine Zählung.
-[[Rechtsgrundlage für die Prüfung auf eine neuere Version, und was der Hosting-Anbieter und der Dienst vor dem Server über eine Anfrage protokollieren]]
+des Editors liest bei jedem Start eine Datei, in der steht, welche Version die neueste ist,
+solange Sie das in den Einstellungen unter „Über“ nicht abgeschaltet haben. Die Datei liegt im
+Repository des Projekts bei GitHub (GitHub, Inc., USA); ein Server des Herstellers wird nicht
+gefragt, und der Hersteller erfährt von der Anfrage nichts. Die Anfrage nennt nichts: keine
+Version, keine Nummer, nichts über Ihr System oder Ihre Dokumente. Wie bei jeder Anfrage sieht
+GitHub die Internetadresse, von der sie kommt; was GitHub dazu aufbewahrt, steht in GitHubs
+eigener Datenschutzerklärung. Wenn Sie selbst ein Update starten, wird die neue Version von den
+Releases des Projekts geholt, ebenfalls bei GitHub.
+[[Rechtsgrundlage für die Prüfung auf eine neuere Version]]
 
 ## Rechtsgrundlage, Speicherung, Empfänger
 

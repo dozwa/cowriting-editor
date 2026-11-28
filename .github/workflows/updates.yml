@@ -1,0 +1,72 @@
+name: Updates
+
+# Tells installed editors of a release. They read one file, `latest.json` on the branch `updates`
+# (the address is `SERVER` in crates/app/src/update_check.rs). When a release is published, its
+# `latest.json` is put there, if its version is newer than the one that is there. A draft tells
+# nobody; neither does a release that has no `latest.json`.
+# By hand (Actions ▸ Updates ▸ Run workflow): the same for the tag given, and with `force` also
+# for an older version, to take a release back that should not have gone out.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The published release editors are to be told of, such as v0.2.0-alpha
+        required: true
+      force:
+        description: Also when it is not newer than what they are told of now
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updates
+  cancel-in-progress: false
+
+jobs:
+  tell:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The release's latest.json onto the branch updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != false ]; then
+            echo "::error::$TAG is not a published release."
+            exit 1
+          fi
+          mkdir "$RUNNER_TEMP/new"
+          if ! gh release download "$TAG" --dir "$RUNNER_TEMP/new" --pattern latest.json; then
+            echo "::notice::$TAG has no latest.json: editors are not told of it."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin updates; then
+            git worktree add -B updates "$RUNNER_TEMP/updates" FETCH_HEAD
+          else
+            # the first time: a branch with nothing of the source in it
+            git worktree add --detach "$RUNNER_TEMP/updates"
+            git -C "$RUNNER_TEMP/updates" checkout --orphan updates
+            git -C "$RUNNER_TEMP/updates" rm -rfq .
+          fi
+          newer=$(python3 scripts/latest-json.py newer --tag "$TAG" --new "$RUNNER_TEMP/new/latest.json" --old "$RUNNER_TEMP/updates/latest.json")
+          if [ "$newer" != yes ] && [ "$FORCE" != true ]; then
+            echo "::notice::Editors are told of a version that is not older than $TAG already: nothing changed."
+            exit 0
+          fi
+          cp "$RUNNER_TEMP/new/latest.json" "$RUNNER_TEMP/updates/latest.json"
+          cd "$RUNNER_TEMP/updates"
+          git add latest.json
+          if git diff --cached --quiet; then
+            echo "::notice::latest.json is that of $TAG already."
+            exit 0
+          fi
+          git commit -m "Editors are told of $TAG"
+          git push origin updates
