@@ -116,4 +116,4 @@ the release build).
 
 Until the first merge of `dev`, `main` still has the old workflows: there CI builds the app on
 every push, and cannot be started by hand from the Actions page. `gh workflow run ci.yml --ref dev`
-is the way to the dev app until then. The first merge of `dev` into `main` makes `v0.1.1-alpha`.
+is the way to the dev app until then. The first merge of `dev` into `main` makes `v0.2.0-alpha`: `dev` was set to `0.2.0-dev` for it.

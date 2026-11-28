@@ -2,7 +2,7 @@
   "name": "cowriting-editor-ui",
   "private": true,
   "license": "MIT",
-  "version": "0.1.1-dev",
+  "version": "0.2.0-dev",
   "type": "module",
   "scripts": {
     "dev": "vite",

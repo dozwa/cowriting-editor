@@ -182,6 +182,7 @@ to a new heading with its version and date; the release workflow does that (see 
 
 ### Changed
 
+- The version is 0.2.0: what `dev` holds since 0.1.0 is far more than a step from 0.1.0 to 0.1.1.
 - The MIT licence has its own file.
 - The README points to the user wiki.
 - The README says what the editor is for, and what it is not for or not yet. (#24)
