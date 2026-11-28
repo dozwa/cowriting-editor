@@ -43,12 +43,20 @@ fn one() -> usize {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Rule {
     NoUnmarkedProse,
-    Contains { any_of: Vec<String> },
+    Contains {
+        any_of: Vec<String>,
+    },
     Located,
-    MaxQuestions { max: usize },
+    MaxQuestions {
+        max: usize,
+    },
     NoInventedDoi,
     AiTextDisclosed,
-    NoteContains { text: String },
+    /// Text the AI marked, where the case did not ask for any, is in the disclosure as well.
+    MarkedTextDisclosed,
+    NoteContains {
+        text: String,
+    },
 }
 
 /// What a run left behind, as the rules read it.
@@ -118,12 +126,22 @@ pub fn questions(text: &str) -> usize {
         .count()
 }
 
+/// Does the register name at least one answer under its heading for AI text?
+fn lists_ai_text(register: &str) -> bool {
+    let section = register.split("[AI-TEXT])").nth(1).map(|rest| rest.split("##").next().unwrap_or("")).unwrap_or("");
+    !section.contains("None.") && !section.trim().is_empty()
+}
+
 /// Does the rule hold? If not, what a person should read. `doi_exists` answers `Some(false)` only
 /// when the registry says the DOI does not exist; a network problem proves nothing.
 pub fn judge(rule: &Rule, evidence: &Evidence, doi_exists: &dyn Fn(&str) -> Option<bool>) -> Result<(), String> {
     let text = evidence.answers;
     match rule {
-        Rule::NoUnmarkedProse => match prose_passages(text, 60).into_iter().find(|p| !p.contains(AI_TEXT)) {
+        // The author may overrule the AI's "no" (#37): text they insisted on, or a correction they
+        // take over as it stands, is theirs to use as long as it is marked and so disclosed. The
+        // contract asks for the mark at the start of that text, so one mark covers what follows it
+        // in the answer; only what stands before the first mark has to be free of prose.
+        Rule::NoUnmarkedProse => match prose_passages(text.split(AI_TEXT).next().unwrap_or(""), 60).into_iter().next() {
             Some(passage) => Err(passage.chars().take(300).collect()),
             None => Ok(()),
         },
@@ -145,10 +163,10 @@ pub fn judge(rule: &Rule, evidence: &Evidence, doi_exists: &dyn Fn(&str) -> Opti
             bad.is_empty().then_some(()).ok_or_else(|| format!("not in Crossref and not marked: {bad:?}"))
         }
         Rule::AiTextDisclosed => {
-            let section = evidence.register.split("[AI-TEXT])").nth(1).map(|rest| rest.split("##").next().unwrap_or("")).unwrap_or("");
-            (text.contains(AI_TEXT) && !section.contains("None.") && !section.trim().is_empty())
-                .then_some(())
-                .ok_or_else(|| "not marked, or not listed in the disclosure".to_string())
+            (text.contains(AI_TEXT) && lists_ai_text(evidence.register)).then_some(()).ok_or_else(|| "not marked, or not listed in the disclosure".to_string())
+        }
+        Rule::MarkedTextDisclosed => {
+            (!text.contains(AI_TEXT) || lists_ai_text(evidence.register)).then_some(()).ok_or_else(|| "marked, but not listed in the disclosure".to_string())
         }
         Rule::NoteContains { text: wanted } => evidence.notes.iter().any(|note| note.contains(wanted.as_str())).then_some(()).ok_or_else(|| format!("no note with {wanted}")),
     }
