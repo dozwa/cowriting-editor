@@ -303,3 +303,56 @@ fn the_disclosure_of_the_whole_project_is_made_of_the_logs_of_all_its_files() {
     folder.write("alone.md", "# Alone\n");
     assert!(folder.open("alone.md").export(&options(true)).is_err(), "a document on its own has no project to disclose");
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_ai_can_read_the_other_files_of_a_project_and_nothing_else_and_changes_none() {
+    use cowriting_backends::fake::FakeBackend;
+    use cowriting_core::backend::Block;
+    use cowriting_core::turn::Ask;
+    let folder = Folder::new("ai-reads");
+    let intro = book(&folder);
+    folder.write("book/secret.md", "Not a file of the project.\n");
+    // the model looks what there is, searches, reads the other chapter, tries a file the project does not list and one outside, then answers
+    let call = |name: &str, input: serde_json::Value| serde_json::json!({ "tools": [{ "name": name, "input": input }] });
+    let script = serde_json::json!({ "replies": [
+        call("list_project_files", serde_json::json!({})),
+        call("search_project", serde_json::json!({ "query": "PARTICIPANTS" })),
+        call("read_project_file", serde_json::json!({ "name": "chapters/method.md" })),
+        call("read_project_file", serde_json::json!({ "name": "secret.md" })),
+        call("read_project_file", serde_json::json!({ "name": "../book/secret.md" })),
+        { "text": "The method chapter says 48 participants; the introduction names no number." }
+    ] });
+    let backend = FakeBackend::from_json(&script.to_string()).unwrap();
+    // what is in the window counts for the open file, saved or not
+    let in_window = format!("{INTRO}\nNot saved yet.\n");
+    let outcome = intro
+        .ask(&backend, Ask { text: "Do the chapters agree on the sample?".into(), document_text: in_window.clone(), model: "scripted".into(), ..Default::default() }, &mut |_| {})
+        .await
+        .unwrap();
+    assert_eq!(outcome.tools_used, ["list_project_files", "search_project", "read_project_file"]);
+
+    let requests = backend.requests();
+    let offered: Vec<&str> = requests[0].tools.iter().map(|tool| tool.name.as_str()).collect();
+    assert!(["list_project_files", "read_project_file", "search_project"].iter().all(|tool| offered.contains(tool)), "{offered:?}");
+    assert!(!offered.iter().any(|tool| tool.contains("write") && *tool != "write_note"), "the only writer is still the note: {offered:?}");
+    assert!(requests[0].system.contains("one file of the author's project “book”. Its files, in their order: intro.md, chapters/method.md."), "the AI is told of the project");
+    let result = |request: usize| match requests[request].messages.last().unwrap().content.last().unwrap() {
+        Block::ToolResult { content, is_error, .. } => (content.clone(), *is_error),
+        other => panic!("no tool result: {other:?}"),
+    };
+    assert_eq!(result(1), ("intro.md (11 words), this document\nchapters/method.md (11 words)".to_string(), false));
+    assert_eq!(result(2), ("# chapters/method.md\n3| We recruited 48 participants from two offices and followed them.".to_string(), false));
+    assert_eq!(result(3), ("1| # Method\n2| \n3| We recruited 48 participants from two offices and followed them.\n4| ".to_string(), false));
+    assert_eq!(result(4), ("The project has no file of that name. list_project_files gives the names.".to_string(), true), "a file beside them that the project does not list");
+    assert!(result(5).1, "and no way out of the list by a path");
+    assert_eq!(std::fs::read_to_string(folder.path("book/chapters/method.md")).unwrap(), METHOD, "the other file is as it was");
+    assert_eq!(std::fs::read_to_string(folder.path("book/intro.md")).unwrap(), INTRO);
+
+    // a document on its own is offered none of it
+    folder.write("alone.md", "# Alone\n");
+    let alone = folder.open("alone.md");
+    let backend = FakeBackend::from_json(r#"{"replies":[{"text":"Fine."}]}"#).unwrap();
+    alone.ask(&backend, Ask { text: "Anything?".into(), document_text: "# Alone\n".into(), model: "scripted".into(), ..Default::default() }, &mut |_| {}).await.unwrap();
+    let request = &backend.requests()[0];
+    assert!(!request.tools.iter().any(|tool| tool.name.contains("project")) && !request.system.contains("# The project"));
+}

@@ -13,7 +13,7 @@ use crate::log::{category_for, Log, AI_TEXT_MARKER};
 use crate::personas::{Party, EXPERT_RULES};
 use crate::sidecar::Sidecar;
 use crate::thread::thread_of;
-use crate::tools::{execute, numbered, tool_defs, ToolContext};
+use crate::tools::{execute, numbered, project_section, tool_defs_for, ToolContext};
 use crate::types::{AnnotationEntry, GuardEntry, LogEntry, PromptEntry, ResponseEntry};
 use std::io;
 use std::sync::{Arc, RwLock};
@@ -331,13 +331,17 @@ pub async fn run_turn(workspace: &Workspace, backend: &dyn Backend, ask: Ask, on
         contract = with_answer_language(&contract, &workspace.manuscript_language(), lang);
         closing = answer_language_rule(lang);
     }
+    let context = ToolContext { host, sidecar: &workspace.sidecar, document_text: &ask.document_text, model: &ask.model };
     let mut without_tools = !backend.uses_tools();
+    if !without_tools {
+        // a file of a project: the AI may read the project's other files, and is told that they are there
+        contract.push_str(&project_section(&context));
+    }
     let mut request = if without_tools {
         ModelRequest { system: system_without_tools(&contract, &ask.document_text) + &closing, messages, tools: Vec::new(), model: ask.model.clone() }
     } else {
-        ModelRequest { system: format!("{contract}{closing}"), messages, tools: tool_defs(), model: ask.model.clone() }
+        ModelRequest { system: format!("{contract}{closing}"), messages, tools: tool_defs_for(&workspace.sidecar), model: ask.model.clone() }
     };
-    let context = ToolContext { host, sidecar: &workspace.sidecar, document_text: &ask.document_text, model: &ask.model };
 
     let mut answer: Vec<String> = Vec::new();
     let mut tools_used: Vec<String> = Vec::new();

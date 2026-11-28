@@ -273,7 +273,11 @@ this document, or the whole project.
   its files, and is kept in `.cowriting/<the project's file>/disclosure/` beside the project's
   file. Each file still has its own as well.
 
-Not yet there: the AI reading the other files of the project.
+**The AI and the other files.** Asked in one file, the AI is told that it is a file of a project
+and which files there are. It can list them, search all of them for a word, and read one, when
+a question reaches beyond the open document: whether a term is used alike, what another chapter
+says. It reads only the files the project lists and can change none of them; the log names the
+tools it used. What it reads goes to your AI provider like the open document does.
 
 ## AI use outside the editor
 
@@ -419,7 +423,8 @@ editor has to be moved back, or its `.cowriting/<name>/` folder moved along by h
 
 ## What is sent where
 
-When you ask, your question and your document go to the provider you set up. With a model on
+When you ask, your question and your document go to the provider you set up; in a project of
+several files, also what the AI reads of the other files. With a model on
 your own computer nothing leaves it. A reference check sends each reference's DOI, or its title,
 first author and year, to crossref.org, and nothing of your text. Zotero is asked on your own
 computer only. Nothing is sent otherwise. An API key is kept in the system's

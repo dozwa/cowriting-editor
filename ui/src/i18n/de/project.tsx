@@ -21,7 +21,7 @@ export const project = {
 
   // the files
   files: 'Dateien',
-  filesHint: 'In der Reihenfolge des Textes. Ein Klick öffnet eine Datei; was offen ist, wird vorher gespeichert.',
+  filesHint: 'In der Reihenfolge des Textes. Ein Klick öffnet eine Datei; was offen ist, wird vorher gespeichert. Die KI, die Sie fragen, kann alle lesen.',
   filesHintMore: 'Jede Datei hat ihren eigenen Plan und ihr eigenes Protokoll; Experten, verknüpfte Dateien, Quellen und die KI sind in allen dieselben.',
   open: (name: string) => `${name} öffnen`,
   isOpen: 'offen',

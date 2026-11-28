@@ -123,7 +123,10 @@ to a new heading with its version and date; the release workflow does that (see 
   all files, names the project with its files, and is kept in `.cowriting/<project's file>/`
   beside the project's file. Tried with the tests' Word and Typst exports and in the browser,
   not in the app's own window. The
-  AI reading the other files is not part of this. The Project tab can be hidden like the others.
+  **The AI reads the other files:** asked in one file of a project, the AI can list the
+  project's files, search all of them and read one, when a question reaches beyond the open
+  document. It reaches only the files the project lists and can change none; what it reads goes
+  to your AI provider like the open document does. Tried with a scripted model, not with a real one. The Project tab can be hidden like the others.
   On Windows a document now has one spelling of its path however it was opened, so a file's plan
   is the same from the file dialog and from the Project tab.
   (#26, open)
