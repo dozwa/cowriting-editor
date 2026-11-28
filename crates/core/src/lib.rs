@@ -5,6 +5,7 @@
 pub mod actions;
 pub mod backend;
 pub mod briefs;
+pub mod chats;
 pub mod contract;
 pub mod disclosure;
 pub mod guard;

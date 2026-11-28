@@ -1,0 +1,266 @@
+[
+ {
+  "title": "Mixed model in R",
+  "create_time": 1793523600.0,
+  "update_time": 1793524200.0,
+  "current_node": "a3",
+  "conversation_id": "c-1",
+  "mapping": {
+   "root": {
+    "id": "root",
+    "message": null,
+    "parent": null,
+    "children": [
+     "sys"
+    ]
+   },
+   "sys": {
+    "id": "sys",
+    "message": {
+     "id": "sys",
+     "author": {
+      "role": "system"
+     },
+     "create_time": 1793523600.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       ""
+      ]
+     },
+     "metadata": {}
+    },
+    "parent": "root",
+    "children": [
+     "u1"
+    ]
+   },
+   "u1": {
+    "id": "u1",
+    "message": {
+     "id": "u1",
+     "author": {
+      "role": "user"
+     },
+     "create_time": 1793523601.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "How do I fit a mixed model with a random slope in R?"
+      ]
+     },
+     "metadata": {}
+    },
+    "parent": "sys",
+    "children": [
+     "a1",
+     "a1b"
+    ]
+   },
+   "a1": {
+    "id": "a1",
+    "message": {
+     "id": "a1",
+     "author": {
+      "role": "assistant"
+     },
+     "create_time": 1793523605.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Use lme4: `lmer(y ~ x + (x | subject), data = d)`."
+      ]
+     },
+     "metadata": {
+      "model_slug": "gpt-x"
+     }
+    },
+    "parent": "u1",
+    "children": [
+     "u2"
+    ]
+   },
+   "a1b": {
+    "id": "a1b",
+    "message": {
+     "id": "a1b",
+     "author": {
+      "role": "assistant"
+     },
+     "create_time": 1793523608.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "A regenerated answer that was not continued."
+      ]
+     },
+     "metadata": {
+      "model_slug": "gpt-x"
+     }
+    },
+    "parent": "u1",
+    "children": []
+   },
+   "u2": {
+    "id": "u2",
+    "message": {
+     "id": "u2",
+     "author": {
+      "role": "user"
+     },
+     "create_time": 1793523660.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Here is my plot. Why does it not converge?",
+       {
+        "content_type": "image_asset_pointer",
+        "asset_pointer": "file-service://x"
+       }
+      ]
+     },
+     "metadata": {}
+    },
+    "parent": "a1",
+    "children": [
+     "t1"
+    ]
+   },
+   "t1": {
+    "id": "t1",
+    "message": {
+     "id": "t1",
+     "author": {
+      "role": "tool"
+     },
+     "create_time": 1793523662.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "exit code 0"
+      ]
+     },
+     "metadata": {}
+    },
+    "parent": "u2",
+    "children": [
+     "a2"
+    ]
+   },
+   "a2": {
+    "id": "a2",
+    "message": {
+     "id": "a2",
+     "author": {
+      "role": "assistant"
+     },
+     "create_time": 1793523663.0,
+     "content": {
+      "content_type": "code",
+      "parts": [
+       "print(1)"
+      ]
+     },
+     "metadata": {
+      "model_slug": "gpt-x"
+     }
+    },
+    "parent": "t1",
+    "children": [
+     "a3"
+    ]
+   },
+   "a3": {
+    "id": "a3",
+    "message": {
+     "id": "a3",
+     "author": {
+      "role": "assistant"
+     },
+     "create_time": 1793523670.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "The slope variance is near zero. Simplify the random part."
+      ]
+     },
+     "metadata": {
+      "model_slug": "gpt-x"
+     }
+    },
+    "parent": "a2",
+    "children": []
+   }
+  }
+ },
+ {
+  "title": "Holiday plans",
+  "create_time": 1793610000.0,
+  "current_node": "b2",
+  "mapping": {
+   "r": {
+    "id": "r",
+    "message": null,
+    "parent": null,
+    "children": [
+     "b1"
+    ]
+   },
+   "b1": {
+    "id": "b1",
+    "message": {
+     "id": "b1",
+     "author": {
+      "role": "user"
+     },
+     "create_time": 1793610001.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Where to in March?"
+      ]
+     },
+     "metadata": {}
+    },
+    "parent": "r",
+    "children": [
+     "b2"
+    ]
+   },
+   "b2": {
+    "id": "b2",
+    "message": {
+     "id": "b2",
+     "author": {
+      "role": "assistant"
+     },
+     "create_time": 1793610005.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Lisbon is mild then."
+      ]
+     },
+     "metadata": {
+      "model_slug": "gpt-x"
+     }
+    },
+    "parent": "b1",
+    "children": []
+   }
+  }
+ },
+ {
+  "title": "Empty",
+  "create_time": 1793523600.0,
+  "current_node": "e",
+  "mapping": {
+   "e": {
+    "id": "e",
+    "message": null,
+    "parent": null,
+    "children": []
+   }
+  }
+ }
+]

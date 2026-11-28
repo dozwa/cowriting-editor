@@ -1,0 +1,85 @@
+[
+ {
+  "uuid": "u-1",
+  "name": "Explaining Bland-Altman",
+  "created_at": "2026-11-03T10:00:00.000000Z",
+  "updated_at": "2026-11-03T10:05:00.000000Z",
+  "account": {
+   "uuid": "acc"
+  },
+  "chat_messages": [
+   {
+    "uuid": "m1",
+    "text": "What does a Bland-Altman plot show?",
+    "content": [
+     {
+      "type": "text",
+      "text": "What does a Bland-Altman plot show?"
+     }
+    ],
+    "sender": "human",
+    "created_at": "2026-11-03T10:00:01.000000Z",
+    "attachments": [],
+    "files": []
+   },
+   {
+    "uuid": "m2",
+    "text": "The difference of two methods against their mean.",
+    "content": [
+     {
+      "type": "text",
+      "text": "The difference of two methods against their mean."
+     }
+    ],
+    "sender": "assistant",
+    "created_at": "2026-11-03T10:00:09.000000Z",
+    "attachments": [],
+    "files": []
+   },
+   {
+    "uuid": "m3",
+    "text": "And the limits of agreement in this paper?",
+    "content": [
+     {
+      "type": "text",
+      "text": "And the limits of agreement in this paper?"
+     }
+    ],
+    "sender": "human",
+    "created_at": "2026-11-03T10:02:00.000000Z",
+    "attachments": [
+     {
+      "file_name": "paper.pdf",
+      "extracted_content": "..."
+     }
+    ],
+    "files": []
+   },
+   {
+    "uuid": "m4",
+    "text": "",
+    "content": [
+     {
+      "type": "tool_use",
+      "name": "search",
+      "input": {}
+     },
+     {
+      "type": "text",
+      "text": "Mean difference plus and minus 1.96 standard deviations."
+     }
+    ],
+    "sender": "assistant",
+    "created_at": "2026-11-03T10:02:10.000000Z",
+    "attachments": [],
+    "files": []
+   }
+  ]
+ },
+ {
+  "uuid": "u-2",
+  "name": "",
+  "created_at": "2026-11-04T08:00:00.000000Z",
+  "chat_messages": []
+ }
+]
