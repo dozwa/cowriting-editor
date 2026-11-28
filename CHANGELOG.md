@@ -139,6 +139,17 @@ to a new heading with its version and date; the release workflow does that (see 
   Settings shows as "what would be sent" is still the plain message. Usage figures remain
   switched off as built, and sent only with consent. (#28, open)
 
+- **Terms of use, agreed to at the first start.** The editor has terms of use beside its privacy
+  statement: it is free and comes as it is, keeping copies of your work is yours to do, and the
+  provider is not liable for damage or lost data as far as the law allows. At the first start
+  the editor shows both texts and goes on only with your agreement; a newer version that comes
+  with changed texts asks again. Until then nothing goes to the editor's own server. This
+  agreement is not the consent to usage figures, which stays a separate and free choice. Both
+  texts can be read in Settings under About. The privacy statement now says that the maker's
+  service tells installations apart by their random number alone and stores no internet
+  address, and that such figures are pseudonymous. Switched off as built: the texts are drafts
+  with parts to fill in, and nobody is asked to agree to a draft.
+
 ### Fixed
 
 - **PDF export with Typst and pictures.** Every export with Typst failed as soon as the document

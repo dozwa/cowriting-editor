@@ -151,6 +151,21 @@ Still to find out on the first signed releases:
 
 Guide: https://tauri.app/plugin/updater/
 
+## Changing the terms of use or the privacy statement
+
+The four texts are `docs/TERMS.md`, `docs/NUTZUNGSBEDINGUNGEN.md`, `docs/PRIVACY.md` and
+`docs/DATENSCHUTZ.md`; English and German say the same. While one of them has a part in double
+square brackets, all of them are drafts: nobody is asked to agree, and no usage figures are asked
+for or sent.
+
+When a text changes in what it says, set `VERSION` in `crates/app/src/terms.rs` to the day of the
+change and write the same day at the top of both terms. Every author is then asked to agree
+again at the first start of the release that carries the change. A corrected typo needs no new
+version. `COWRITING_TERMS_TRIAL=1` shows the dialog in the dev app and the bridge while the texts
+are drafts.
+
+The texts were written without a lawyer. Have them looked at before the brackets are filled in.
+
 ## Changing a file the editor keeps
 
 The rules are at the top of `crates/core/src/stored.rs`; every stored JSON file is read and

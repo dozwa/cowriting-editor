@@ -1,4 +1,4 @@
-# Datenschutzerklärung: Nutzungszahlen des CoWriting Editors
+# Datenschutzerklärung des CoWriting Editors
 
 Entwurf vom 24.11.2026. Noch nicht in Kraft: Die Stellen in doppelten eckigen Klammern sind noch auszufüllen, und
 solange eine offen ist, fragt der Editor nichts und sendet nichts.
@@ -53,8 +53,12 @@ Server des Herstellers, dort geprüft und gespeichert. Die Verschlüsselung verb
 eine Meldung gesendet wurde, wann und von welcher Internetadresse, und die Zahlen bleiben
 personenbezogene Daten: Sie tragen die Nummer der Installation.
 
-Kommt eine Meldung an, sieht der Server die Internetadresse, von der sie kam, wie jeder Server.
-[[ob und wie lange der Server Internetadressen speichert]]
+Der Dienst des Herstellers unterscheidet Installationen allein an der Nummer der Installation.
+Kommt eine Meldung an, erreicht den Dienst die Internetadresse, von der sie kam, wie bei jeder
+Anfrage; der Dienst speichert sie nicht und schreibt sie in kein Protokoll. Auch an einer
+zufälligen Nummer lässt sich eine Installation wiedererkennen: Die Zahlen sind deshalb
+pseudonym, nicht anonym.
+[[was der Hosting-Anbieter und der Dienst vor dem Server über eine Anfrage protokollieren, und wie lange]]
 
 ## Die Prüfung auf eine neuere Version
 
@@ -65,7 +69,9 @@ nichts: keine Version, keine Nummer, nichts über Ihr System oder Ihre Dokumente
 Anfrage sieht der Server die Internetadresse, von der sie kommt. Wenn Sie selbst ein Update
 starten, wird die neue Version von den Releases des Projekts auf GitHub geholt (GitHub, Inc.,
 USA); dann sieht auch GitHub Ihre Internetadresse.
-[[Rechtsgrundlage für die Prüfung auf eine neuere Version, und ob und wie lange der Server Internetadressen dieser Anfragen speichert]]
+Der Dienst des Herstellers speichert zu einer solchen Anfrage nichts: keine Internetadresse,
+keine Zeit, keine Zählung.
+[[Rechtsgrundlage für die Prüfung auf eine neuere Version, und was der Hosting-Anbieter und der Dienst vor dem Server über eine Anfrage protokollieren]]
 
 ## Rechtsgrundlage, Speicherung, Empfänger
 

@@ -814,6 +814,48 @@ export function UsageDialog({ api, onAnswered }: { api: Api; onAnswered(saved: P
   )
 }
 
+/**
+ * The terms of use, at the first start and again when they or the privacy statement changed with a
+ * new version. The editor goes on only with an agreement; the other way out closes it. This is not
+ * the consent to usage figures, which is asked separately and can be a no.
+ */
+export function TermsDialog({ api, isChange, onAgreed }: { api: Api; isChange: boolean; onAgreed(): void }) {
+  const t = m.dialogs
+  const [terms, setTerms] = useState<string | null>(null)
+  const [statement, setStatement] = useState<string | null>(null)
+  const [reading, setReading] = useState<'terms' | 'privacy'>('terms')
+  const [error, setError] = useState('')
+  const [isBusy, setBusy] = useState(false)
+  useEffect(() => {
+    api.termsText(language).then(setTerms, e => setError(String(e)))
+    api.privacyStatement(language).then(setStatement, e => setError(String(e)))
+  }, [api])
+  const agree = () => {
+    setBusy(true)
+    api.termsAgreed().then(onAgreed, e => (setError(String(e)), setBusy(false)))
+  }
+  const text = reading === 'terms' ? terms : statement
+  return (
+    <Dialog title={t.termsTitle} onClose={() => {}} mayClose={() => false}>
+      <p>{isChange ? t.termsChanged : t.termsIntro}</p>
+      <div className="row" role="tablist">
+        <button role="tab" aria-selected={reading === 'terms'} onClick={() => setReading('terms')}>{t.termsTerms}</button>
+        <button role="tab" aria-selected={reading === 'privacy'} onClick={() => setReading('privacy')}>{t.termsPrivacy}</button>
+      </div>
+      <div className="notes terms" role="tabpanel" aria-label={reading === 'terms' ? t.termsTerms : t.termsPrivacy} tabIndex={0}>
+        {text === null ? <p className="muted">…</p> : <Markdown components={NOTES_PARTS}>{text}</Markdown>}
+      </div>
+      <p className="muted">{t.termsNotUsage}</p>
+      {error !== '' && <p className="error" role="alert">{error}</p>}
+      <div className="row end">
+        <button onClick={() => void api.quit().catch(e => setError(String(e)))}>{t.termsQuit}</button>
+        <span className="spacer" />
+        <button className="primary" disabled={isBusy || terms === null} onClick={agree}>{t.termsAgree}</button>
+      </div>
+    </Dialog>
+  )
+}
+
 /** A release's notes are shown as text only: no link in them leads anywhere and no picture is fetched. */
 const NOTES_PARTS: Components = { a: ({ children }) => <span>{children}</span>, img: () => null }
 

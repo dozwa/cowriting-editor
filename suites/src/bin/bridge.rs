@@ -31,6 +31,7 @@ struct Bridge {
     notices: Mutex<Vec<cowriting_core::stored::Notice>>,
     /// The newer version the page was told about in this run.
     told: Mutex<Option<String>>,
+    terms_agreed: Mutex<bool>,
 }
 
 /// Where the bridge asks for a newer version: a server on this computer, named by `COWRITING_UPDATE_SERVER`, or nowhere.
@@ -76,6 +77,9 @@ impl Bridge {
         view["usage"] = json!({ "isAvailable": false, "isAsked": false, "installation": null });
         view["asking"] = json!(cowriting_app::support::Asking::default());
         view["feedbackByMail"] = json!(cowriting_app::feedback::has_mail());
+        // the bridge asks for agreement to the terms only for a trial (COWRITING_TERMS_TRIAL=1), and keeps the answer for the run
+        let is_due = std::env::var("COWRITING_TERMS_TRIAL").is_ok_and(|trial| trial == "1") && !*self.terms_agreed.lock().unwrap();
+        view["terms"] = json!({ "isDue": is_due, "isChange": false, "version": cowriting_app::terms::VERSION });
         view["canCheckForUpdate"] = json!(update_server().is_some());
         view["settingsFolder"] = json!("(the bridge keeps its settings in memory)");
         view
@@ -86,6 +90,12 @@ impl Bridge {
         let text = |key: &str| args[key].as_str().unwrap_or_default().to_string();
         match name {
             "get_settings" => Ok(self.settings_view()),
+            "terms_text" => Ok(json!(cowriting_app::terms::text(&text("language")))),
+            "privacy_statement" => Ok(json!(cowriting_app::usage::statement(&text("language")))),
+            "terms_agreed" => {
+                *self.terms_agreed.lock().unwrap() = true;
+                Ok(Value::Null)
+            }
             // the check for a newer version, against a server on this computer (COWRITING_UPDATE_SERVER); the bridge installs nothing
             "update_at_start" | "check_for_update" => {
                 let at_start = name == "update_at_start";
@@ -387,6 +397,7 @@ fn main() {
         settings: Mutex::new(settings),
         preferences: Mutex::default(),
         told: Mutex::default(),
+        terms_agreed: Mutex::default(),
         key: Mutex::new(std::env::var("COWRITING_API_KEY").ok().filter(|k| !k.trim().is_empty())),
         is_first_run: Mutex::new(args.iter().any(|a| a == "--first-run")),
         notices: Mutex::default(),

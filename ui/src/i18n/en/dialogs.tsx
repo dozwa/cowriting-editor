@@ -145,6 +145,14 @@ export const dialogs = {
   feedbackOpened: (way: 'issue' | 'mail'): string => (way === 'issue' ? 'Opened in your browser. It is sent only when you submit it there.' : 'Opened in your mail program. It is sent only when you send it there.'),
   // asking for support, every tenth start
   // usage figures
+  termsTitle: 'Terms of use and privacy',
+  termsIntro: 'Before you start: the terms under which the editor is offered, and what it does with your data. The short of it: the editor is free and comes as it is, without warranty and without liability for damage or lost data as far as the law allows, so keep copies of your work. Your documents stay on your computer.',
+  termsChanged: 'This version of the editor comes with changed terms of use or a changed privacy statement. Please read them again; the editor goes on when you agree.',
+  termsTerms: 'Terms of use',
+  termsPrivacy: 'Privacy statement',
+  termsNotUsage: 'Agreeing here is not a consent to usage figures. Those are asked for separately, and a no there changes nothing.',
+  termsQuit: 'Do not agree and quit',
+  termsAgree: 'I agree to the terms of use',
   updateTitle: 'Updates',
   updateChecking: 'Asking whether there is a newer version…',
   updateNewest: (version: string) => `You have the newest version (${version}).`,

@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import Markdown from 'react-markdown'
 import type { Api, ModelChoice, ProjectOverrides, ProjectView, Settings, SettingsView } from './api'
 import { Dialog, FeedbackDialog, UsageChoice } from './dialogs'
-import { LANGUAGES, type LanguageId, languageFor, m } from './i18n'
+import { LANGUAGES, type LanguageId, language, languageFor, m } from './i18n'
 import { ACTIONS, type Action, HIDEABLE_TABS, LIMITS, type Preferences, STANDARD, keysOf, showKeys, shortcutsOf, whyNot } from './preferences'
 
 type Kind = 'anthropic' | 'local' | 'other' | 'claudeCode'
@@ -221,6 +222,10 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
   const [waiting, setWaiting] = useState<Action | null>(null)
   const [complaint, setComplaint] = useState('')
   const [feedback, setFeedback] = useState<'bug' | 'idea' | null>(null)
+  /** The terms of use or the privacy statement, while one is read here. */
+  const [legal, setLegal] = useState<{ which: 'terms' | 'privacy'; text: string } | null>(null)
+  const readLegal = (which: 'terms' | 'privacy') =>
+    legal?.which === which ? setLegal(null) : void (which === 'terms' ? api.termsText(language) : api.privacyStatement(language)).then(text => setLegal({ which, text }), e => setError(String(e)))
   const set = <K extends keyof Preferences>(key: K, value: Preferences[K]) => setDraft(now => ({ ...now, [key]: value }))
 
   useEffect(() => onPreview(draft), [draft, onPreview])
@@ -554,6 +559,17 @@ export function SettingsDialog({ api, settings, project, documentName, getText, 
                 <dt>{m.settings.sent}</dt>
                 <dd>{m.settings.sentWhat}{settings.canCheckForUpdate && m.settings.sentUpdate}{settings.usage.isAvailable && m.settings.sentUsage}</dd>
               </dl>
+              <h3>{m.settings.termsHeading}</h3>
+              <p className="muted">{m.settings.termsAbout}</p>
+              <div className="row">
+                <button aria-expanded={legal?.which === 'terms'} onClick={() => readLegal('terms')}>{m.settings.termsRead}</button>
+                <button aria-expanded={legal?.which === 'privacy'} onClick={() => readLegal('privacy')}>{m.settings.privacyRead}</button>
+              </div>
+              {legal !== null && (
+                <div className="notes terms" aria-label={legal.which === 'terms' ? m.settings.termsRead : m.settings.privacyRead} tabIndex={0}>
+                  <Markdown components={{ a: ({ children }) => <span>{children}</span>, img: () => null }}>{legal.text}</Markdown>
+                </div>
+              )}
               <h3>{m.settings.tourHeading}</h3>
               <p className="muted">{m.settings.tourAbout}</p>
               <div className="row">

@@ -413,6 +413,21 @@ first author and year, to crossref.org, and nothing of your text. Zotero is aske
 computer only. Nothing is sent otherwise. An API key is kept in the system's
 key store. The disclosure names the provider and the model that answered.
 
+## Terms of use
+
+The editor has terms of use (`docs/TERMS.md`, `docs/NUTZUNGSBEDINGUNGEN.md`) and a privacy
+statement (`docs/PRIVACY.md`, `docs/DATENSCHUTZ.md`). At the first start it shows both and goes
+on only when you agree to the terms; the other button closes it. When a newer version comes with
+changed terms or a changed statement, it asks again at its first start. Until you agreed, nothing
+goes to the editor's own server: no check for a newer version and no usage figures. Agreeing to
+the terms is not consent to usage figures, which is asked separately and can be a no. Both texts
+can be read at any time in Settings under About.
+
+The terms say that the editor is free and comes as it is, that keeping copies of your work is
+yours to do, and that the provider is not liable for damage or lost data as far as the law
+allows. As built now nobody is asked: both texts are drafts with parts to fill in (the provider's
+name and address among them), and nobody is asked to agree to a draft.
+
 ## Updates
 
 A released version asks the editor's own server at each start whether a newer version exists.

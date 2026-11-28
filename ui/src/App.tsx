@@ -5,7 +5,7 @@ import { LivePanel, ScopePanel, span } from './plan'
 import { SourcesPanel } from './sources'
 import { ProjectPanel } from './project'
 import { seeView } from './diagnostics'
-import { DisclosureDialog, ExportDialog, FeedbackDialog, MovePicturesDialog, PictureDialog, SupportDialog, UpdateDialog, UsageDialog } from './dialogs'
+import { DisclosureDialog, ExportDialog, FeedbackDialog, MovePicturesDialog, PictureDialog, SupportDialog, TermsDialog, UpdateDialog, UsageDialog } from './dialogs'
 import { Tour, TOUR } from './tour'
 import { createEditor, type Editor, type Format } from './editor'
 import { FormatBar, MarkdownHelp } from './formatbar'
@@ -719,13 +719,23 @@ export function App({ api, makeEditor = createEditor }: Props) {
     // who skipped the tour before setting up the AI is offered that now, as before there was a tour
     if (settings !== null && settings.isFirstRun && !settings.isReady) setDialog('settings')
   }
-  const settingsDialog = dialog === 'settings' && settings !== null && (
+  const settingsDialog = dialog === 'settings' && settings !== null && !settings.terms.isDue && (
     <SettingsDialog api={api} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onTour={() => (setDialog(null), toStep(0))} onUpdate={() => (setDialog(null), setUpdating('check'))} settings={settings} project={doc === null ? null : project} documentName={doc?.name ?? ''} onPreview={setPreview} onClose={saved => (setDialog(null), saved !== null && (setSettings(saved), setWithoutTools(false), doc !== null && void api.project().then(setProject, () => {}), void api.liveView().then(setWatching, () => {})))} />
   )
+  // before anything else: the terms of use, at the first start and when they changed. Nothing else is shown until the author agreed.
+  const isTermsDue = settings !== null && settings.terms.isDue
+  const termsAgreed = () => {
+    if (settings === null) return
+    setSettings({ ...settings, terms: { ...settings.terms, isDue: false } })
+    // the check for a newer version waited for this
+    void api.updateAtStart().then(found => found?.state === 'newer' && (setNewer(found), found.isNews && setUpdating('known')), () => {})
+  }
   // asked once, and only where there is somewhere to send to and a privacy statement in force
   const isUsageDue = settings !== null && settings.usage.isAvailable && !settings.usage.isAsked && !settings.isFirstRun && dialog === null && tourStep === null
   const isSupportDue = !isUsageDue && updating === null && settings !== null && settings.asking.isDue && !isAsked && !settings.isFirstRun && dialog === null && tourStep === null
-  const otherDialogs = settings !== null && (
+  const otherDialogs = settings !== null && isTermsDue ? (
+    <TermsDialog api={api} isChange={settings.terms.isChange} onAgreed={termsAgreed} />
+  ) : settings !== null && (
     <>
       {(dialog === 'feedback' || dialog === 'bug') && <FeedbackDialog api={api} settings={settings} kind={dialog === 'bug' ? 'bug' : 'idea'} getText={doc === null ? undefined : () => editor.current?.getText() ?? ''} onClose={() => setDialog(null)} />}
       {tourStep !== null && dialog === null && <Tour step={tourStep} hasDocument={doc !== null} isReady={settings.isReady} onStep={toStep} onSettings={() => setDialog('settings')} onEnd={endTour} />}

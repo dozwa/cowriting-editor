@@ -58,6 +58,38 @@ impl Editor {
 /// When the editor was started.
 static STARTED: OnceLock<std::time::Instant> = OnceLock::new();
 
+/// Whether the author has to agree to the terms of use before the editor goes on. While the texts
+/// are drafts nobody is asked; `COWRITING_TERMS_TRIAL=1` asks all the same, to look at the dialog.
+fn terms_asking(app: &tauri::AppHandle) -> cowriting_app::terms::Asking {
+    let in_force = cowriting_app::terms::is_in_force() || std::env::var("COWRITING_TERMS_TRIAL").is_ok_and(|trial| trial == "1");
+    match state_file(app) {
+        Some(state) => cowriting_app::terms::asking_when(&state, in_force),
+        None => cowriting_app::terms::Asking { is_due: false, is_change: false, version: cowriting_app::terms::VERSION },
+    }
+}
+
+/// The terms of use, in the language shown.
+#[tauri::command]
+fn terms_text(language: String) -> &'static str {
+    cowriting_app::terms::text(&language)
+}
+
+/// The author agreed to the terms. What waited for that goes on: a sign of use they had agreed to earlier.
+#[tauri::command]
+fn terms_agreed(app: tauri::AppHandle) -> Result<(), String> {
+    let state = state_file(&app).ok_or("The editor has no folder for its settings.")?;
+    cowriting_app::terms::agreed(&state, DiskHost.now().get(..10).unwrap_or_default())?;
+    note("terms", &format!("agreed to the version of {}", cowriting_app::terms::VERSION));
+    send_start(&app);
+    Ok(())
+}
+
+/// The author did not agree to the terms: the editor closes.
+#[tauri::command]
+fn quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 /// Where usage figures go, if anywhere: see `usage::server`. `COWRITING_USAGE_SERVER` names one on this computer, for tests and trials.
 fn usage_server() -> Option<String> {
     usage::server(std::env::var("COWRITING_USAGE_SERVER").ok().as_deref())
@@ -73,6 +105,10 @@ fn usage_sender(app: &tauri::AppHandle) -> Option<Sender> {
 /// session that could not be sent when the editor closed go first, if that consent stands.
 fn send_start(app: &tauri::AppHandle) {
     use std::sync::atomic::Ordering;
+    // nothing goes to the editor's server before the author agreed to the terms as they are now
+    if terms_asking(app).is_due {
+        return;
+    }
     let preferences = read_file(app).preferences;
     let (Some(server), Some(sender), Some(state)) = (usage_server(), usage_sender(app), state_file(app)) else { return };
     let waiting = if preferences.usage_figures { usage::take_waiting(&state) } else { None };
@@ -190,7 +226,7 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 /// The check at start: only if the author left it on, and silent when it fails. Nothing is fetched or installed by it.
 #[tauri::command]
 async fn update_at_start(app: tauri::AppHandle) -> Result<Option<UpdateFound>, String> {
-    if !read_file(&app).preferences.update_check || update_server(&app).is_none() {
+    if terms_asking(&app).is_due || !read_file(&app).preferences.update_check || update_server(&app).is_none() {
         return Ok(None);
     }
     Ok(look_for_update(&app).await.ok())
@@ -305,6 +341,8 @@ struct SettingsView {
     /// The tour of the editor was not seen yet: the window starts with it.
     show_tour: bool,
     usage: UsageView,
+    /// Whether the author has to agree to the terms of use before anything else.
+    terms: cowriting_app::terms::Asking,
     /// This version can ask whether a newer one exists: a released version with a server to ask.
     can_check_for_update: bool,
     /// The editor's own files that could not be read and were set aside, or that a newer version wrote.
@@ -358,6 +396,7 @@ fn get_settings(app: tauri::AppHandle, editor: State<Editor>) -> SettingsView {
             is_asked: state_file(&app).is_some_and(|state| usage::was_asked(&state)),
             installation: state_file(&app).and_then(|state| usage::installation(&state)),
         },
+        terms: terms_asking(&app),
         can_check_for_update: update_server(&app).is_some(),
         notices: editor.notices.lock().unwrap().clone(),
     }
@@ -1154,6 +1193,9 @@ fn main() {
             recent_diagnostics,
             clear_diagnostics,
             write_report_file,
+            terms_text,
+            terms_agreed,
+            quit,
             update_at_start,
             check_for_update,
             install_update,

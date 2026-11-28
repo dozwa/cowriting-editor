@@ -46,7 +46,7 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
   let keptLayouts: KeptLayout[] = options.keptLayouts ?? []
   const turns: TurnRow[] = []
   let release = () => {}
-  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; updates: string[]; reportFiles: [string, number, string | null][]; project: unknown[][]; files: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], updates: [], reportFiles: [], project: [], files: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
+  const calls: { saved: string[]; asked: { text: string; replyTo: string | null; persona: string | null; documentText: string }[]; annotated: [string, Use, string][]; exported: unknown[]; settings: [Settings, string | null][]; tested: Settings[]; party: unknown[][]; pasted: [string, number][]; comments: [string, string][]; live: unknown[][]; reviewed: string[]; scope: string[]; checked: string[]; searched: string[]; exports: [string, string, string][]; previews: [string, string, PdfChoice][]; pdf: PdfChoice[]; adopted: string[]; moved: ([string, string] | [string, string, string])[]; preferences: Preferences[]; picked: string[]; feedback: [string, string, string][]; usage: [boolean, boolean][]; updates: string[]; terms: string[]; reportFiles: [string, number, string | null][]; project: unknown[][]; files: unknown[][]; support: string[]; pages: string[]; pictures: string[]; marks: Record<string, number[]> } = { marks: options.marks ?? {}, pictures: [], feedback: [], usage: [], updates: [], terms: [], reportFiles: [], project: [], files: [], support: [], pages: [], saved: [], asked: [], annotated: [], exported: [], settings: [], tested: [], party: [], pasted: [], comments: [], live: [], reviewed: [], scope: [], checked: [], searched: [], exports: [], previews: [], pdf: [], adopted: [], moved: [], preferences: [], picked: [] }
   const watch = { isOn: false, personas: ['reviewer-2'], hints: [] as LiveHint[] }
   const pace = () => ({ pauseMs: settings.preferences.livePauseSeconds === STANDARD.livePauseSeconds ? 30 : settings.preferences.livePauseSeconds * 1000, gapMs: settings.preferences.liveGapSeconds * 1000, perHour: settings.preferences.livePerHour })
   let plan = ''
@@ -88,12 +88,18 @@ function standIn(options: { isReady?: boolean; holdAnswer?: boolean; answer?: st
     words: 7,
     chars: { withSpaces: 12345, withoutSpaces: 10321 },
   })
-  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, canCheckForUpdate: options.update !== undefined, notices: [], settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
+  let settings: SettingsView = { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0, general: { backend: 'anthropic', model: 'claude-opus-5-5', baseUrl: '', maxTokens: 0 }, isAiOwn: false, preferences: { ...STANDARD }, version: '0.1.0', system: 'macos aarch64', feedbackByMail: true, contact: 'me@example.org', repository: 'https://github.com/dozwa/cowriting-editor', asking: { isDue: false, withStar: true }, showTour: false, usage: { isAvailable: false, isAsked: false, installation: null }, terms: { isDue: false, isChange: false, version: '2026-11-28' }, canCheckForUpdate: options.update !== undefined, notices: [], settingsFolder: '/home/me/.config/cowriting-editor', hasKey: options.isReady ?? true, isReady: options.isReady ?? true, modelStatus: 'tested', isFirstRun: false, openAtStart: '/work/thesis.md', ...options.settings }
   const api: Api = {
     sendFeedback: async (way, title, text) => void calls.feedback.push([way, title, text]),
+    termsText: async language => (language === 'de' ? '# Nutzungsbedingungen\n\nDer Anbieter haftet nicht.' : '# Terms of use\n\nThe provider is not liable.'),
+    termsAgreed: async () => {
+      calls.terms.push('agreed')
+      settings = { ...settings, terms: { ...settings.terms, isDue: false } }
+    },
+    quit: async () => void calls.terms.push('quit'),
     // the stand-in's server: what `update` says, or the reason it cannot be asked; the check at start is silent then
     updateAtStart: async () => {
-      if (options.update === undefined || !settings.preferences.updateCheck) return null
+      if (options.update === undefined || !settings.preferences.updateCheck || settings.terms.isDue) return null
       calls.updates.push('start')
       return typeof options.update === 'string' ? null : options.update
     },
@@ -2500,4 +2506,55 @@ test('an update that fails says why and leaves the editor as it is', async () =>
   expect((await dialog.findByRole('alert')).textContent).toBe('The update could not be installed: the signature does not fit.')
   expect(calls.updates).toEqual(['start', 'install'])
   expect((dialog.getByRole('button', { name: 'Install and restart' }) as HTMLButtonElement).disabled).toBe(false)
+})
+
+test('at the first start the terms are shown before anything else, and the editor goes on only with an agreement', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ update: NEWER, settings: { terms: { isDue: true, isChange: false, version: '2026-11-28' }, showTour: true, usage: { isAvailable: true, isAsked: false, installation: null } } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'Terms of use and privacy' }))
+  expect(dialog.getByText(/^Before you start/)).toBeTruthy()
+  expect(await dialog.findByText('The provider is not liable.')).toBeTruthy()
+  // nothing else asks or shows itself meanwhile, and the server was not asked about a newer version
+  expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  expect(calls.updates).toEqual([])
+  // Escape is no answer
+  await user.keyboard('{Escape}')
+  expect(screen.getByRole('dialog', { name: 'Terms of use and privacy' })).toBeTruthy()
+  // the privacy statement can be read in the same place
+  await user.click(dialog.getByRole('tab', { name: 'Privacy statement' }))
+  expect(await dialog.findByText('Privacy statement: usage figures')).toBeTruthy()
+  expect(dialog.getByText(/is not a consent to usage figures/)).toBeTruthy()
+
+  await user.click(dialog.getByRole('button', { name: 'I agree to the terms of use' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Terms of use and privacy' })).toBeNull())
+  expect(calls.terms).toEqual(['agreed'])
+  // now what waited comes: the check for a newer version ran
+  await waitFor(() => expect(calls.updates).toEqual(['start']))
+})
+
+test('changed terms are asked for again after an update, and not agreeing closes the editor', async () => {
+  const user = userEvent.setup()
+  const { api, calls } = standIn({ settings: { terms: { isDue: true, isChange: true, version: '2026-11-28' } } })
+  render(<App api={api} makeEditor={plainEditor} />)
+  const dialog = within(await screen.findByRole('dialog', { name: 'Terms of use and privacy' }))
+  expect(dialog.getByText(/comes with changed terms of use or a changed privacy statement/)).toBeTruthy()
+  await user.click(dialog.getByRole('button', { name: 'Do not agree and quit' }))
+  expect(calls.terms).toEqual(['quit'])
+  expect(screen.getByRole('dialog', { name: 'Terms of use and privacy' })).toBeTruthy()
+})
+
+test('the terms and the privacy statement can be read again in the settings', async () => {
+  const user = userEvent.setup()
+  const { api } = standIn()
+  render(<App api={api} makeEditor={plainEditor} />)
+  await screen.findByLabelText('Document')
+  await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Settings…' }))
+  const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
+  await user.click(settings.getByRole('tab', { name: 'About' }))
+  await user.click(settings.getByRole('button', { name: 'Terms of use' }))
+  expect(await settings.findByText('The provider is not liable.')).toBeTruthy()
+  await user.click(settings.getByRole('button', { name: 'Privacy statement' }))
+  expect(await settings.findByText('Privacy statement: usage figures')).toBeTruthy()
+  expect(settings.queryByText('The provider is not liable.')).toBeNull()
 })

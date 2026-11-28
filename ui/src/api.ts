@@ -214,7 +214,7 @@ export type AskResult = { id: string; answer: string; isAiText: boolean; refused
 export type Settings = { backend: string; model: string; baseUrl: string; maxTokens: number }
 /** Whether a model kept to the assist-only rules in the behaviour suite. */
 export type ModelStatus = 'tested' | 'failed' | 'untested'
-export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; /** This version can ask whether a newer one exists. */ canCheckForUpdate: boolean; notices: StoredNotice[] }
+export type SettingsView = Settings & { /** The general AI settings; the fields above are what holds for the open document, which can have its own. */ general: Settings; isAiOwn: boolean; hasKey: boolean; isReady: boolean; modelStatus: ModelStatus; isFirstRun: boolean; openAtStart: string | null; preferences: Preferences; version: string; settingsFolder: string; system: string; feedbackByMail: boolean; contact: string; repository: string; asking: { isDue: boolean; withStar: boolean }; showTour: boolean; usage: { isAvailable: boolean; isAsked: boolean; installation: string | null }; /** The terms of use: whether the author has to agree before anything else, and whether they agreed to an earlier version. */ terms: { isDue: boolean; isChange: boolean; version: string }; /** This version can ask whether a newer one exists. */ canCheckForUpdate: boolean; notices: StoredNotice[] }
 export type ModelChoice = { id: string; name: string; status: ModelStatus }
 
 export type ExportOptions = { language: 'en' | 'de'; format: 'md' | 'tex'; withPrompts: boolean; withAnswers: boolean; withOutside: boolean }
@@ -335,6 +335,12 @@ export const api = {
   pickReportFile: () => save({ filters: [{ name: 'Text', extensions: ['txt'] }], defaultPath: 'cowriting-report.txt' }),
   /** Writes that file: the log's last minutes and, only if the author agreed, the text given here. */
   writeReportFile: (target: string, minutes: number, documentText: string | null) => invoke<void>('write_report_file', { target, minutes, documentText }),
+  /** The terms of use, in the language shown. */
+  termsText: (language: string) => invoke<string>('terms_text', { language }),
+  /** The author agreed to the terms as they are now. */
+  termsAgreed: () => invoke<void>('terms_agreed'),
+  /** Closes the editor: the author did not agree. */
+  quit: () => invoke<void>('quit'),
   /** The check at start: null when it is switched off, when this version does not check, or when the server could not be asked. */
   updateAtStart: () => invoke<UpdateFound | null>('update_at_start'),
   /** The check the author asks for; it fails with the reason when the server cannot be asked. */

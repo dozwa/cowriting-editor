@@ -14,6 +14,7 @@ pub mod project_files;
 pub mod sealed;
 pub mod shown;
 pub mod support;
+pub mod terms;
 pub mod update_check;
 pub mod usage;
 pub mod word;

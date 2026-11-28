@@ -1,4 +1,4 @@
-# Privacy statement: usage figures of the CoWriting Editor
+# Privacy statement of the CoWriting Editor
 
 Draft of 2026-11-24. Not yet in force: the parts in double square brackets are still to be filled in, and
 as long as one is open the editor asks for nothing and sends nothing.
@@ -51,8 +51,11 @@ it is then unreadable; it is opened on the maker's server, checked and stored th
 does not hide that a message was sent, when, and from which internet address, and the figures
 remain personal data: they carry the installation's number.
 
-When a message arrives, the server sees the internet address it came from, as every server does.
-[[whether and how long the server keeps internet addresses]]
+The maker's service tells installations apart by the installation's number alone. When a message
+arrives, the internet address it came from reaches the service, as with every request; the
+service does not store it and writes it into no log. A random number is still a way to
+recognise an installation again, so these figures are pseudonymous, not anonymous.
+[[what the hosting provider and the service in front of the server log about a request, and for how long]]
 
 ## The check for a newer version
 
@@ -62,7 +65,8 @@ that off in Settings under About. The request names nothing: no version, no numb
 your system or your documents. As with every request, the server sees the internet address it
 comes from. When you start an update yourself, the new version is fetched from the project's
 releases on GitHub (GitHub, Inc., USA), which then sees your internet address too.
-[[legal basis for the check for a newer version, and whether and how long the server keeps internet addresses of these requests]]
+The maker's service stores nothing about such a request: no internet address, no time, no count.
+[[legal basis for the check for a newer version, and what the hosting provider and the service in front of the server log about a request]]
 
 ## Legal basis, storage, recipients
 
