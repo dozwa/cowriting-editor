@@ -238,7 +238,11 @@ fn an_export_of_the_whole_project_holds_every_file_and_one_of_a_single_document_
     let folder = Folder::new("whole-export");
     let (session, intro) = book_to_export(&folder);
     let offered = session.whole_export().expect("a file of a project is offered the whole");
-    assert_eq!(offered, WholeExport { name: "book".into(), files: 2, pdf: folder.path("book/book.pdf"), docx: folder.path("book/book.docx") });
+    // beside the project's file, in the spelling of paths the system has
+    assert_eq!(
+        offered,
+        WholeExport { name: "book".into(), files: 2, pdf: project_files::native(&folder.path("book/book.pdf")), docx: project_files::native(&folder.path("book/book.docx")) }
+    );
     folder.write("alone.md", "# Alone\n");
     assert_eq!(folder.open("alone.md").whole_export(), None);
     if find_program("pandoc").is_none() {
