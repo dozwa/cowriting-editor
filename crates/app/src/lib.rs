@@ -517,7 +517,8 @@ impl Session {
     /// Opens a markdown file whose project settings are kept in `projects`, the editor's own folder for them.
     /// A project's file opens the first of its files.
     pub fn open_in(host: Arc<dyn Host>, path: &str, projects: Option<&str>) -> Result<(Session, Opened), String> {
-        let path = &project_files::document_to_open(host.as_ref(), path)?;
+        // one spelling for a document, however it was named: its settings are found by its path
+        let path = &project_files::native(&project_files::document_to_open(host.as_ref(), path)?);
         let text = host.read(path).map_err(|e| format!("{path} could not be opened: {e}"))?;
         if let Some(projects) = projects {
             follow_move(host.as_ref(), path, projects);

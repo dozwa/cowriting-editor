@@ -30,9 +30,24 @@ fn is_markdown(path: &str) -> bool {
     lower.ends_with(".md") || lower.ends_with(".markdown")
 }
 
+/// A path as this system spells it. On Windows a file dialog gives backslashes, and the editor's
+/// own joining gives slashes; a document's settings are found by its path as text, so the same
+/// file must not come under two spellings. Elsewhere a path is left as it is.
+pub fn native(path: &str) -> String {
+    spelled(path, cfg!(windows))
+}
+
+fn spelled(path: &str, is_windows: bool) -> String {
+    if is_windows {
+        path.replace('/', "\\")
+    } else {
+        path.to_string()
+    }
+}
+
 /// A file of the project, by the way the project's file names it.
 fn member(project: &str, entry: &str) -> String {
-    joined(&folder_of(project), entry)
+    native(&joined(&folder_of(project), entry))
 }
 
 /// The way the project's file names a document by.
@@ -297,4 +312,16 @@ pub fn overview(host: &dyn Host, projects: Option<&str>, project: &str, open: Op
         files.push(row);
     }
     Ok(Overview { path: project.to_string(), name: ProjectFile::name_of(project).to_string(), goal: file.goal, words_target: file.words, words, chars, files })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::spelled;
+
+    #[test]
+    fn on_windows_a_path_has_one_spelling_and_elsewhere_it_is_left_alone() {
+        assert_eq!(spelled("C:\\Users\\me/book/chapters/method.md", true), "C:\\Users\\me\\book\\chapters\\method.md");
+        assert_eq!(spelled("C:/Users/me/book/intro.md", true), spelled("C:\\Users\\me\\book\\intro.md", true));
+        assert_eq!(spelled("/home/me/a\\b/intro.md", false), "/home/me/a\\b/intro.md", "a backslash can be part of a name there");
+    }
 }

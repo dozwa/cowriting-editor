@@ -116,6 +116,8 @@ to a new heading with its version and date; the release workflow does that (see 
   settings or log. Tried in the browser; the file dialogs of the app's own window were not.
   The disclosure and the export for a whole project, and the AI reading the other files, are
   not part of this: each file still has its own. The Project tab can be hidden like the others.
+  On Windows a document now has one spelling of its path however it was opened, so a file's plan
+  is the same from the file dialog and from the Project tab.
   (#26, open)
 
 - **Updates from inside the app.** A released version asks the editor's own server at each start

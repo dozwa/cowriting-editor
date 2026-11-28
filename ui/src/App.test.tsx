@@ -476,7 +476,8 @@ test('saving sends the text as typed, and a refused write is shown in the log', 
   render(<App api={api} makeEditor={plainEditor} />)
   await screen.findByText('thesis.md')
   expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
-  await user.type(screen.getByLabelText('Document'), 'Mine.')
+  // the file's name is shown a moment before the text field is there
+  await user.type(await screen.findByLabelText('Document'), 'Mine.')
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(calls.saved).toEqual(['# Thesis\n\nWe recruited 48 subjects.\nMine.']))
   await screen.findByText('saved')
