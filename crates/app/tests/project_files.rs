@@ -145,7 +145,7 @@ fn files_are_added_removed_and_ordered_without_touching_them() {
     assert!(intro.order_project_files(&[third.clone(), first.clone()]).unwrap_err().contains("leaves out"));
     assert!(intro.order_project_files(&[third.clone(), first.clone(), first.clone()]).is_err());
     // opening the project's file opens the file that is first now
-    assert_eq!(project_files::document_to_open(&DiskHost, &folder.path("book/book.cowriting.json")).unwrap(), third.replace('\\', "/"));
+    assert_eq!(project_files::document_to_open(&DiskHost, &folder.path("book/book.cowriting.json")).unwrap(), project_files::native(&third));
 
     intro.remove_project_file(&second).unwrap();
     assert_eq!(folder.listed(), ["results.md", "intro.md"]);

@@ -215,7 +215,9 @@ pub fn rename(host: &dyn Host, projects: Option<&str>, project: &str, document: 
     if name.is_empty() || name.contains(['/', '\\']) || !is_markdown(name) {
         return Err("The file needs a name that ends in .md, without a folder.".into());
     }
-    let target = format!("{}/{name}", folder_of(document).trim_end_matches(['/', '\\']));
+    // both places in the spelling a document is opened by: its plan is found by its path
+    let document = &native(document);
+    let target = native(&format!("{}/{name}", folder_of(document).trim_end_matches(['/', '\\'])));
     let (from, to) = (sidecar(projects, document), sidecar(projects, &target));
     if host.exists(&target) {
         return Err(format!("{name} is there already."));
